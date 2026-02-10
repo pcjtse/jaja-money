@@ -2,7 +2,7 @@
 
 A Streamlit-based stock analysis app powered by the Alpha Vantage API. Enter a stock symbol to view real-time quotes, company fundamentals, technical indicators, and an interactive price chart.
 
-![Screenshot](screenshot.PNG)
+![Screenshot](screenshot.png)
 
 ## Features
 
