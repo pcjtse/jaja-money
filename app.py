@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime
 from api import FinnhubAPI
 
 
@@ -59,6 +60,22 @@ def fetch_financials(symbol: str) -> dict:
 @st.cache_data(ttl=300)
 def fetch_daily(symbol: str) -> dict:
     return FinnhubAPI().get_daily(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_news(symbol: str) -> list:
+    return FinnhubAPI().get_news(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_recommendations(symbol: str) -> list:
+    return FinnhubAPI().get_recommendations(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_earnings(symbol: str) -> list:
+    return FinnhubAPI().get_earnings(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_peers(symbol: str) -> list:
+    return FinnhubAPI().get_peers(symbol)
 
 
 # --- Sidebar ---
@@ -263,3 +280,114 @@ if df is not None and len(df) > 0:
             chart_df.set_index("Date").sort_index(ascending=False),
             use_container_width=True,
         )
+
+# --- Market Research ---
+
+st.header("Market Research")
+
+# Analyst Recommendations
+try:
+    with st.spinner("Fetching analyst recommendations..."):
+        recs = fetch_recommendations(symbol)
+except Exception as e:
+    recs = []
+    st.warning(f"Could not fetch analyst recommendations: {e}")
+
+if recs:
+    latest = recs[0]
+    st.subheader("Analyst Recommendations")
+    period = latest.get("period", "")
+    st.caption(f"Most recent period: {period}")
+
+    buy = latest.get("buy", 0)
+    hold = latest.get("hold", 0)
+    sell = latest.get("sell", 0)
+    strong_buy = latest.get("strongBuy", 0)
+    strong_sell = latest.get("strongSell", 0)
+
+    rec_cols = st.columns(5)
+    rec_cols[0].metric("Strong Buy", strong_buy)
+    rec_cols[1].metric("Buy", buy)
+    rec_cols[2].metric("Hold", hold)
+    rec_cols[3].metric("Sell", sell)
+    rec_cols[4].metric("Strong Sell", strong_sell)
+
+    # Bar chart of recommendation breakdown
+    fig_rec = go.Figure(go.Bar(
+        x=["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"],
+        y=[strong_buy, buy, hold, sell, strong_sell],
+        marker_color=["#1a7f37", "#2da44e", "#f0b429", "#e05252", "#cf2929"],
+    ))
+    fig_rec.update_layout(
+        xaxis_title="Rating",
+        yaxis_title="Number of Analysts",
+        height=300,
+        margin=dict(t=20),
+    )
+    st.plotly_chart(fig_rec, use_container_width=True)
+
+# Earnings History
+try:
+    with st.spinner("Fetching earnings history..."):
+        earnings = fetch_earnings(symbol)
+except Exception as e:
+    earnings = []
+    st.warning(f"Could not fetch earnings history: {e}")
+
+if earnings:
+    st.subheader("Earnings History (EPS)")
+    rows = []
+    for e in earnings:
+        actual = e.get("actual")
+        estimate = e.get("estimate")
+        surprise = e.get("surprisePercent")
+        rows.append({
+            "Period": e.get("period", ""),
+            "Actual EPS": f"${actual:.2f}" if actual is not None else "N/A",
+            "Estimated EPS": f"${estimate:.2f}" if estimate is not None else "N/A",
+            "Surprise %": f"{surprise:+.2f}%" if surprise is not None else "N/A",
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+# Peer Companies
+try:
+    with st.spinner("Fetching peer companies..."):
+        peers = fetch_peers(symbol)
+except Exception as e:
+    peers = []
+    st.warning(f"Could not fetch peer companies: {e}")
+
+if peers:
+    st.subheader("Peer Companies")
+    peer_list = [p for p in peers if p != symbol]
+    if peer_list:
+        st.write(" · ".join(peer_list))
+    else:
+        st.write("No peers found.")
+
+# Recent News
+try:
+    with st.spinner("Fetching recent news..."):
+        news = fetch_news(symbol)
+except Exception as e:
+    news = []
+    st.warning(f"Could not fetch news: {e}")
+
+if news:
+    st.subheader("Recent News")
+    displayed = news[:10]
+    for article in displayed:
+        headline = article.get("headline", "No title")
+        url = article.get("url", "")
+        source = article.get("source", "")
+        ts = article.get("datetime", 0)
+        date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else ""
+        summary = article.get("summary", "")
+
+        with st.expander(f"{date_str}  |  {headline}"):
+            if summary:
+                st.write(summary)
+            col_src, col_link = st.columns([2, 1])
+            col_src.caption(f"Source: {source}")
+            if url:
+                col_link.markdown(f"[Read article]({url})")

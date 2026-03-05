@@ -48,3 +48,28 @@ class FinnhubAPI:
         if not data or data.get("s") != "ok":
             raise ValueError(f"No daily price data found for symbol '{symbol}'.")
         return data
+
+    def get_news(self, symbol: str, days: int = 7) -> list:
+        """Return recent company news articles for the last `days` days."""
+        to_dt = time.strftime("%Y-%m-%d", time.localtime())
+        from_dt = time.strftime(
+            "%Y-%m-%d",
+            time.localtime(time.time() - days * 24 * 60 * 60),
+        )
+        data = self.client.company_news(symbol, _from=from_dt, to=to_dt)
+        return data if data else []
+
+    def get_recommendations(self, symbol: str) -> list:
+        """Return analyst recommendation trends (buy/hold/sell counts)."""
+        data = self.client.recommendation_trends(symbol)
+        return data if data else []
+
+    def get_earnings(self, symbol: str, limit: int = 4) -> list:
+        """Return recent EPS surprises (actual vs. estimated earnings)."""
+        data = self.client.company_earnings(symbol, limit=limit)
+        return data if data else []
+
+    def get_peers(self, symbol: str) -> list:
+        """Return list of peer/comparable company ticker symbols."""
+        data = self.client.company_peers(symbol)
+        return data if data else []
