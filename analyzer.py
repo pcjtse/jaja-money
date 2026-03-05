@@ -162,3 +162,79 @@ def stream_fundamental_analysis(prompt: str):
                 and event.delta.type == "text_delta"
             ):
                 yield event.delta.text
+
+
+_SENTIMENT_THEMES_SYSTEM = """\
+You are a financial news analyst. Your task is to synthesise a batch of \
+news articles and their machine-learning sentiment scores into a concise \
+thematic briefing for investors.
+
+Structure your response with:
+1. **Overall Sentiment Signal** — restate the aggregate (Bullish / Bearish / \
+Mixed) and explain what is driving it
+2. **Key Bullish Themes** — bullet the main positive narratives (2-4 points)
+3. **Key Bearish / Risk Themes** — bullet the main negative narratives \
+(2-4 points)
+4. **Neutral / Background Noise** — brief note on articles that are \
+informational but not price-moving
+5. **Investor Takeaway** — one paragraph: what should investors watch for \
+in the near term based on this news flow?
+
+Be specific — reference actual headlines where relevant. Be concise.\
+"""
+
+
+def stream_sentiment_themes(
+    symbol: str,
+    articles: list,
+    scores: list,
+    aggregate: dict,
+) -> object:
+    """Stream a Claude sentiment-themes briefing.
+
+    Yields text chunks.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        raise ValueError(
+            "ANTHROPIC_API_KEY not set. "
+            "Add your Anthropic API key to .env."
+        )
+
+    # Build the user message
+    lines = [
+        f"## News Sentiment Briefing: {symbol}\n",
+        f"**Aggregate signal:** {aggregate['signal']} "
+        f"(net score: {aggregate['net_score']:+.2f}, "
+        f"positive: {aggregate['counts']['positive']}, "
+        f"negative: {aggregate['counts']['negative']}, "
+        f"neutral: {aggregate['counts']['neutral']})\n",
+        "### Scored Articles\n",
+    ]
+
+    for article, score in zip(articles, scores):
+        headline = article.get("headline", "")
+        source = article.get("source", "")
+        label = score.get("label", "neutral").upper()
+        conf = score.get("score", 0.0)
+        if headline:
+            lines.append(
+                f"- **[{label} {conf:.0%}]** [{source}] {headline}"
+            )
+
+    prompt = "\n".join(lines)
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=_SENTIMENT_THEMES_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text

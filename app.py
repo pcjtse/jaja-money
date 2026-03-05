@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from api import FinnhubAPI
-from analyzer import build_data_prompt, stream_fundamental_analysis
+from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes
+from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
 
 
 # --- Local technical indicator helpers ---
@@ -366,7 +367,7 @@ if peers:
     else:
         st.write("No peers found.")
 
-# Recent News
+# Recent News + Sentiment
 try:
     with st.spinner("Fetching recent news..."):
         news = fetch_news(symbol)
@@ -375,23 +376,90 @@ except Exception as e:
     st.warning(f"Could not fetch news: {e}")
 
 if news:
-    st.subheader("Recent News")
+    st.subheader("News Sentiment Scan")
     displayed = news[:10]
-    for article in displayed:
+
+    # --- Run FinBERT on all displayed headlines ---
+    with st.spinner("Scoring sentiment with FinBERT..."):
+        scores = score_articles(displayed)
+    agg = aggregate_sentiment(scores)
+
+    # --- Aggregate metrics row ---
+    signal = agg["signal"]
+    net = agg["net_score"]
+    counts = agg["counts"]
+
+    signal_color = (
+        SENTIMENT_COLOR["positive"] if "Bullish" in signal
+        else SENTIMENT_COLOR["negative"] if "Bearish" in signal
+        else SENTIMENT_COLOR["neutral"]
+    )
+    agg_col1, agg_col2 = st.columns([1, 2])
+    with agg_col1:
+        st.metric("Overall Signal", signal, f"Net score: {net:+.2f}")
+
+    with agg_col2:
+        fig_donut = go.Figure(go.Pie(
+            labels=["Positive", "Negative", "Neutral"],
+            values=[counts["positive"], counts["negative"], counts["neutral"]],
+            hole=0.6,
+            marker_colors=[
+                SENTIMENT_COLOR["positive"],
+                SENTIMENT_COLOR["negative"],
+                SENTIMENT_COLOR["neutral"],
+            ],
+            textinfo="label+percent",
+            showlegend=False,
+        ))
+        fig_donut.update_layout(
+            height=200,
+            margin=dict(t=10, b=10, l=10, r=10),
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    # --- Per-article expanders with sentiment badge ---
+    for article, score in zip(displayed, scores):
         headline = article.get("headline", "No title")
         url = article.get("url", "")
         source = article.get("source", "")
         ts = article.get("datetime", 0)
         date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else ""
         summary = article.get("summary", "")
+        label = score["label"]
+        conf = score["score"]
+        emoji = SENTIMENT_EMOJI[label]
 
-        with st.expander(f"{date_str}  |  {headline}"):
+        with st.expander(f"{emoji} {date_str}  |  {headline}"):
+            st.markdown(
+                f'<span style="color:{SENTIMENT_COLOR[label]};font-weight:bold;">'
+                f"{label.upper()} {conf:.0%}</span>",
+                unsafe_allow_html=True,
+            )
             if summary:
                 st.write(summary)
             col_src, col_link = st.columns([2, 1])
             col_src.caption(f"Source: {source}")
             if url:
                 col_link.markdown(f"[Read article]({url})")
+
+    # --- Claude themes button ---
+    st.divider()
+    run_themes = st.button(
+        "Analyze Sentiment Themes with Claude",
+        use_container_width=False,
+    )
+    if run_themes:
+        themes_placeholder = st.empty()
+        themes_text = ""
+        try:
+            with st.spinner("Claude is synthesizing news themes..."):
+                for chunk in stream_sentiment_themes(symbol, displayed, scores, agg):
+                    themes_text += chunk
+                    themes_placeholder.markdown(themes_text)
+        except ValueError as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Theme analysis failed: {e}")
 
 # --- Fundamental Analyzer (Claude-powered) ---
 
