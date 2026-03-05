@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime
 from api import FinnhubAPI
+from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes
+from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
+from factors import compute_factors, composite_score, composite_label_color
+from guardrails import compute_risk
 
 
 # --- Local technical indicator helpers ---
@@ -59,6 +64,22 @@ def fetch_financials(symbol: str) -> dict:
 @st.cache_data(ttl=300)
 def fetch_daily(symbol: str) -> dict:
     return FinnhubAPI().get_daily(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_news(symbol: str) -> list:
+    return FinnhubAPI().get_news(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_recommendations(symbol: str) -> list:
+    return FinnhubAPI().get_recommendations(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_earnings(symbol: str) -> list:
+    return FinnhubAPI().get_earnings(symbol)
+
+@st.cache_data(ttl=300)
+def fetch_peers(symbol: str) -> list:
+    return FinnhubAPI().get_peers(symbol)
 
 
 # --- Sidebar ---
@@ -263,3 +284,438 @@ if df is not None and len(df) > 0:
             chart_df.set_index("Date").sort_index(ascending=False),
             use_container_width=True,
         )
+
+# --- Market Research ---
+
+st.header("Market Research")
+
+# Analyst Recommendations
+try:
+    with st.spinner("Fetching analyst recommendations..."):
+        recs = fetch_recommendations(symbol)
+except Exception as e:
+    recs = []
+    st.warning(f"Could not fetch analyst recommendations: {e}")
+
+if recs:
+    latest = recs[0]
+    st.subheader("Analyst Recommendations")
+    period = latest.get("period", "")
+    st.caption(f"Most recent period: {period}")
+
+    buy = latest.get("buy", 0)
+    hold = latest.get("hold", 0)
+    sell = latest.get("sell", 0)
+    strong_buy = latest.get("strongBuy", 0)
+    strong_sell = latest.get("strongSell", 0)
+
+    rec_cols = st.columns(5)
+    rec_cols[0].metric("Strong Buy", strong_buy)
+    rec_cols[1].metric("Buy", buy)
+    rec_cols[2].metric("Hold", hold)
+    rec_cols[3].metric("Sell", sell)
+    rec_cols[4].metric("Strong Sell", strong_sell)
+
+    # Bar chart of recommendation breakdown
+    fig_rec = go.Figure(go.Bar(
+        x=["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"],
+        y=[strong_buy, buy, hold, sell, strong_sell],
+        marker_color=["#1a7f37", "#2da44e", "#f0b429", "#e05252", "#cf2929"],
+    ))
+    fig_rec.update_layout(
+        xaxis_title="Rating",
+        yaxis_title="Number of Analysts",
+        height=300,
+        margin=dict(t=20),
+    )
+    st.plotly_chart(fig_rec, use_container_width=True)
+
+# Earnings History
+try:
+    with st.spinner("Fetching earnings history..."):
+        earnings = fetch_earnings(symbol)
+except Exception as e:
+    earnings = []
+    st.warning(f"Could not fetch earnings history: {e}")
+
+if earnings:
+    st.subheader("Earnings History (EPS)")
+    rows = []
+    for e in earnings:
+        actual = e.get("actual")
+        estimate = e.get("estimate")
+        surprise = e.get("surprisePercent")
+        rows.append({
+            "Period": e.get("period", ""),
+            "Actual EPS": f"${actual:.2f}" if actual is not None else "N/A",
+            "Estimated EPS": f"${estimate:.2f}" if estimate is not None else "N/A",
+            "Surprise %": f"{surprise:+.2f}%" if surprise is not None else "N/A",
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+# Peer Companies
+try:
+    with st.spinner("Fetching peer companies..."):
+        peers = fetch_peers(symbol)
+except Exception as e:
+    peers = []
+    st.warning(f"Could not fetch peer companies: {e}")
+
+if peers:
+    st.subheader("Peer Companies")
+    peer_list = [p for p in peers if p != symbol]
+    if peer_list:
+        st.write(" · ".join(peer_list))
+    else:
+        st.write("No peers found.")
+
+scores = []   # FinBERT per-article scores (populated below if news available)
+agg = None    # Aggregate sentiment dict
+
+# Recent News + Sentiment
+try:
+    with st.spinner("Fetching recent news..."):
+        news = fetch_news(symbol)
+except Exception as e:
+    news = []
+    st.warning(f"Could not fetch news: {e}")
+
+if news:
+    st.subheader("News Sentiment Scan")
+    displayed = news[:10]
+
+    # --- Run FinBERT on all displayed headlines ---
+    with st.spinner("Scoring sentiment with FinBERT..."):
+        scores = score_articles(displayed)
+    agg = aggregate_sentiment(scores)
+
+    # --- Aggregate metrics row ---
+    signal = agg["signal"]
+    net = agg["net_score"]
+    counts = agg["counts"]
+
+    signal_color = (
+        SENTIMENT_COLOR["positive"] if "Bullish" in signal
+        else SENTIMENT_COLOR["negative"] if "Bearish" in signal
+        else SENTIMENT_COLOR["neutral"]
+    )
+    agg_col1, agg_col2 = st.columns([1, 2])
+    with agg_col1:
+        st.metric("Overall Signal", signal, f"Net score: {net:+.2f}")
+
+    with agg_col2:
+        fig_donut = go.Figure(go.Pie(
+            labels=["Positive", "Negative", "Neutral"],
+            values=[counts["positive"], counts["negative"], counts["neutral"]],
+            hole=0.6,
+            marker_colors=[
+                SENTIMENT_COLOR["positive"],
+                SENTIMENT_COLOR["negative"],
+                SENTIMENT_COLOR["neutral"],
+            ],
+            textinfo="label+percent",
+            showlegend=False,
+        ))
+        fig_donut.update_layout(
+            height=200,
+            margin=dict(t=10, b=10, l=10, r=10),
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    # --- Per-article expanders with sentiment badge ---
+    for article, score in zip(displayed, scores):
+        headline = article.get("headline", "No title")
+        url = article.get("url", "")
+        source = article.get("source", "")
+        ts = article.get("datetime", 0)
+        date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else ""
+        summary = article.get("summary", "")
+        label = score["label"]
+        conf = score["score"]
+        emoji = SENTIMENT_EMOJI[label]
+
+        with st.expander(f"{emoji} {date_str}  |  {headline}"):
+            st.markdown(
+                f'<span style="color:{SENTIMENT_COLOR[label]};font-weight:bold;">'
+                f"{label.upper()} {conf:.0%}</span>",
+                unsafe_allow_html=True,
+            )
+            if summary:
+                st.write(summary)
+            col_src, col_link = st.columns([2, 1])
+            col_src.caption(f"Source: {source}")
+            if url:
+                col_link.markdown(f"[Read article]({url})")
+
+    # --- Claude themes button ---
+    st.divider()
+    run_themes = st.button(
+        "Analyze Sentiment Themes with Claude",
+        use_container_width=False,
+    )
+    if run_themes:
+        themes_placeholder = st.empty()
+        themes_text = ""
+        try:
+            with st.spinner("Claude is synthesizing news themes..."):
+                for chunk in stream_sentiment_themes(symbol, displayed, scores, agg):
+                    themes_text += chunk
+                    themes_placeholder.markdown(themes_text)
+        except ValueError as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Theme analysis failed: {e}")
+
+# --- Factor Score Engine ---
+
+st.divider()
+st.header("Factor Score Engine")
+st.caption(
+    "Eight quantitative factors — valuation, trend, momentum, MACD, sentiment, "
+    "earnings quality, analyst consensus, and 52-week strength — combined into "
+    "a single composite signal."
+)
+
+_close = df["Close"] if df is not None and len(df) > 0 else None
+_recs_for_factors = recs if "recs" in locals() else []
+_earnings_for_factors = earnings if "earnings" in locals() else []
+
+_factors = compute_factors(
+    quote=quote,
+    financials=financials,
+    close=_close,
+    earnings=_earnings_for_factors,
+    recommendations=_recs_for_factors,
+    sentiment_agg=agg,
+)
+_composite = composite_score(_factors)
+_label, _color = composite_label_color(_composite)
+
+# Row 1: composite gauge (left) + radar chart (right)
+gauge_col, radar_col = st.columns([1, 1])
+
+with gauge_col:
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=_composite,
+        number={"suffix": " / 100", "font": {"size": 28}},
+        title={"text": f"<b>{_label}</b>", "font": {"size": 20, "color": _color}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1},
+            "bar": {"color": _color, "thickness": 0.3},
+            "bgcolor": "white",
+            "steps": [
+                {"range": [0,  30], "color": "#fde8e8"},
+                {"range": [30, 45], "color": "#fef3cd"},
+                {"range": [45, 55], "color": "#ebebeb"},
+                {"range": [55, 70], "color": "#d4edda"},
+                {"range": [70, 100], "color": "#c3e6cb"},
+            ],
+            "threshold": {
+                "line": {"color": _color, "width": 4},
+                "thickness": 0.75,
+                "value": _composite,
+            },
+        },
+    ))
+    fig_gauge.update_layout(height=280, margin=dict(t=40, b=10, l=20, r=20))
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
+with radar_col:
+    _names  = [f["name"] for f in _factors]
+    _scores = [f["score"] for f in _factors]
+    # Close the polygon
+    _names_closed  = _names + [_names[0]]
+    _scores_closed = _scores + [_scores[0]]
+
+    fig_radar = go.Figure(go.Scatterpolar(
+        r=_scores_closed,
+        theta=_names_closed,
+        fill="toself",
+        fillcolor="rgba(45,164,78,0.15)",
+        line=dict(color="#2da44e", width=2),
+        name="Factor Scores",
+    ))
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=9)),
+            angularaxis=dict(tickfont=dict(size=10)),
+        ),
+        showlegend=False,
+        height=280,
+        margin=dict(t=20, b=20, l=40, r=40),
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
+
+# Row 2: factor breakdown table
+_rows = []
+for f in _factors:
+    score = f["score"]
+    if score >= 70:
+        bar = "🟢🟢🟢🟢"
+    elif score >= 55:
+        bar = "🟢🟢🟢⚪"
+    elif score >= 45:
+        bar = "🟡🟡⚪⚪"
+    elif score >= 30:
+        bar = "🔴🔴⚪⚪"
+    else:
+        bar = "🔴🔴🔴🔴"
+    _rows.append({
+        "Factor":  f["name"],
+        "Score":   score,
+        "Signal":  bar,
+        "Label":   f["label"],
+        "Detail":  f["detail"],
+        "Weight":  f"{f['weight']:.0%}",
+    })
+
+st.dataframe(
+    pd.DataFrame(_rows),
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Score":  st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d"),
+        "Signal": st.column_config.TextColumn("Signal", width="small"),
+    },
+)
+
+# --- Risk Guardrails ---
+
+st.divider()
+st.header("Risk Guardrails")
+st.caption(
+    "Four risk dimensions — volatility, drawdown, signal strength, and red-flag count — "
+    "combined into a single risk score, with actionable alerts for specific danger conditions."
+)
+
+_risk = compute_risk(
+    quote=quote,
+    financials=financials,
+    close=_close,
+    earnings=_earnings_for_factors,
+    recommendations=_recs_for_factors,
+    sentiment_agg=agg,
+    composite_factor_score=_composite,
+)
+
+# Summary row: risk score gauge + key metrics
+risk_gauge_col, risk_meta_col = st.columns([1, 1])
+
+with risk_gauge_col:
+    _rlabel = _risk["risk_level"]
+    _rcolor = _risk["risk_color"]
+    _rscore = _risk["risk_score"]
+    fig_risk_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=_rscore,
+        number={"suffix": " / 100", "font": {"size": 28}},
+        title={"text": f"<b>Risk: {_rlabel}</b>", "font": {"size": 18, "color": _rcolor}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1},
+            "bar": {"color": _rcolor, "thickness": 0.3},
+            "bgcolor": "white",
+            "steps": [
+                {"range": [0,  25], "color": "#c3e6cb"},
+                {"range": [25, 45], "color": "#d4edda"},
+                {"range": [45, 65], "color": "#fef3cd"},
+                {"range": [65, 80], "color": "#fde8e8"},
+                {"range": [80, 100], "color": "#f5c6cb"},
+            ],
+            "threshold": {
+                "line": {"color": _rcolor, "width": 4},
+                "thickness": 0.75,
+                "value": _rscore,
+            },
+        },
+    ))
+    fig_risk_gauge.update_layout(height=260, margin=dict(t=40, b=10, l=20, r=20))
+    st.plotly_chart(fig_risk_gauge, use_container_width=True)
+
+with risk_meta_col:
+    _hv = _risk.get("hv")
+    _dd = _risk.get("drawdown_pct")
+    m1, m2 = st.columns(2)
+    m1.metric(
+        "Annualised Volatility (20d)",
+        f"{_hv:.1f}%" if _hv is not None else "N/A",
+    )
+    m2.metric(
+        "Drawdown from 52-Wk High",
+        f"{_dd:.1f}%" if _dd is not None else "N/A",
+    )
+    _flag_count = len(_risk["flags"])
+    m1.metric("Active Risk Flags", _flag_count)
+    m2.metric("Factor Score (context)", f"{_composite} / 100")
+
+# Flag alerts
+_flags = _risk["flags"]
+if not _flags:
+    st.success("No risk flags triggered. All monitored conditions are within normal ranges.")
+else:
+    for _f in _flags:
+        _body = f"**{_f['icon']} {_f['title']}** — {_f['message']}"
+        if _f["severity"] == "danger":
+            st.error(_body)
+        elif _f["severity"] == "warning":
+            st.warning(_body)
+        else:
+            st.info(_body)
+
+# --- Fundamental Analyzer (Claude-powered) ---
+
+st.divider()
+st.header("Fundamental Analyzer")
+st.caption(
+    "Powered by Claude Opus 4.6 with adaptive thinking. "
+    "Synthesizes all available data into a structured investment research report."
+)
+
+run_analysis = st.button(
+    "Run Fundamental Analysis",
+    type="primary",
+    use_container_width=False,
+)
+
+if run_analysis:
+    # Build technicals dict from already-computed values
+    technicals: dict = {}
+    if df is not None and len(df) > 0:
+        close = df["Close"]
+        sma50_v = calc_sma(close, 50)
+        sma200_v = calc_sma(close, 200)
+        rsi_v = calc_rsi(close)
+        macd_r = calc_macd(close)
+
+        technicals["sma50"] = f"${sma50_v:,.2f}" if sma50_v is not None else "N/A"
+        technicals["sma200"] = f"${sma200_v:,.2f}" if sma200_v is not None else "N/A"
+        technicals["rsi"] = f"{rsi_v:.2f}" if rsi_v is not None else "N/A"
+        if macd_r is not None:
+            technicals["macd"] = f"{macd_r[0]:.4f}"
+            technicals["macd_signal"] = f"{macd_r[1]:.4f}"
+            technicals["macd_hist"] = f"{macd_r[2]:+.4f}"
+
+    data_prompt = build_data_prompt(
+        symbol=symbol,
+        quote=quote,
+        profile=profile,
+        financials=financials,
+        technicals=technicals,
+        recommendations=recs if "recs" in dir() else [],
+        earnings=earnings if "earnings" in dir() else [],
+        peers=peers if "peers" in dir() else [],
+        news=news if "news" in dir() else [],
+    )
+
+    report_placeholder = st.empty()
+    report_text = ""
+
+    try:
+        with st.spinner("Claude is analyzing the data..."):
+            for chunk in stream_fundamental_analysis(data_prompt):
+                report_text += chunk
+                report_placeholder.markdown(report_text)
+    except ValueError as e:
+        st.error(str(e))
+    except Exception as e:
+        st.error(f"Analysis failed: {e}")
