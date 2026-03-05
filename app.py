@@ -6,6 +6,7 @@ from api import FinnhubAPI
 from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes
 from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
 from factors import compute_factors, composite_score, composite_label_color
+from guardrails import compute_risk
 
 
 # --- Local technical indicator helpers ---
@@ -578,6 +579,88 @@ st.dataframe(
         "Signal": st.column_config.TextColumn("Signal", width="small"),
     },
 )
+
+# --- Risk Guardrails ---
+
+st.divider()
+st.header("Risk Guardrails")
+st.caption(
+    "Four risk dimensions — volatility, drawdown, signal strength, and red-flag count — "
+    "combined into a single risk score, with actionable alerts for specific danger conditions."
+)
+
+_risk = compute_risk(
+    quote=quote,
+    financials=financials,
+    close=_close,
+    earnings=_earnings_for_factors,
+    recommendations=_recs_for_factors,
+    sentiment_agg=agg,
+    composite_factor_score=_composite,
+)
+
+# Summary row: risk score gauge + key metrics
+risk_gauge_col, risk_meta_col = st.columns([1, 1])
+
+with risk_gauge_col:
+    _rlabel = _risk["risk_level"]
+    _rcolor = _risk["risk_color"]
+    _rscore = _risk["risk_score"]
+    fig_risk_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=_rscore,
+        number={"suffix": " / 100", "font": {"size": 28}},
+        title={"text": f"<b>Risk: {_rlabel}</b>", "font": {"size": 18, "color": _rcolor}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1},
+            "bar": {"color": _rcolor, "thickness": 0.3},
+            "bgcolor": "white",
+            "steps": [
+                {"range": [0,  25], "color": "#c3e6cb"},
+                {"range": [25, 45], "color": "#d4edda"},
+                {"range": [45, 65], "color": "#fef3cd"},
+                {"range": [65, 80], "color": "#fde8e8"},
+                {"range": [80, 100], "color": "#f5c6cb"},
+            ],
+            "threshold": {
+                "line": {"color": _rcolor, "width": 4},
+                "thickness": 0.75,
+                "value": _rscore,
+            },
+        },
+    ))
+    fig_risk_gauge.update_layout(height=260, margin=dict(t=40, b=10, l=20, r=20))
+    st.plotly_chart(fig_risk_gauge, use_container_width=True)
+
+with risk_meta_col:
+    _hv = _risk.get("hv")
+    _dd = _risk.get("drawdown_pct")
+    m1, m2 = st.columns(2)
+    m1.metric(
+        "Annualised Volatility (20d)",
+        f"{_hv:.1f}%" if _hv is not None else "N/A",
+    )
+    m2.metric(
+        "Drawdown from 52-Wk High",
+        f"{_dd:.1f}%" if _dd is not None else "N/A",
+    )
+    _flag_count = len(_risk["flags"])
+    m1.metric("Active Risk Flags", _flag_count)
+    m2.metric("Factor Score (context)", f"{_composite} / 100")
+
+# Flag alerts
+_flags = _risk["flags"]
+if not _flags:
+    st.success("No risk flags triggered. All monitored conditions are within normal ranges.")
+else:
+    for _f in _flags:
+        _body = f"**{_f['icon']} {_f['title']}** — {_f['message']}"
+        if _f["severity"] == "danger":
+            st.error(_body)
+        elif _f["severity"] == "warning":
+            st.warning(_body)
+        else:
+            st.info(_body)
 
 # --- Fundamental Analyzer (Claude-powered) ---
 
