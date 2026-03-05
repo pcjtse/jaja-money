@@ -5,6 +5,7 @@ from datetime import datetime
 from api import FinnhubAPI
 from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes
 from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
+from factors import compute_factors, composite_score, composite_label_color
 
 
 # --- Local technical indicator helpers ---
@@ -367,6 +368,9 @@ if peers:
     else:
         st.write("No peers found.")
 
+scores = []   # FinBERT per-article scores (populated below if news available)
+agg = None    # Aggregate sentiment dict
+
 # Recent News + Sentiment
 try:
     with st.spinner("Fetching recent news..."):
@@ -460,6 +464,120 @@ if news:
             st.error(str(e))
         except Exception as e:
             st.error(f"Theme analysis failed: {e}")
+
+# --- Factor Score Engine ---
+
+st.divider()
+st.header("Factor Score Engine")
+st.caption(
+    "Eight quantitative factors — valuation, trend, momentum, MACD, sentiment, "
+    "earnings quality, analyst consensus, and 52-week strength — combined into "
+    "a single composite signal."
+)
+
+_close = df["Close"] if df is not None and len(df) > 0 else None
+_recs_for_factors = recs if "recs" in locals() else []
+_earnings_for_factors = earnings if "earnings" in locals() else []
+
+_factors = compute_factors(
+    quote=quote,
+    financials=financials,
+    close=_close,
+    earnings=_earnings_for_factors,
+    recommendations=_recs_for_factors,
+    sentiment_agg=agg,
+)
+_composite = composite_score(_factors)
+_label, _color = composite_label_color(_composite)
+
+# Row 1: composite gauge (left) + radar chart (right)
+gauge_col, radar_col = st.columns([1, 1])
+
+with gauge_col:
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=_composite,
+        number={"suffix": " / 100", "font": {"size": 28}},
+        title={"text": f"<b>{_label}</b>", "font": {"size": 20, "color": _color}},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1},
+            "bar": {"color": _color, "thickness": 0.3},
+            "bgcolor": "white",
+            "steps": [
+                {"range": [0,  30], "color": "#fde8e8"},
+                {"range": [30, 45], "color": "#fef3cd"},
+                {"range": [45, 55], "color": "#ebebeb"},
+                {"range": [55, 70], "color": "#d4edda"},
+                {"range": [70, 100], "color": "#c3e6cb"},
+            ],
+            "threshold": {
+                "line": {"color": _color, "width": 4},
+                "thickness": 0.75,
+                "value": _composite,
+            },
+        },
+    ))
+    fig_gauge.update_layout(height=280, margin=dict(t=40, b=10, l=20, r=20))
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
+with radar_col:
+    _names  = [f["name"] for f in _factors]
+    _scores = [f["score"] for f in _factors]
+    # Close the polygon
+    _names_closed  = _names + [_names[0]]
+    _scores_closed = _scores + [_scores[0]]
+
+    fig_radar = go.Figure(go.Scatterpolar(
+        r=_scores_closed,
+        theta=_names_closed,
+        fill="toself",
+        fillcolor="rgba(45,164,78,0.15)",
+        line=dict(color="#2da44e", width=2),
+        name="Factor Scores",
+    ))
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=9)),
+            angularaxis=dict(tickfont=dict(size=10)),
+        ),
+        showlegend=False,
+        height=280,
+        margin=dict(t=20, b=20, l=40, r=40),
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
+
+# Row 2: factor breakdown table
+_rows = []
+for f in _factors:
+    score = f["score"]
+    if score >= 70:
+        bar = "🟢🟢🟢🟢"
+    elif score >= 55:
+        bar = "🟢🟢🟢⚪"
+    elif score >= 45:
+        bar = "🟡🟡⚪⚪"
+    elif score >= 30:
+        bar = "🔴🔴⚪⚪"
+    else:
+        bar = "🔴🔴🔴🔴"
+    _rows.append({
+        "Factor":  f["name"],
+        "Score":   score,
+        "Signal":  bar,
+        "Label":   f["label"],
+        "Detail":  f["detail"],
+        "Weight":  f"{f['weight']:.0%}",
+    })
+
+st.dataframe(
+    pd.DataFrame(_rows),
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Score":  st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d"),
+        "Signal": st.column_config.TextColumn("Signal", width="small"),
+    },
+)
 
 # --- Fundamental Analyzer (Claude-powered) ---
 
