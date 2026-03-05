@@ -238,3 +238,106 @@ def stream_sentiment_themes(
                 and event.delta.type == "text_delta"
             ):
                 yield event.delta.text
+
+
+_PORTFOLIO_MEMO_SYSTEM = """\
+You are a senior portfolio manager writing a concise investment memo for a
+private client. You have been given quantitative analysis outputs — a factor
+score, a risk score, and a rule-based position suggestion — alongside the
+client's stated risk tolerance and investment horizon.
+
+Write a portfolio construction memo with the following sections:
+
+1. **Investment Stance** — one sentence summary of the recommended action and why
+2. **Position Construction** — how to build the position (size, tranches, timing),
+   referencing the client's risk profile and horizon
+3. **Risk Management** — stop-loss rationale, what would invalidate the thesis,
+   and specific conditions to monitor
+4. **Upside Scenario** — what has to go right to hit the price targets; key catalysts
+5. **Downside Scenario** — what could go wrong; asymmetric risks specific to this stock
+6. **Portfolio Fit** — one paragraph on how this position fits within a diversified
+   portfolio given the client's stated risk tolerance
+
+Be specific — reference actual numbers (factor score, risk score, position %, stop %,
+targets). Be direct and avoid boilerplate. Write for a sophisticated investor.\
+"""
+
+
+def stream_portfolio_memo(
+    symbol: str,
+    suggestion: dict,
+    factors: list,
+    risk: dict,
+    profile: dict | None,
+    risk_tolerance: str,
+    horizon: str,
+) -> object:
+    """Stream a Claude portfolio construction memo.  Yields text chunks."""
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        raise ValueError(
+            "ANTHROPIC_API_KEY not set. "
+            "Add your Anthropic API key to .env."
+        )
+
+    name = (profile or {}).get("name", symbol)
+    sector = (profile or {}).get("finnhubIndustry", "Unknown sector")
+
+    lines = [
+        f"## Portfolio Memo Request: {symbol} ({name})",
+        f"**Sector:** {sector}",
+        f"**Client profile:** {risk_tolerance} risk tolerance, {horizon}\n",
+        "### Quantitative Summary",
+        f"- Composite factor score: {suggestion.get('action')} signal",
+        f"- Risk score: {risk.get('risk_score')}/100 ({risk.get('risk_level')})",
+        (f"- Annualised volatility (20d): {risk['hv']:.1f}%"
+         if risk.get("hv") else "- Annualised volatility: N/A"),
+        (f"- Drawdown from 52-wk high: {risk['drawdown_pct']:.1f}%"
+         if risk.get("drawdown_pct") else "- Drawdown: N/A"),
+        "",
+        "### Rule-Based Suggestion",
+        f"- Action: {suggestion.get('action')}",
+        f"- Suggested allocation: {suggestion.get('position_label')} of portfolio",
+        f"- Entry strategy: {suggestion.get('entry_strategy')}",
+    ]
+    if suggestion.get("stop_price"):
+        lines.append(
+            f"- Stop-loss: ${suggestion['stop_price']} "
+            f"({suggestion.get('stop_pct')}% below entry)"
+        )
+    if suggestion.get("target_1"):
+        lines.append(f"- Target 1: ${suggestion['target_1']}")
+    if suggestion.get("target_2"):
+        lines.append(f"- Target 2: ${suggestion['target_2']}")
+    if suggestion.get("risk_reward"):
+        lines.append(f"- Risk/reward (to T1): {suggestion['risk_reward']}×")
+
+    lines += ["", "### Factor Breakdown"]
+    for f in factors:
+        lines.append(f"- {f['name']}: {f['score']}/100 — {f['label']} ({f['detail']})")
+
+    lines += ["", "### Active Risk Flags"]
+    flags = risk.get("flags", [])
+    if flags:
+        for fl in flags:
+            lines.append(f"- [{fl['severity'].upper()}] {fl['title']}: {fl['message']}")
+    else:
+        lines.append("- No active risk flags")
+
+    lines += ["", "### Rule-engine rationale"]
+    for r in suggestion.get("rationale", []):
+        lines.append(f"- {r}")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1500,
+        system=_PORTFOLIO_MEMO_SYSTEM,
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text
