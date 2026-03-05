@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from api import FinnhubAPI
+from analyzer import build_data_prompt, stream_fundamental_analysis
 
 
 # --- Local technical indicator helpers ---
@@ -391,3 +392,61 @@ if news:
             col_src.caption(f"Source: {source}")
             if url:
                 col_link.markdown(f"[Read article]({url})")
+
+# --- Fundamental Analyzer (Claude-powered) ---
+
+st.divider()
+st.header("Fundamental Analyzer")
+st.caption(
+    "Powered by Claude Opus 4.6 with adaptive thinking. "
+    "Synthesizes all available data into a structured investment research report."
+)
+
+run_analysis = st.button(
+    "Run Fundamental Analysis",
+    type="primary",
+    use_container_width=False,
+)
+
+if run_analysis:
+    # Build technicals dict from already-computed values
+    technicals: dict = {}
+    if df is not None and len(df) > 0:
+        close = df["Close"]
+        sma50_v = calc_sma(close, 50)
+        sma200_v = calc_sma(close, 200)
+        rsi_v = calc_rsi(close)
+        macd_r = calc_macd(close)
+
+        technicals["sma50"] = f"${sma50_v:,.2f}" if sma50_v is not None else "N/A"
+        technicals["sma200"] = f"${sma200_v:,.2f}" if sma200_v is not None else "N/A"
+        technicals["rsi"] = f"{rsi_v:.2f}" if rsi_v is not None else "N/A"
+        if macd_r is not None:
+            technicals["macd"] = f"{macd_r[0]:.4f}"
+            technicals["macd_signal"] = f"{macd_r[1]:.4f}"
+            technicals["macd_hist"] = f"{macd_r[2]:+.4f}"
+
+    data_prompt = build_data_prompt(
+        symbol=symbol,
+        quote=quote,
+        profile=profile,
+        financials=financials,
+        technicals=technicals,
+        recommendations=recs if "recs" in dir() else [],
+        earnings=earnings if "earnings" in dir() else [],
+        peers=peers if "peers" in dir() else [],
+        news=news if "news" in dir() else [],
+    )
+
+    report_placeholder = st.empty()
+    report_text = ""
+
+    try:
+        with st.spinner("Claude is analyzing the data..."):
+            for chunk in stream_fundamental_analysis(data_prompt):
+                report_text += chunk
+                report_placeholder.markdown(report_text)
+    except ValueError as e:
+        st.error(str(e))
+    except Exception as e:
+        st.error(f"Analysis failed: {e}")

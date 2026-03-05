@@ -3,3 +3,4 @@ finnhub-python
 python-dotenv
 plotly
 pandas
+anthropic
