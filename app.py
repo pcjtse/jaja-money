@@ -3,10 +3,11 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from api import FinnhubAPI
-from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes
+from analyzer import build_data_prompt, stream_fundamental_analysis, stream_sentiment_themes, stream_portfolio_memo
 from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
 from factors import compute_factors, composite_score, composite_label_color
 from guardrails import compute_risk
+from portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
 
 
 # --- Local technical indicator helpers ---
@@ -27,7 +28,8 @@ def calc_rsi(series: pd.Series, length: int = 14):
     avg_loss = loss.ewm(alpha=1 / length, min_periods=length).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1]
+    val = float(rsi.iloc[-1])
+    return val if not pd.isna(val) else None
 
 
 def calc_macd(
@@ -477,8 +479,8 @@ st.caption(
 )
 
 _close = df["Close"] if df is not None and len(df) > 0 else None
-_recs_for_factors = recs if "recs" in locals() else []
-_earnings_for_factors = earnings if "earnings" in locals() else []
+_recs_for_factors = recs
+_earnings_for_factors = earnings
 
 _factors = compute_factors(
     quote=quote,
@@ -662,6 +664,97 @@ else:
         else:
             st.info(_body)
 
+# --- Portfolio Construction ---
+
+st.divider()
+st.header("Portfolio Construction")
+st.caption(
+    "Rule-based position sizing, entry strategy, stop-loss, and price targets "
+    "tailored to your risk tolerance and investment horizon. "
+    "Optionally generate a full narrative memo with Claude."
+)
+
+_pt_col, _ph_col = st.columns(2)
+_risk_tolerance = _pt_col.selectbox("Risk Tolerance", RISK_TOLERANCES, index=1)
+_horizon        = _ph_col.selectbox("Investment Horizon", HORIZONS, index=1)
+
+_suggestion = suggest_position(
+    risk_tolerance=_risk_tolerance,
+    horizon=_horizon,
+    composite_factor=_composite,
+    risk_score=_risk["risk_score"],
+    quote=quote,
+    close=_close,
+)
+
+# Action banner
+st.markdown(
+    f'<div style="background:{_suggestion["action_color"]}22;border-left:4px solid '
+    f'{_suggestion["action_color"]};padding:10px 16px;border-radius:4px;margin:8px 0">'
+    f'<span style="font-size:1.3rem;font-weight:700;color:{_suggestion["action_color"]}">'
+    f'{_suggestion["action"]}</span>'
+    f'<span style="margin-left:12px;color:#555">{_risk_tolerance} · {_horizon}</span>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
+
+# Key metrics row
+_c1, _c2, _c3, _c4, _c5 = st.columns(5)
+_c1.metric("Suggested Allocation", _suggestion["position_label"])
+_c2.metric(
+    "Stop-Loss",
+    f"${_suggestion['stop_price']:,.2f}" if _suggestion["stop_price"] else "N/A",
+    f"-{_suggestion['stop_pct']:.1f}%" if _suggestion["stop_pct"] else None,
+)
+_c3.metric(
+    "Target 1",
+    f"${_suggestion['target_1']:,.2f}" if _suggestion["target_1"] else "N/A",
+    (f"+{(_suggestion['target_1'] / quote['c'] - 1) * 100:.1f}%"
+     if _suggestion["target_1"] and quote.get("c") else None),
+)
+_c4.metric(
+    "Target 2",
+    f"${_suggestion['target_2']:,.2f}" if _suggestion["target_2"] else "N/A",
+    (f"+{(_suggestion['target_2'] / quote['c'] - 1) * 100:.1f}%"
+     if _suggestion["target_2"] and quote.get("c") else None),
+)
+_c5.metric(
+    "Risk / Reward",
+    f"{_suggestion['risk_reward']}×" if _suggestion["risk_reward"] else "N/A",
+)
+
+# Entry strategy
+st.info(f"**Entry Strategy:** {_suggestion['entry_strategy']}")
+
+# Rationale
+with st.expander("Rule-engine rationale"):
+    for _r in _suggestion["rationale"]:
+        st.markdown(f"- {_r}")
+
+# Claude portfolio memo
+st.divider()
+_run_memo = st.button("Generate Portfolio Memo with Claude", use_container_width=False)
+if _run_memo:
+    _memo_placeholder = st.empty()
+    _memo_text = ""
+    try:
+        with st.spinner("Claude is writing your portfolio memo..."):
+            for _chunk in stream_portfolio_memo(
+                symbol=symbol,
+                suggestion=_suggestion,
+                factors=_factors,
+                risk=_risk,
+                profile=profile,
+                risk_tolerance=_risk_tolerance,
+                horizon=_horizon,
+            ):
+                _memo_text += _chunk
+                _memo_placeholder.markdown(_memo_text)
+    except ValueError as e:
+        st.error(str(e))
+    except Exception as e:
+        st.error(f"Portfolio memo failed: {e}")
+
 # --- Fundamental Analyzer (Claude-powered) ---
 
 st.divider()
@@ -701,10 +794,10 @@ if run_analysis:
         profile=profile,
         financials=financials,
         technicals=technicals,
-        recommendations=recs if "recs" in dir() else [],
-        earnings=earnings if "earnings" in dir() else [],
-        peers=peers if "peers" in dir() else [],
-        news=news if "news" in dir() else [],
+        recommendations=recs,
+        earnings=earnings,
+        peers=peers,
+        news=news,
     )
 
     report_placeholder = st.empty()

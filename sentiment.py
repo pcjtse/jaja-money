@@ -31,11 +31,9 @@ def score_articles(articles: list) -> list[dict]:
             results.append({"label": "neutral", "score": 1.0})
             continue
 
-        # pipe returns a list of all label scores, sorted by score desc
-        preds = pipe(headline)  # [[{label, score}, ...]]
-        # preds is a list-of-lists when top_k=None; first element is best
-        top = preds[0] if isinstance(preds[0], dict) else preds[0][0]
-        # Normalise label to lowercase
+        # With top_k=None, pipeline returns a list of dicts sorted by score desc
+        preds = pipe(headline)
+        top = preds[0]  # highest-confidence prediction
         results.append({"label": top["label"].lower(), "score": top["score"]})
 
     return results
@@ -53,7 +51,9 @@ def aggregate_sentiment(scores: list[dict]) -> dict:
     counts = {"positive": 0, "negative": 0, "neutral": 0}
     for s in scores:
         label = s.get("label", "neutral").lower()
-        counts[label] = counts.get(label, 0) + 1
+        if label not in counts:
+            label = "neutral"
+        counts[label] += 1
 
     total = len(scores)
     net = (counts["positive"] - counts["negative"]) / total if total else 0.0
