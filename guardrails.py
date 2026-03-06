@@ -18,7 +18,11 @@ def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     """Annualised historical volatility (%) over the last `window` days."""
     if close is None or len(close) < window + 1:
         return None
-    log_returns = (close / close.shift(1)).apply(math.log).dropna()
+    ratio = (close / close.shift(1)).dropna()
+    ratio = ratio[ratio > 0]   # guard against zero/negative prices
+    if len(ratio) < window:
+        return None
+    log_returns = ratio.apply(math.log)
     daily_std = float(log_returns.tail(window).std())
     return daily_std * math.sqrt(252) * 100   # annualised %
 
@@ -32,7 +36,8 @@ def _rsi(close: pd.Series, length: int = 14) -> float | None:
     avg_gain = gain.ewm(alpha=1 / length, min_periods=length).mean()
     avg_loss = loss.ewm(alpha=1 / length, min_periods=length).mean()
     rs = avg_gain / avg_loss
-    return float((100 - (100 / (1 + rs))).iloc[-1])
+    val = float((100 - (100 / (1 + rs))).iloc[-1])
+    return val if not math.isnan(val) else None
 
 
 def _sma(close: pd.Series, length: int) -> float | None:
@@ -226,7 +231,7 @@ def _build_flags(
             bullish_ratio = (sb + b) / total
             if bullish_ratio < 0.20:
                 flag("danger", "🎯", "Weak analyst support",
-                     f"Only {bullish_ratio:.0%} of analysts rate {symbol if 'symbol' in dir() else 'this stock'} "
+                     f"Only {bullish_ratio:.0%} of analysts rate this stock "
                      f"Buy or Strong Buy ({sb + b}/{total}). Broad analyst pessimism.")
             elif bullish_ratio < 0.35:
                 flag("warning", "🎯", "Below-average analyst consensus",

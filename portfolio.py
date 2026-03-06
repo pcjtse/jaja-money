@@ -40,8 +40,12 @@ _TOLERANCE_KEY = {t: t.lower() for t in RISK_TOLERANCES}
 def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     if close is None or len(close) < window + 1:
         return None
-    log_returns = (close / close.shift(1)).apply(math.log).dropna()
-    return float(log_returns.tail(window).std()) * math.sqrt(252)  # annualised (ratio, not %)
+    ratio = (close / close.shift(1)).dropna()
+    ratio = ratio[ratio > 0]   # guard against zero/negative prices
+    if len(ratio) < window:
+        return None
+    log_returns = ratio.apply(math.log)
+    return float(log_returns.tail(window).std()) * math.sqrt(252)  # annualised ratio
 
 
 def _rsi(close: pd.Series, length: int = 14) -> float | None:
@@ -125,7 +129,7 @@ def suggest_position(
     # Round to nearest 0.5, floor at 0, ceiling at base_max
     position_pct = max(0.0, min(base_max, round(raw_pct * 2) / 2))
     lo = max(0.0, position_pct - 1.0)
-    hi = position_pct + 1.0
+    hi = min(base_max, position_pct + 1.0)
     position_label = f"{lo:.1f}–{hi:.1f}%"
 
     # ----- 3. Entry strategy -----
@@ -195,7 +199,7 @@ def suggest_position(
 
     # ----- 6. Risk / reward -----
     risk_reward: float | None = None
-    if stop_pct and target_1 and price > 0:
+    if stop_pct and stop_pct >= 0.1 and target_1 and price > 0:
         reward_pct = (target_1 / price - 1) * 100
         risk_reward = round(reward_pct / stop_pct, 2)
 

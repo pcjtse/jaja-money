@@ -8,6 +8,7 @@ All functions are pure Python / pandas — no Streamlit imports.
 
 from __future__ import annotations
 
+import math
 import pandas as pd
 
 # ---------------------------------------------------------------------------
@@ -45,7 +46,8 @@ def _rsi(close: pd.Series, length: int = 14):
     avg_gain = gain.ewm(alpha=1 / length, min_periods=length).mean()
     avg_loss = loss.ewm(alpha=1 / length, min_periods=length).mean()
     rs = avg_gain / avg_loss
-    return float((100 - (100 / (1 + rs))).iloc[-1])
+    val = float((100 - (100 / (1 + rs))).iloc[-1])
+    return val if not math.isnan(val) else None
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +333,8 @@ def compute_factors(
 
     Each dict has keys: name, score (0–100), label, detail, weight.
     """
-    price = float(quote.get("c", 0) or 0) or None
+    _c = quote.get("c")
+    price = float(_c) if (_c is not None and float(_c) > 0) else None
 
     return [
         _factor_valuation(financials),

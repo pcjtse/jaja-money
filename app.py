@@ -28,7 +28,8 @@ def calc_rsi(series: pd.Series, length: int = 14):
     avg_loss = loss.ewm(alpha=1 / length, min_periods=length).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1]
+    val = float(rsi.iloc[-1])
+    return val if not pd.isna(val) else None
 
 
 def calc_macd(
@@ -478,8 +479,8 @@ st.caption(
 )
 
 _close = df["Close"] if df is not None and len(df) > 0 else None
-_recs_for_factors = recs if "recs" in locals() else []
-_earnings_for_factors = earnings if "earnings" in locals() else []
+_recs_for_factors = recs
+_earnings_for_factors = earnings
 
 _factors = compute_factors(
     quote=quote,
@@ -793,10 +794,10 @@ if run_analysis:
         profile=profile,
         financials=financials,
         technicals=technicals,
-        recommendations=recs if "recs" in dir() else [],
-        earnings=earnings if "earnings" in dir() else [],
-        peers=peers if "peers" in dir() else [],
-        news=news if "news" in dir() else [],
+        recommendations=recs,
+        earnings=earnings,
+        peers=peers,
+        news=news,
     )
 
     report_placeholder = st.empty()

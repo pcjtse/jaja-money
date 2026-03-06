@@ -288,12 +288,14 @@ def stream_portfolio_memo(
         f"**Sector:** {sector}",
         f"**Client profile:** {risk_tolerance} risk tolerance, {horizon}\n",
         "### Quantitative Summary",
-        f"- Composite factor score: {suggestion.get('action')} signal",
+        f"- Composite factor score: "
+        f"{int(sum(f['score'] * f['weight'] for f in factors) / sum(f['weight'] for f in factors)) if factors else 'N/A'}"
+        f"/100 ({suggestion.get('action')} signal)",
         f"- Risk score: {risk.get('risk_score')}/100 ({risk.get('risk_level')})",
         (f"- Annualised volatility (20d): {risk['hv']:.1f}%"
-         if risk.get("hv") else "- Annualised volatility: N/A"),
+         if risk.get("hv") is not None else "- Annualised volatility: N/A"),
         (f"- Drawdown from 52-wk high: {risk['drawdown_pct']:.1f}%"
-         if risk.get("drawdown_pct") else "- Drawdown: N/A"),
+         if risk.get("drawdown_pct") is not None else "- Drawdown: N/A"),
         "",
         "### Rule-Based Suggestion",
         f"- Action: {suggestion.get('action')}",
