@@ -6,3 +6,4 @@ pandas
 anthropic
 transformers
 torch
+pytest
