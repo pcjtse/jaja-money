@@ -4,8 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from screener import run_screen, default_universe, apply_filters
-from config import cfg
+from screener import run_screen, default_universe
 
 st.set_page_config(page_title="Stock Screener", page_icon="🔍", layout="wide")
 st.title("Stock Screener")

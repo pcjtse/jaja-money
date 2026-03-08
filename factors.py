@@ -203,7 +203,7 @@ def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
         detail = f"Price above SMA-200 but SMA-50 (${sma50:.2f}) still below SMA-200 (${sma200:.2f})"
     elif price > sma50 and sma50 < sma200:
         s, lbl = 52, "Tentative recovery"
-        detail = f"Price reclaimed SMA-50 but long-term trend still bearish"
+        detail = "Price reclaimed SMA-50 but long-term trend still bearish"
     elif price < sma50 and sma50 > sma200:
         s, lbl = 45, "Pullback in uptrend"
         detail = f"Structural uptrend intact but price below SMA-50 (${sma50:.2f})"

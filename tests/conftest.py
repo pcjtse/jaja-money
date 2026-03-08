@@ -1,6 +1,7 @@
 """Updated conftest.py — stubs transformers/torch and sets env vars for tests."""
 import os
 import sys
+import tempfile
 import types
 
 # ---------------------------------------------------------------------------
@@ -58,9 +59,6 @@ if "yaml" not in sys.modules:
 # ---------------------------------------------------------------------------
 # Point user home to a temp dir so history/watchlist/cache don't pollute
 # ---------------------------------------------------------------------------
-import tempfile
-import pathlib
-
 _tmp = tempfile.mkdtemp(prefix="jaja_test_")
 os.environ.setdefault("HOME", _tmp)
 

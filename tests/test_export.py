@@ -1,5 +1,4 @@
 """Tests for export.py (P1.3)."""
-import pytest
 import pandas as pd
 
 

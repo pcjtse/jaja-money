@@ -1,6 +1,5 @@
 """Unit tests for portfolio.py — position sizing, entry strategy, stops, targets."""
 
-import math
 import pytest
 import pandas as pd
 

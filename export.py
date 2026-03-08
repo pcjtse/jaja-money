@@ -137,7 +137,6 @@ def analysis_to_html(
     risk_color = risk.get("risk_color", "#888")
 
     pe = (financials or {}).get("peBasicExclExtraTTM")
-    eps = (financials or {}).get("epsBasicExclExtraItemsTTM")
     mc = (financials or {}).get("marketCapitalization")
     mc_str = f"${float(mc)/1000:.1f}B" if mc and float(mc) < 1_000_000 else \
              f"${float(mc)/1_000_000:.2f}T" if mc else "N/A"

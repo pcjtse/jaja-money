@@ -1,6 +1,5 @@
 """Unit tests for factors.py — all internal helpers and public API."""
 
-import math
 import pytest
 import pandas as pd
 

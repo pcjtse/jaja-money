@@ -2,9 +2,6 @@
 
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
-import pandas as pd
-import numpy as np
 
 from api import FinnhubAPI
 from portfolio_analysis import analyze_portfolio
@@ -191,7 +188,6 @@ if st.button("Analyze Portfolio", type="primary"):
     st.subheader("AI Portfolio Commentary")
     if st.button("Generate Portfolio Commentary with Claude"):
         from analyzer import _get_client
-        import os
         client = _get_client()
 
         portfolio_desc = "\n".join(

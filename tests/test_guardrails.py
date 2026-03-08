@@ -1,6 +1,5 @@
 """Unit tests for guardrails.py — risk dimensions, flag engine, composite risk."""
 
-import math
 import pytest
 import pandas as pd
 

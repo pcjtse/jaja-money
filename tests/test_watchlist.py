@@ -1,7 +1,5 @@
 """Tests for watchlist.py (P1.2)."""
-import json
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture(autouse=True)

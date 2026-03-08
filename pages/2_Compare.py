@@ -2,7 +2,6 @@
 
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
 
 from api import FinnhubAPI
 from comparison import compare_tickers, comparison_dataframe

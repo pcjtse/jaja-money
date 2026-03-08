@@ -1,8 +1,6 @@
 """Tests for sectors.py (P3.3)."""
-import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 
 
 def _make_close(n=252, drift=0.0002):
