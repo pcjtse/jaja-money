@@ -38,7 +38,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check . --select=E,W,F --ignore=E501,W503
+          ruff check . --select=E,W,F --ignore=E501
 
       - name: Run tests with coverage
         env:
