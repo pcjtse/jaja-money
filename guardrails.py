@@ -181,8 +181,8 @@ def _build_flags(
                      f"All trend signals are bearish. Avoid bottom-fishing without confirmation.")
             elif price < sma200 and sma50 < sma200:
                 flag("warning", "⚠️", "Below key moving averages",
-                     f"Price and SMA-50 are both below SMA-200. "
-                     f"Long-term momentum is negative.")
+                     "Price and SMA-50 are both below SMA-200. "
+                     "Long-term momentum is negative.")
 
     # --- Valuation flags ---
     pe = metrics.get("peBasicExclExtraTTM")
@@ -190,8 +190,8 @@ def _build_flags(
         pe = float(pe)
         if pe < 0:
             flag("warning", "💸", "Negative earnings",
-                 f"Trailing P/E is negative (reported EPS loss). "
-                 f"The company is not yet profitable on a trailing basis.")
+                 "Trailing P/E is negative (reported EPS loss). "
+                 "The company is not yet profitable on a trailing basis.")
         elif pe > 80:
             flag("danger", "💰", "Extreme valuation premium",
                  f"Trailing P/E = {pe:.1f}×. Priced for perfection — any earnings "

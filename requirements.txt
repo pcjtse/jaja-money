@@ -7,3 +7,11 @@ anthropic
 transformers
 torch
 pytest
+# P1.5 disk cache / config
+pyyaml
+# P3.5 multi-source fallback (optional — gracefully skipped if absent)
+yfinance
+# P4.4 test coverage
+pytest-cov
+# Dev tooling
+ruff

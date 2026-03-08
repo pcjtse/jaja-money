@@ -1,8 +1,22 @@
+"""Claude-powered analysis functions.
+
+Enhanced with:
+- Earnings call transcript analysis (P2.3)
+- AI natural language screener parsing (P3.1)
+- Interactive stock Q&A chat (P3.4)
+- Structured logging (P4.3)
+"""
+from __future__ import annotations
+
 import os
 import anthropic
 from dotenv import load_dotenv
 
+from log_setup import get_logger
+
 load_dotenv()
+
+log = get_logger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are an expert equity research analyst with deep experience in fundamental \
@@ -25,6 +39,16 @@ Structure your report with these sections:
 Keep the tone professional and the report digestible for a sophisticated \
 but non-specialist reader.\
 """
+
+
+def _get_client() -> anthropic.Anthropic:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        raise ValueError(
+            "ANTHROPIC_API_KEY not set. "
+            "Add your Anthropic API key to .env."
+        )
+    return anthropic.Anthropic(api_key=api_key)
 
 
 def build_data_prompt(
@@ -90,7 +114,12 @@ def build_data_prompt(
     lines.append(f"- RSI(14): {technicals.get('rsi', 'N/A')}")
     lines.append(f"- MACD: {technicals.get('macd', 'N/A')}")
     lines.append(f"- MACD Signal: {technicals.get('macd_signal', 'N/A')}")
-    lines.append(f"- MACD Histogram: {technicals.get('macd_hist', 'N/A')}\n")
+    lines.append(f"- MACD Histogram: {technicals.get('macd_hist', 'N/A')}")
+    if technicals.get("bb_upper"):
+        lines.append(f"- Bollinger Upper: {technicals.get('bb_upper', 'N/A')}")
+        lines.append(f"- Bollinger Lower: {technicals.get('bb_lower', 'N/A')}")
+        lines.append(f"- BB %B: {technicals.get('bb_pct_b', 'N/A')}")
+    lines.append("")
 
     # --- Analyst Recommendations ---
     if recommendations:
@@ -136,19 +165,9 @@ def build_data_prompt(
 
 
 def stream_fundamental_analysis(prompt: str):
-    """
-    Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking.
-    Yields text chunks as they arrive.
-    """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your_anthropic_api_key_here":
-        raise ValueError(
-            "ANTHROPIC_API_KEY not set. "
-            "Add your Anthropic API key to .env."
-        )
-
-    client = anthropic.Anthropic(api_key=api_key)
-
+    """Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking."""
+    client = _get_client()
+    log.info("Starting fundamental analysis stream")
     with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=4096,
@@ -189,19 +208,10 @@ def stream_sentiment_themes(
     articles: list,
     scores: list,
     aggregate: dict,
-) -> object:
-    """Stream a Claude sentiment-themes briefing.
+):
+    """Stream a Claude sentiment-themes briefing. Yields text chunks."""
+    client = _get_client()
 
-    Yields text chunks.
-    """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your_anthropic_api_key_here":
-        raise ValueError(
-            "ANTHROPIC_API_KEY not set. "
-            "Add your Anthropic API key to .env."
-        )
-
-    # Build the user message
     lines = [
         f"## News Sentiment Briefing: {symbol}\n",
         f"**Aggregate signal:** {aggregate['signal']} "
@@ -218,13 +228,10 @@ def stream_sentiment_themes(
         label = score.get("label", "neutral").upper()
         conf = score.get("score", 0.0)
         if headline:
-            lines.append(
-                f"- **[{label} {conf:.0%}]** [{source}] {headline}"
-            )
+            lines.append(f"- **[{label} {conf:.0%}]** [{source}] {headline}")
 
     prompt = "\n".join(lines)
-
-    client = anthropic.Anthropic(api_key=api_key)
+    log.info("Starting sentiment themes stream for %s", symbol)
 
     with client.messages.stream(
         model="claude-opus-4-6",
@@ -271,14 +278,9 @@ def stream_portfolio_memo(
     profile: dict | None,
     risk_tolerance: str,
     horizon: str,
-) -> object:
-    """Stream a Claude portfolio construction memo.  Yields text chunks."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your_anthropic_api_key_here":
-        raise ValueError(
-            "ANTHROPIC_API_KEY not set. "
-            "Add your Anthropic API key to .env."
-        )
+):
+    """Stream a Claude portfolio construction memo. Yields text chunks."""
+    client = _get_client()
 
     name = (profile or {}).get("name", symbol)
     sector = (profile or {}).get("finnhubIndustry", "Unknown sector")
@@ -330,12 +332,243 @@ def stream_portfolio_memo(
     for r in suggestion.get("rationale", []):
         lines.append(f"- {r}")
 
-    client = anthropic.Anthropic(api_key=api_key)
+    log.info("Starting portfolio memo stream for %s", symbol)
     with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=1500,
         system=_PORTFOLIO_MEMO_SYSTEM,
         messages=[{"role": "user", "content": "\n".join(lines)}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
+# P2.3: Earnings Call Transcript Analysis
+# ---------------------------------------------------------------------------
+
+_TRANSCRIPT_SYSTEM = """\
+You are an expert financial analyst specializing in earnings call analysis.
+Analyze the provided earnings call transcript and produce a structured briefing.
+
+Structure your analysis with:
+1. **Management Tone** — assess the overall tone: confident / cautious / defensive
+2. **Key Guidance Points** — bullet 3-5 specific forward-looking statements with numbers
+3. **Revenue & Earnings Commentary** — what management said about results vs. expectations
+4. **Growth Drivers** — bullish factors management highlighted (products, markets, etc.)
+5. **Risk Acknowledgements** — headwinds, challenges, or uncertainties they mentioned
+6. **Q&A Insights** — notable analyst questions and management responses
+7. **Investor Takeaway** — one paragraph: what does this call signal for the next quarter?
+
+Be specific — quote actual phrases from management where impactful. Flag any hedging
+language, unusual caution, or notable confidence. Write for a sophisticated investor.\
+"""
+
+
+def stream_transcript_analysis(symbol: str, transcript_text: str):
+    """Stream an earnings call transcript analysis. Yields text chunks."""
+    client = _get_client()
+
+    prompt = f"""## Earnings Call Transcript Analysis: {symbol}
+
+{transcript_text[:8000]}  <!-- truncated to fit context if needed -->
+"""
+    log.info("Starting transcript analysis stream for %s", symbol)
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=2000,
+        system=_TRANSCRIPT_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
+# P3.1: AI Natural Language Screener
+# ---------------------------------------------------------------------------
+
+_NL_SCREENER_SYSTEM = """\
+You are a quantitative stock analyst. The user will describe a stock screening
+criteria in natural language. Your job is to:
+1. Parse the intent into structured filter criteria
+2. Map each criterion to one of these measurable dimensions:
+   - factor_score (0-100): composite quantitative score
+   - risk_score (0-100): risk level
+   - pe_ratio: price/earnings
+   - rsi: RSI(14) value
+   - market_cap_b: market cap in billions
+   - sentiment: "positive" | "negative" | "neutral"
+   - trend: "uptrend" | "downtrend" | "sideways"
+3. Output ONLY valid JSON in this format (no extra text):
+{
+  "filters": [
+    {"dimension": "factor_score", "operator": ">", "value": 65, "label": "Strong factor score"},
+    ...
+  ],
+  "description": "One sentence description of what the screen is looking for"
+}
+
+Operators: ">", "<", ">=", "<=", "==", "in" (value is then a list).
+If a criterion can't be mapped, skip it.
+"""
+
+
+def parse_nl_screen(query: str) -> dict:
+    """Parse a natural language screening query into structured filters.
+
+    Returns dict with 'filters' list and 'description' string.
+    Raises ValueError if Claude can't be reached.
+    """
+    import json as _json
+    client = _get_client()
+
+    log.info("Parsing NL screen query: %s", query[:100])
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=512,
+        system=_NL_SCREENER_SYSTEM,
+        messages=[{"role": "user", "content": query}],
+    )
+    text = response.content[0].text.strip()
+
+    # Extract JSON from the response
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start == -1 or end == 0:
+        return {"filters": [], "description": query}
+
+    try:
+        return _json.loads(text[start:end])
+    except _json.JSONDecodeError:
+        return {"filters": [], "description": query}
+
+
+def stream_screener_summary(results: list[dict], query: str):
+    """Stream a Claude narrative explaining the top screener results."""
+    client = _get_client()
+
+    rows = "\n".join(
+        f"- {r['symbol']}: factor={r.get('factor_score','?')}/100, "
+        f"risk={r.get('risk_score','?')}/100, "
+        f"price=${r.get('price','?')}, sector={r.get('sector','?')}"
+        for r in results[:10]
+    )
+
+    prompt = f"""## Stock Screener Results
+
+**Query:** {query}
+
+**Top Matches:**
+{rows}
+
+Briefly explain why these stocks match the criteria and highlight 2-3 of the most
+compelling candidates with specific reasons. Be concise and actionable."""
+
+    log.info("Streaming screener summary for query: %s", query[:60])
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=800,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
+# P3.4: Interactive AI Chat for Stock Q&A
+# ---------------------------------------------------------------------------
+
+_CHAT_SYSTEM_TEMPLATE = """\
+You are a knowledgeable stock analyst assistant for {symbol} ({name}).
+You have access to the following current analysis data for this stock:
+
+{data_context}
+
+Answer the user's questions about this stock concisely and accurately.
+Reference the specific data above when relevant. If asked about something
+outside the provided data, acknowledge the limitation honestly.
+Do not make up data points. Keep responses focused and actionable.\
+"""
+
+
+def build_chat_system_prompt(
+    symbol: str,
+    profile: dict | None,
+    quote: dict,
+    financials: dict | None,
+    factors: list,
+    risk: dict,
+    composite_score: int,
+    composite_label: str,
+) -> str:
+    """Build the system prompt for the chat interface."""
+    name = (profile or {}).get("name", symbol)
+    sector = (profile or {}).get("finnhubIndustry", "N/A")
+    price = quote.get("c", 0)
+    change_pct = quote.get("dp", 0)
+
+    pe = (financials or {}).get("peBasicExclExtraTTM")
+    mc = (financials or {}).get("marketCapitalization")
+    mc_str = f"${float(mc)/1000:.1f}B" if mc and float(mc) < 1_000_000 else \
+             f"${float(mc)/1_000_000:.1f}T" if mc else "N/A"
+
+    factor_lines = "\n".join(
+        f"  - {f['name']}: {f['score']}/100 ({f['label']})"
+        for f in factors
+    )
+    flag_lines = "\n".join(
+        f"  - [{fl['severity'].upper()}] {fl['title']}"
+        for fl in risk.get("flags", [])
+    ) or "  - None"
+
+    data_context = f"""
+**Company:** {name} ({symbol}) | Sector: {sector}
+**Price:** ${price:,.2f} ({change_pct:+.2f}% today)
+**Market Cap:** {mc_str} | P/E: {f"{pe:.1f}x" if pe else "N/A"}
+**Composite Factor Score:** {composite_score}/100 — {composite_label}
+**Risk Score:** {risk.get('risk_score')}/100 — {risk.get('risk_level')}
+**Factor Breakdown:**
+{factor_lines}
+**Active Risk Flags:**
+{flag_lines}"""
+
+    return _CHAT_SYSTEM_TEMPLATE.format(
+        symbol=symbol, name=name, data_context=data_context
+    )
+
+
+def stream_chat_response(
+    system_prompt: str,
+    conversation_history: list[dict],
+    user_message: str,
+):
+    """Stream a chat response. Yields text chunks.
+
+    conversation_history: list of {"role": "user"|"assistant", "content": str}
+    """
+    client = _get_client()
+
+    messages = conversation_history + [{"role": "user", "content": user_message}]
+
+    log.info("Chat response stream (turns=%d)", len(messages))
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=messages,
     ) as stream:
         for event in stream:
             if (

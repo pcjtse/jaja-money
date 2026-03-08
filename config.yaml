@@ -1,0 +1,73 @@
+cache:
+  ttl_seconds: 300
+  disk_cache_dir: ~/.jaja-money/cache
+  use_disk_cache: true
+
+factor_weights:
+  valuation: 0.15
+  trend: 0.20
+  rsi: 0.10
+  macd: 0.10
+  sentiment: 0.15
+  earnings: 0.15
+  analyst: 0.10
+  range: 0.05
+
+risk:
+  bands:
+    extreme: 80
+    high: 65
+    elevated: 45
+    moderate: 25
+
+portfolio:
+  max_positions:
+    conservative: 5.0
+    moderate: 10.0
+    aggressive: 20.0
+
+screener:
+  default_universe:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - NVDA
+    - META
+    - TSLA
+    - BRK.B
+    - JPM
+    - JNJ
+    - V
+    - PG
+    - XOM
+    - HD
+    - MA
+    - BAC
+    - PFE
+    - AVGO
+    - CVX
+    - COST
+
+sectors:
+  etfs:
+    - { ticker: XLK, name: Technology }
+    - { ticker: XLF, name: Financials }
+    - { ticker: XLE, name: Energy }
+    - { ticker: XLV, name: Health Care }
+    - { ticker: XLI, name: Industrials }
+    - { ticker: XLY, name: Consumer Disc. }
+    - { ticker: XLP, name: Consumer Staples }
+    - { ticker: XLRE, name: Real Estate }
+    - { ticker: XLB, name: Materials }
+    - { ticker: XLU, name: Utilities }
+    - { ticker: XLC, name: Communication }
+
+display:
+  chart_height: 500
+  max_news_articles: 10
+
+logging:
+  level: INFO
+  max_bytes: 10485760
+  backup_count: 3

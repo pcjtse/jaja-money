@@ -3,6 +3,13 @@
 Eight quantitative factors computed from already-fetched data, combined into a
 single 0-100 composite score that maps to a Buy / Sell / Neutral signal.
 
+Enhanced with:
+- Bollinger Bands %B factor (P1.4)
+- OBV (On-Balance Volume) trend signal (P1.4)
+- Volume analysis helpers (P1.4)
+- Configurable weights via config.py (P4.5)
+- Structured logging (P4.3)
+
 All functions are pure Python / pandas — no Streamlit imports.
 """
 
@@ -10,6 +17,12 @@ from __future__ import annotations
 
 import math
 import pandas as pd
+
+from config import cfg
+from log_setup import get_logger
+
+log = get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -51,13 +64,93 @@ def _rsi(close: pd.Series, length: int = 14):
 
 
 # ---------------------------------------------------------------------------
-# Individual factor scorers
-# Each returns a dict: {name, score (0-100), label, detail, weight}
+# P1.4: New technical indicator helpers
 # ---------------------------------------------------------------------------
+
+def calc_bollinger_bands(
+    close: pd.Series,
+    window: int = 20,
+    num_std: float = 2.0,
+) -> dict | None:
+    """Compute Bollinger Bands.
+
+    Returns dict with upper, middle, lower, pct_b (0-1 where 1=upper band),
+    and bandwidth (%).  Returns None if insufficient data.
+    """
+    if close is None or len(close) < window:
+        return None
+    sma = close.rolling(window=window).mean()
+    std = close.rolling(window=window).std()
+    upper = sma + num_std * std
+    lower = sma - num_std * std
+    last_close = float(close.iloc[-1])
+    last_upper = float(upper.iloc[-1])
+    last_lower = float(lower.iloc[-1])
+    last_mid = float(sma.iloc[-1])
+
+    band_range = last_upper - last_lower
+    pct_b = ((last_close - last_lower) / band_range) if band_range > 0 else 0.5
+    bandwidth = (band_range / last_mid * 100) if last_mid > 0 else 0.0
+
+    return {
+        "upper": round(last_upper, 2),
+        "middle": round(last_mid, 2),
+        "lower": round(last_lower, 2),
+        "pct_b": round(pct_b, 3),
+        "bandwidth": round(bandwidth, 2),
+        "upper_series": upper,
+        "lower_series": lower,
+        "middle_series": sma,
+    }
+
+
+def calc_obv(close: pd.Series, volume: pd.Series | None) -> pd.Series | None:
+    """Compute On-Balance Volume series.
+
+    OBV = cumulative sum of +volume on up days, -volume on down days.
+    Returns None if volume data is unavailable.
+    """
+    if close is None or volume is None or len(close) < 2:
+        return None
+    if len(close) != len(volume):
+        return None
+
+    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    obv = (direction * volume).cumsum()
+    return obv
+
+
+def calc_vwap(df: pd.DataFrame) -> float | None:
+    """Compute rolling VWAP (last 20 trading days) from OHLCV DataFrame.
+
+    Expects columns: High, Low, Close, Volume.
+    """
+    if df is None or len(df) < 1:
+        return None
+    required = {"High", "Low", "Close", "Volume"}
+    if not required.issubset(df.columns):
+        return None
+    window = df.tail(20).copy()
+    typical = (window["High"] + window["Low"] + window["Close"]) / 3
+    vp = (typical * window["Volume"]).sum()
+    vol = window["Volume"].sum()
+    if vol == 0:
+        return None
+    return round(vp / vol, 2)
+
+
+# ---------------------------------------------------------------------------
+# Individual factor scorers
+# ---------------------------------------------------------------------------
+
+def _get_weight(name: str, default: float) -> float:
+    weights = cfg.factor_weights
+    return float(weights.get(name, default))
+
 
 def _factor_valuation(financials: dict | None) -> dict:
     """P/E–based valuation. Lower P/E → higher score (value lens)."""
-    weight = 0.15
+    weight = _get_weight("valuation", 0.15)
     pe = (financials or {}).get("peBasicExclExtraTTM")
 
     if pe is None:
@@ -85,7 +178,7 @@ def _factor_valuation(financials: dict | None) -> dict:
 
 def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
     """Price position relative to SMA-50 and SMA-200."""
-    weight = 0.20
+    weight = _get_weight("trend", 0.20)
     if close is None or price is None:
         return dict(name="Trend (SMA)", score=50, weight=weight,
                     label="No data", detail="Price data unavailable")
@@ -98,7 +191,6 @@ def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
                     label="Insufficient data", detail="Fewer than 50 trading days available")
 
     if sma200 is None:
-        # Only sma50 available
         if price > sma50:
             s, lbl, detail = 65, "Above SMA-50", f"Price ${price:.2f} > SMA-50 ${sma50:.2f}"
         else:
@@ -111,7 +203,7 @@ def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
         detail = f"Price above SMA-200 but SMA-50 (${sma50:.2f}) still below SMA-200 (${sma200:.2f})"
     elif price > sma50 and sma50 < sma200:
         s, lbl = 52, "Tentative recovery"
-        detail = f"Price reclaimed SMA-50 but long-term trend still bearish"
+        detail = "Price reclaimed SMA-50 but long-term trend still bearish"
     elif price < sma50 and sma50 > sma200:
         s, lbl = 45, "Pullback in uptrend"
         detail = f"Structural uptrend intact but price below SMA-50 (${sma50:.2f})"
@@ -124,7 +216,7 @@ def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
 
 def _factor_rsi(close: pd.Series | None) -> dict:
     """RSI-14 momentum / mean-reversion factor."""
-    weight = 0.10
+    weight = _get_weight("rsi", 0.10)
     if close is None:
         return dict(name="Momentum (RSI)", score=50, weight=weight,
                     label="No data", detail="Price data unavailable")
@@ -157,7 +249,7 @@ def _factor_rsi(close: pd.Series | None) -> dict:
 
 def _factor_macd(close: pd.Series | None) -> dict:
     """MACD histogram direction (current vs previous bar)."""
-    weight = 0.10
+    weight = _get_weight("macd", 0.10)
     if close is None:
         return dict(name="MACD Signal", score=50, weight=weight,
                     label="No data", detail="Price data unavailable")
@@ -183,12 +275,12 @@ def _factor_macd(close: pd.Series | None) -> dict:
 
 def _factor_sentiment(sentiment_agg: dict | None) -> dict:
     """FinBERT aggregate news sentiment net score."""
-    weight = 0.15
+    weight = _get_weight("sentiment", 0.15)
     if not sentiment_agg:
         return dict(name="News Sentiment", score=50, weight=weight,
                     label="No data", detail="Sentiment data unavailable")
 
-    net = float(sentiment_agg.get("net_score", 0.0))  # [-1, +1]
+    net = float(sentiment_agg.get("net_score", 0.0))
     score = _clamp((net + 1) / 2 * 100)
     signal = sentiment_agg.get("signal", "Mixed / Neutral")
     counts = sentiment_agg.get("counts", {})
@@ -204,7 +296,7 @@ def _factor_sentiment(sentiment_agg: dict | None) -> dict:
 
 def _factor_earnings(earnings: list) -> dict:
     """Average EPS surprise % over the last 4 quarters."""
-    weight = 0.15
+    weight = _get_weight("earnings", 0.15)
     surprises = [
         float(e["surprisePercent"])
         for e in (earnings or [])
@@ -240,7 +332,7 @@ def _factor_earnings(earnings: list) -> dict:
 
 def _factor_analyst(recommendations: list) -> dict:
     """Buy/Hold/Sell consensus from the most recent recommendation period."""
-    weight = 0.10
+    weight = _get_weight("analyst", 0.10)
     if not recommendations:
         return dict(name="Analyst Consensus", score=50, weight=weight,
                     label="No data", detail="No analyst recommendations")
@@ -281,7 +373,7 @@ def _factor_analyst(recommendations: list) -> dict:
 
 def _factor_range_position(financials: dict | None, price: float | None) -> dict:
     """Price position within the 52-week range (momentum / price-strength)."""
-    weight = 0.05
+    weight = _get_weight("range", 0.05)
     metrics = financials or {}
     high52 = metrics.get("52WeekHigh")
     low52  = metrics.get("52WeekLow")
@@ -295,7 +387,7 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
         return dict(name="52-Wk Strength", score=50, weight=weight,
                     label="Flat range", detail="52-week high equals low")
 
-    pct = (price - low52) / (high52 - low52)  # 0 = at low, 1 = at high
+    pct = (price - low52) / (high52 - low52)
     score = _clamp(pct * 100)
 
     if pct >= 0.80:
@@ -336,7 +428,7 @@ def compute_factors(
     _c = quote.get("c")
     price = float(_c) if (_c is not None and float(_c) > 0) else None
 
-    return [
+    factors = [
         _factor_valuation(financials),
         _factor_trend(close, price),
         _factor_rsi(close),
@@ -346,6 +438,8 @@ def compute_factors(
         _factor_analyst(recommendations),
         _factor_range_position(financials, price),
     ]
+    log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
+    return factors
 
 
 def composite_score(factors: list[dict]) -> int:

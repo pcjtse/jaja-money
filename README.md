@@ -2,8 +2,10 @@
 
 A Streamlit-based stock analysis app powered by the Finnhub API and Claude AI.
 Enter a stock symbol to get real-time quotes, technicals, AI-driven fundamental
-analysis, FinBERT news sentiment, an 8-factor quantitative score, and a risk
-guardrail engine with actionable alerts.
+analysis, FinBERT news sentiment, an 8-factor quantitative score, a risk
+guardrail engine with actionable alerts, multi-stock comparison, a stock
+screener, portfolio analysis, sector rotation tracking, and strategy
+backtesting.
 
 ![Screenshot](screenshot.png)
 
@@ -15,6 +17,7 @@ guardrail engine with actionable alerts.
 - **Technical Indicators** — SMA(50), SMA(200), RSI(14), MACD with signal and histogram (computed locally from price data)
 - **Price Chart** — Interactive candlestick chart of the last 100 trading days (Plotly)
 - **Market Research** — Analyst recommendations (bar chart), earnings history (EPS vs estimate vs surprise), peer companies
+- **Export** — Download results as CSV or a printable HTML report
 
 ### News Sentiment Scan _(FinBERT)_
 - Scores up to 10 recent headlines with **ProsusAI/finbert** (runs locally, cached across reruns)
@@ -68,6 +71,52 @@ On-demand analysis powered by **Claude Opus 4.6 with adaptive thinking**.
 Synthesises all fetched data into a structured 8-section investment research report:
 Company Snapshot · Valuation · Financial Health · Technical Posture ·
 Analyst Sentiment · Peer Context · Key Risks & Catalysts · Investment Thesis.
+
+### Price & Signal Alerts
+- Set price threshold, factor-score, or risk-score alerts per ticker
+- Alerts persisted locally in `~/.jaja-money/alerts.json`
+- Evaluated on demand via `check_alerts(quote, factor_score, risk_score)`
+
+### Watchlist
+- Save any analysed ticker to `~/.jaja-money/watchlist.json`
+- Stores ticker, name, last price, factor score, and timestamp
+- Accessible across sessions without re-fetching
+
+### Historical Tracking
+- Every analysis snapshot (factor score, risk score, price, flags) stored in `~/.jaja-money/history.db` (SQLite)
+- Keyed by `(symbol, date)` for trend-over-time queries
+
+---
+
+## Multi-Page App
+
+The app ships five additional Streamlit pages:
+
+### Compare Stocks (`pages/2_Compare.py`)
+Enter 2–5 tickers to compare side-by-side across factor scores, risk scores,
+P/E, RSI, and key metrics. Correlation heatmap included.
+
+### Stock Screener (`pages/3_Screener.py`)
+Filter the S&P 500 sample (or a custom universe) by factor score, risk score,
+P/E, RSI, and more. Also supports **natural-language queries parsed by Claude**
+(e.g. "tech stocks with low risk and strong momentum").
+
+### Portfolio Analysis (`pages/4_Portfolio.py`)
+Enter a multi-stock portfolio with optional weights to compute:
+- Correlation matrix from daily returns
+- Portfolio-level beta, volatility, and weighted factor score
+- Diversification score and concentration warnings
+- AI-generated portfolio commentary via Claude
+
+### Sector Rotation (`pages/5_Sectors.py`)
+Tracks relative strength across **11 S&P 500 sector ETFs** to identify
+rotation trends, leading sectors, and lagging sectors. Each sector is
+classified into a rotation phase (accumulation / leading / distribution / lagging).
+
+### Strategy Backtesting (`pages/6_Backtest.py`)
+Simulates historical trades on a price-derived composite signal (SMA trend,
+RSI, MACD). Configurable entry/exit thresholds and lookback period (1–5 years).
+Returns trade log, equity curve, Sharpe ratio, max drawdown, and win rate.
 
 ---
 
@@ -126,17 +175,39 @@ streamlit run app.py
 
 Open the URL shown in the terminal (typically `http://localhost:8501`).
 Enter a stock symbol (e.g. `AAPL`) in the sidebar and click **Analyze**.
+Use the sidebar navigation to switch between the main dashboard and the
+additional pages (Compare, Screener, Portfolio, Sectors, Backtest).
 
 ## Project Structure
 
 ```
 jaja-money/
-├── app.py           # Streamlit UI — layout, caching, all section rendering
-├── api.py           # Finnhub API wrapper (quote, profile, financials, candles, news, recs, earnings, peers)
-├── analyzer.py      # Claude Opus 4.6 — fundamental analysis + sentiment themes streaming
-├── sentiment.py     # FinBERT sentiment scoring (score_articles, aggregate_sentiment)
-├── factors.py       # Factor score engine — 8 factors + composite + label/colour helpers
-├── guardrails.py    # Risk guardrail engine — 4 dimensions, 13 flag conditions
+├── app.py                  # Streamlit UI — layout, caching, all section rendering
+├── api.py                  # Finnhub API wrapper (quote, profile, financials, candles, news, recs, earnings, peers)
+├── analyzer.py             # Claude Opus 4.6 — fundamental analysis + sentiment themes streaming
+├── sentiment.py            # FinBERT sentiment scoring (score_articles, aggregate_sentiment)
+├── factors.py              # Factor score engine — 8 factors + composite + label/colour helpers
+├── guardrails.py           # Risk guardrail engine — 4 dimensions, 13 flag conditions
+├── alerts.py               # Price & signal alert system (stored in ~/.jaja-money/alerts.json)
+├── watchlist.py            # Watchlist persistence (stored in ~/.jaja-money/watchlist.json)
+├── history.py              # Historical factor score tracking via SQLite (~/.jaja-money/history.db)
+├── export.py               # CSV and printable HTML export helpers
+├── backtest.py             # Backtesting engine — signal simulation, equity curve, metrics
+├── comparison.py           # Multi-stock comparison helpers
+├── screener.py             # Stock screener — rule-based + Claude NL query support
+├── sectors.py              # Sector & industry rotation tracker (11 ETFs)
+├── portfolio.py            # Portfolio suggestion engine — sizing, stops, targets
+├── portfolio_analysis.py   # Portfolio-level risk, correlation, and diversification analysis
+├── providers.py            # Multi-source data provider (Finnhub primary, yfinance fallback)
+├── cache.py                # Persistent disk cache with TTL (~/.jaja-money/cache/)
+├── config.py               # Centralised config (config.yaml + built-in defaults)
+├── log_setup.py            # Structured logging (console + rotating file)
+├── pages/
+│   ├── 2_Compare.py        # Multi-stock comparison page
+│   ├── 3_Screener.py       # Stock screener page
+│   ├── 4_Portfolio.py      # Portfolio analysis page
+│   ├── 5_Sectors.py        # Sector rotation page
+│   └── 6_Backtest.py       # Strategy backtesting page
 └── requirements.txt
 ```
 
@@ -146,5 +217,8 @@ The free Finnhub plan allows **60 requests per minute**. Each full analysis
 uses approximately 8 API calls (quote, profile, financials, daily candles,
 recommendations, earnings, peers, news). Technical indicators and all factor/
 risk computations run locally from the fetched price data — no extra API calls.
-Results are cached for 5 minutes, so repeated lookups within that window cost 0
-additional calls.
+Results are cached for 5 minutes (disk cache with TTL), so repeated lookups
+within that window cost 0 additional calls.
+
+The Screener and Sector pages batch-fetch multiple tickers; use the default
+universe sizes or limit custom universes to avoid hitting rate limits.

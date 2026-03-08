@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install without torch/transformers for CI speed (mocked in tests)
+          pip install streamlit finnhub-python python-dotenv plotly pandas \
+                      anthropic pytest pytest-cov pyyaml yfinance ruff
+
+      - name: Lint with ruff
+        run: |
+          ruff check . --select=E,W,F --ignore=E501
+
+      - name: Run tests with coverage
+        env:
+          FINNHUB_API_KEY: "test_key_ci"
+          ANTHROPIC_API_KEY: "test_key_ci"
+        run: |
+          pytest tests/ -v \
+            --cov=factors \
+            --cov=guardrails \
+            --cov=portfolio \
+            --cov=sentiment \
+            --cov=watchlist \
+            --cov=history \
+            --cov=backtest \
+            --cov=screener \
+            --cov=sectors \
+            --cov=portfolio_analysis \
+            --cov=comparison \
+            --cov=alerts \
+            --cov=export \
+            --cov=cache \
+            --cov=config \
+            --cov-report=term-missing \
+            --cov-fail-under=50
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t jaja-money:test .
+
+      - name: Verify image
+        run: docker image inspect jaja-money:test
