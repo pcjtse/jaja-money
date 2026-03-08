@@ -15,6 +15,8 @@ Main analysis page.  Integrates all enhancements:
 - Config-driven weights (P4.5)
 """
 
+import json
+import os
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -44,7 +46,7 @@ from watchlist import (
 )
 from history import save_analysis, get_score_trend, get_latest_two_snapshots
 from alerts import (
-    get_alerts, add_alert, check_alerts, delete_alert, reset_alert,
+    get_alerts, add_alert, check_alerts, delete_alert,
     CONDITION_TYPES, start_alert_scheduler, stop_alert_scheduler, is_scheduler_running,
 )
 from export import factors_to_csv, price_history_to_csv, analysis_to_html, analysis_to_pdf
@@ -1030,7 +1032,6 @@ else:
     st.caption("Run analysis on multiple days to see the score trend chart.")
 
 # P2.2: Compare to previous analysis diff view
-import json as _json
 _snapshots = get_latest_two_snapshots(symbol)
 if len(_snapshots) == 2:
     with st.expander("Compare to Previous Analysis"):
@@ -1046,8 +1047,8 @@ if len(_snapshots) == 2:
                    f"{_rs_delta:+d} vs {_prev['date']}")
         dc3.metric("Price", f"${_curr['price']:,.2f}" if _curr.get("price") else "N/A")
 
-        _prev_flags = {f["title"] for f in (_json.loads(_prev.get("flags_json") or "[]"))}
-        _curr_flags = {f["title"] for f in (_json.loads(_curr.get("flags_json") or "[]"))}
+        _prev_flags = {f["title"] for f in (json.loads(_prev.get("flags_json") or "[]"))}
+        _curr_flags = {f["title"] for f in (json.loads(_curr.get("flags_json") or "[]"))}
         _new_flags = _curr_flags - _prev_flags
         _removed_flags = _prev_flags - _curr_flags
         if _new_flags:
@@ -1325,8 +1326,7 @@ st.session_state["last_analysis"] = {
 log.info("Analysis complete for %s: factor=%d risk=%d", symbol, _composite, _rscore)
 
 # P4.3: Developer debug panel (hidden behind DEBUG env flag)
-import os as _os
-if _os.getenv("DEBUG", "").lower() in ("1", "true", "yes"):
+if os.getenv("DEBUG", "").lower() in ("1", "true", "yes"):
     st.divider()
     with st.expander("🔧 Developer Debug Panel"):
         import pathlib as _pathlib
