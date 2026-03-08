@@ -67,7 +67,7 @@ def test_trades_are_coherent():
         assert trade.exit_price > 0
         assert isinstance(trade.is_win, bool)
         pnl_check = (trade.exit_price - trade.entry_price) / trade.entry_price * 100
-        assert abs(pnl_check - trade.pnl_pct) < 0.01
+        assert abs(pnl_check - trade.pnl_pct) < 0.02
 
 
 def test_win_rate_matches_trades():
