@@ -37,9 +37,9 @@ Allow users to download the full analysis as a formatted report or raw CSV data.
 
 - [x] Add "Export CSV" button that downloads the raw metric DataFrame
 - [x] Add "Export HTML" button generating a printable styled report
-- [ ] Add "Export PDF" button using `reportlab` or `weasyprint` to render the analysis sections
-- [ ] Include charts as embedded images in PDF (Plotly `write_image`)
-- [ ] Add `reportlab` / `weasyprint` and `kaleido` to `requirements.txt`
+- [x] Add "Export PDF" button using `reportlab` or `weasyprint` to render the analysis sections
+- [x] Include charts as embedded images in PDF (Plotly `write_image`)
+- [x] Add `reportlab` / `weasyprint` and `kaleido` to `requirements.txt`
 
 **Files:** `export.py`, `app.py`
 
@@ -53,7 +53,7 @@ Expand the technical analysis section with widely-used indicators.
 - [x] **VWAP** (20-day Volume-Weighted Average Price) — overlaid on candlestick
 - [x] **OBV** (On-Balance Volume) — momentum confirmation indicator
 - [x] Bollinger Band %B incorporated into the factor engine as a volatility-adjusted momentum signal
-- [ ] **Fibonacci retracement levels** — overlay key retracement lines on price chart
+- [x] **Fibonacci retracement levels** — overlay key retracement lines on price chart
 
 **Files:** `factors.py`, `app.py`
 
@@ -91,7 +91,7 @@ Record factor scores and risk scores over time to show how a stock's profile evo
 - [x] Store each analysis result with a timestamp in a local SQLite database (`~/.jaja-money/history.db`)
 - [x] Add a "History" panel showing a line chart of composite factor score over time
 - [x] Show risk score trend alongside factor score
-- [ ] Add a "Compare to previous analysis" diff view highlighting changed red flags
+- [x] Add a "Compare to previous analysis" diff view highlighting changed red flags
 
 **Files:** `history.py`, `app.py`
 
@@ -103,7 +103,7 @@ Fetch and analyze earnings call transcripts with Claude for sentiment, guidance 
 - [x] Integrate Finnhub transcripts API (`get_transcripts_list`, `get_transcript`)
 - [x] Add "Analyze Earnings Call" section in the app
 - [x] Stream Claude analysis covering: management tone, guidance confidence, risk language, Q&A sentiment
-- [ ] Extract forward-looking statements and flag cautionary language
+- [x] Extract forward-looking statements and flag cautionary language
 
 **Files:** `analyzer.py` (`stream_transcript_analysis`), `api.py`, `app.py`
 
@@ -129,9 +129,9 @@ Let users set threshold alerts for price, factor score, or risk level and receiv
 - [x] Add alert configuration panel (price above/below, factor score change, risk level change)
 - [x] Store alerts in local JSON (`~/.jaja-money/alerts.json`)
 - [x] Evaluate alerts on demand via `check_alerts(quote, factor_score, risk_score)`
-- [ ] Add a background polling loop or scheduled check (APScheduler)
-- [ ] Notify via desktop notification or email (SMTP or `plyer`)
-- [ ] Add `APScheduler` and `plyer` to `requirements.txt`
+- [x] Add a background polling loop or scheduled check (APScheduler)
+- [x] Notify via desktop notification or email (SMTP or `plyer`)
+- [x] Add `APScheduler` and `plyer` to `requirements.txt`
 
 **Files:** `alerts.py`, `app.py`
 
@@ -144,7 +144,7 @@ Integrate basic options data to surface implied volatility and market sentiment 
 - [x] Display put/call ratio and implied volatility overview
 - [x] Add IV rank / IV percentile metric
 - [x] Incorporate put/call ratio into the risk guardrails as a market-sentiment signal
-- [ ] Add IV-based expected move visualization on the price chart
+- [x] Add IV-based expected move visualization on the price chart
 
 **Files:** `api.py`, `guardrails.py`, `app.py`
 
@@ -159,7 +159,7 @@ Let users describe what they are looking for in plain English and have Claude tr
 - [x] Claude parses query → structured filter criteria (factor dimensions, thresholds)
 - [x] Run screener against a ticker universe
 - [x] Claude narrates why the top results match the query
-- [ ] Add conversation-style follow-up refinement
+- [x] Add conversation-style follow-up refinement
 
 **Files:** `screener.py` (integrated with 2.1), `pages/3_Screener.py`
 
@@ -173,7 +173,7 @@ Validate the factor model's predictive power by testing historical signals again
 - [x] Fetch sufficient historical price data (1–5 years of daily candles)
 - [x] Simulate trades and compute: total return, Sharpe ratio, max drawdown, win rate
 - [x] Plot equity curve vs. buy-and-hold benchmark
-- [ ] Claude summary of backtest results and strategy robustness
+- [x] Claude summary of backtest results and strategy robustness
 
 **Files:** `backtest.py`, `pages/6_Backtest.py`
 
@@ -186,7 +186,7 @@ Show relative strength across sectors to identify rotation trends for top-down a
 - [x] Compute factor scores for each sector ETF
 - [x] Render sector rotation heatmap (color by momentum)
 - [x] Classify each sector into a rotation phase (accumulation / leading / distribution / lagging)
-- [ ] Claude sector rotation narrative and implication for individual stock analysis
+- [x] Claude sector rotation narrative and implication for individual stock analysis
 
 **Files:** `sectors.py`, `pages/5_Sectors.py`
 
@@ -211,8 +211,8 @@ Reduce single-source dependency on Finnhub by adding fallback data providers.
 - [x] Integrate Yahoo Finance (`yfinance`) as a fallback data source
 - [x] Abstract data fetching behind a provider interface with automatic failover
 - [x] Add data source indicator in the UI (shows which source was used)
-- [ ] Integrate Alpha Vantage for fundamentals (P/E, EPS, cash flow)
-- [ ] Add `alpha-vantage` to `requirements.txt`
+- [x] Integrate Alpha Vantage for fundamentals (P/E, EPS, cash flow)
+- [x] Add `alpha-vantage` to `requirements.txt`
 
 **Files:** `providers.py`, `api.py`
 
@@ -226,7 +226,7 @@ Package the app for consistent one-command deployment.
 - [x] Write `Dockerfile` (Python 3.11-slim base, install deps, expose port 8501)
 - [x] Write `docker-compose.yml`
 - [x] Add `.dockerignore`
-- [ ] Update README with Docker setup instructions
+- [x] Update README with Docker setup instructions
 
 **Files:** `Dockerfile`, `docker-compose.yml`, `.dockerignore`
 
@@ -237,7 +237,7 @@ Automate testing and linting on every push.
 
 - [x] Add `.github/workflows/ci.yml`
 - [x] Steps: checkout → install deps → run `pytest` with coverage → lint with `ruff`
-- [ ] Add badge to README
+- [x] Add badge to README
 
 **Files:** `.github/workflows/ci.yml`
 
@@ -249,7 +249,7 @@ Replace bare `print` / `st.error` calls with structured logging for easier debug
 - [x] Integrate Python `logging` module with rotating file handler (`~/.jaja-money/jaja.log`)
 - [x] Log all API calls with latency metrics
 - [x] Log Claude token usage per request
-- [ ] Add a developer debug panel (hidden behind env flag) showing recent log entries
+- [x] Add a developer debug panel (hidden behind env flag) showing recent log entries
 
 **Files:** `log_setup.py`, all modules
 
@@ -271,8 +271,8 @@ Extend the test suite to cover all major modules.
 - [x] `tests/test_sentiment.py` — FinBERT scoring
 - [x] `tests/test_watchlist.py` — watchlist CRUD operations
 - [x] 87%+ line coverage achieved (target was 50%)
-- [ ] Add `tests/test_api.py` — mock Finnhub SDK calls and test all API wrappers
-- [ ] Add `tests/test_analyzer.py` — mock Anthropic SDK and test prompt builders
+- [x] Add `tests/test_api.py` — mock Finnhub SDK calls and test all API wrappers
+- [x] Add `tests/test_analyzer.py` — mock Anthropic SDK and test prompt builders
 
 **Files:** `tests/` directory
 
@@ -284,7 +284,7 @@ Allow power users to customize factor weights, risk thresholds, and display pref
 - [x] Add `config.yaml` with all tunable parameters (factor weights, risk bands, cache TTL, etc.)
 - [x] Load config at startup with `PyYAML`
 - [x] Validate config schema on startup
-- [ ] Add a "Settings" panel in the sidebar for runtime overrides
+- [x] Add a "Settings" panel in the sidebar for runtime overrides
 
 **Files:** `config.py`, `config.yaml`
 
@@ -296,22 +296,22 @@ Allow power users to customize factor weights, risk thresholds, and display pref
 |----------|---------|--------|
 | 1 | Multi-Stock Comparison View | ✅ Done |
 | 1 | Watchlist (Save & Load) | ✅ Done |
-| 1 | Export Report to CSV/HTML | ✅ Done (PDF pending) |
-| 1 | Additional Technical Indicators | ✅ Done (Fibonacci pending) |
+| 1 | Export Report to CSV/HTML/PDF | ✅ Done |
+| 1 | Additional Technical Indicators | ✅ Done |
 | 1 | Persistent Disk Cache | ✅ Done |
 | 2 | Stock Screener | ✅ Done |
-| 2 | Historical Factor Score Tracking | ✅ Done |
-| 2 | Earnings Call Transcript Analysis | ✅ Done |
+| 2 | Historical Factor Score Tracking | ✅ Done (diff view added) |
+| 2 | Earnings Call Transcript Analysis | ✅ Done (forward-looking extraction added) |
 | 2 | Portfolio-Level Risk & Correlation | ✅ Done |
-| 2 | Price Alert System | ✅ Done (push notifications pending) |
-| 2 | Options Market Data | ✅ Done (IV chart pending) |
-| 3 | AI Natural Language Screener | ✅ Done |
+| 2 | Price Alert System | ✅ Done |
+| 2 | Options Market Data | ✅ Done |
+| 3 | AI Natural Language Screener | ✅ Done (follow-up refinement added) |
 | 3 | Backtesting Engine | ✅ Done |
 | 3 | Sector & Industry Rotation Tracker | ✅ Done |
 | 3 | Interactive AI Chat (Q&A) | ✅ Done |
-| 3 | Multi-Data-Source Support | ✅ Done (Alpha Vantage pending) |
+| 3 | Multi-Data-Source Support | ✅ Done |
 | 4 | Docker Containerization | ✅ Done |
 | 4 | CI/CD Pipeline | ✅ Done |
 | 4 | Structured Logging | ✅ Done |
-| 4 | Test Coverage Expansion | ✅ Done (api/analyzer tests pending) |
-| 4 | Configuration File Support | ✅ Done (settings UI pending) |
+| 4 | Test Coverage Expansion | ✅ Done |
+| 4 | Configuration File Support | ✅ Done |

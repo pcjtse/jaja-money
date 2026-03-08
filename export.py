@@ -198,3 +198,166 @@ def analysis_to_html(
 </body>
 </html>"""
     return html.encode("utf-8")
+
+
+def analysis_to_pdf(
+    symbol: str,
+    quote: dict,
+    profile: dict | None,
+    financials: dict | None,
+    factors: list[dict],
+    risk: dict,
+    composite_score: int,
+    composite_label: str,
+    chart_image_bytes: bytes | None = None,
+) -> bytes:
+    """Generate a PDF analysis report using reportlab.
+
+    Raises RuntimeError if reportlab is not installed.
+    chart_image_bytes: optional PNG bytes of the price chart (requires kaleido).
+    """
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            HRFlowable, Image as RLImage,
+        )
+    except ImportError:
+        raise RuntimeError(
+            "reportlab is required for PDF export. "
+            "Install it with: pip install reportlab"
+        )
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        rightMargin=2 * cm, leftMargin=2 * cm,
+        topMargin=2 * cm, bottomMargin=2 * cm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "JajaTitle", parent=styles["Title"], fontSize=20, spaceAfter=4,
+    )
+    h2_style = ParagraphStyle(
+        "JajaH2", parent=styles["Heading2"], fontSize=12,
+        spaceBefore=12, spaceAfter=4,
+    )
+    small_style = ParagraphStyle(
+        "JajaSmall", parent=styles["Normal"], fontSize=8,
+        textColor=colors.grey,
+    )
+    body_style = ParagraphStyle("JajaBody", parent=styles["Normal"], fontSize=9)
+
+    price = quote.get("c", 0)
+    change = quote.get("d", 0)
+    change_pct = quote.get("dp", 0)
+    name = (profile or {}).get("name", symbol)
+    sector = (profile or {}).get("finnhubIndustry", "N/A")
+    generated = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    pe = (financials or {}).get("peBasicExclExtraTTM")
+    mc = (financials or {}).get("marketCapitalization")
+    if mc:
+        mc_f = float(mc)
+        mc_str = (
+            f"${mc_f / 1_000_000:.2f}T" if mc_f >= 1_000_000 else
+            f"${mc_f / 1_000:.1f}B" if mc_f >= 1_000 else
+            f"${mc_f:.0f}M"
+        )
+    else:
+        mc_str = "N/A"
+
+    story = []
+
+    story.append(Paragraph(f"{name} ({symbol})", title_style))
+    story.append(Paragraph(f"Sector: {sector}  |  Generated: {generated}", small_style))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(Paragraph("Quote", h2_style))
+    _row_style = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ])
+    qt_data = [
+        ["Metric", "Value"],
+        ["Price", f"${price:,.2f}"],
+        ["Day Change", f"{change:+.2f} ({change_pct:+.2f}%)"],
+        ["P/E Ratio", f"{pe:.1f}x" if pe else "N/A"],
+        ["Market Cap", mc_str],
+    ]
+    qt = Table(qt_data, colWidths=[7 * cm, 9 * cm])
+    qt.setStyle(_row_style)
+    story.append(qt)
+    story.append(Spacer(1, 0.4 * cm))
+
+    if chart_image_bytes:
+        story.append(Paragraph("Price Chart", h2_style))
+        img_buf = io.BytesIO(chart_image_bytes)
+        img = RLImage(img_buf, width=15 * cm, height=7.5 * cm)
+        story.append(img)
+        story.append(Spacer(1, 0.4 * cm))
+
+    composite_txt = f"{composite_score}/100 — {composite_label}"
+    story.append(Paragraph(f"Factor Score Engine  ({composite_txt})", h2_style))
+    factor_data = [["Factor", "Score", "Wt", "Label", "Detail"]]
+    for f in factors:
+        detail = f.get("detail") or ""
+        factor_data.append([
+            f.get("name", ""),
+            str(f.get("score", "")),
+            f"{f.get('weight', 0):.0%}",
+            f.get("label", ""),
+            detail[:55] + ("…" if len(detail) > 55 else ""),
+        ])
+    ft = Table(factor_data, colWidths=[4.5 * cm, 1.5 * cm, 1.5 * cm, 3.5 * cm, 5.5 * cm])
+    ft.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(ft)
+    story.append(Spacer(1, 0.4 * cm))
+
+    risk_score = risk.get("risk_score", 0)
+    risk_level = risk.get("risk_level", "N/A")
+    story.append(Paragraph(f"Risk Guardrails  ({risk_score}/100 — {risk_level})", h2_style))
+    flags = risk.get("flags", [])
+    if flags:
+        flag_data = [["Severity", "Title", "Message"]]
+        for flag in flags:
+            msg = flag.get("message") or ""
+            flag_data.append([
+                flag.get("severity", "").upper(),
+                flag.get("title", ""),
+                msg[:80] + ("…" if len(msg) > 80 else ""),
+            ])
+        flt = Table(flag_data, colWidths=[2.5 * cm, 5 * cm, 8.5 * cm])
+        flt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(flt)
+    else:
+        story.append(Paragraph("No active risk flags.", body_style))
+
+    doc.build(story)
+    return buf.getvalue()

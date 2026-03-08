@@ -77,11 +77,16 @@ if query_mode == "Manual filters":
         st.caption("Active filters: " + " · ".join(f["label"] for f in filters))
 
 else:  # AI NL query
+    # Session state for conversation-style refinement
+    if "screener_filters" not in st.session_state:
+        st.session_state.screener_filters = []
+    if "screener_query_history" not in st.session_state:
+        st.session_state.screener_query_history = []
+
     nl_query = st.text_input(
         "Describe what you're looking for",
         placeholder="Find undervalued tech stocks with low risk and strong momentum",
     )
-    parsed_filters = []
     if nl_query and st.button("Parse Query with Claude", key="parse_nl"):
         with st.spinner("Claude is parsing your query..."):
             try:
@@ -91,9 +96,61 @@ else:  # AI NL query
                 st.success(f"Parsed: {parsed.get('description', '')}")
                 if parsed_filters:
                     st.json(parsed_filters)
-                    filters = parsed_filters
+                    st.session_state.screener_filters = parsed_filters
+                    st.session_state.screener_query_history = [nl_query]
             except Exception as e:
                 st.error(f"Could not parse query: {e}")
+
+    # Show active filters and allow follow-up refinement
+    if st.session_state.screener_filters:
+        st.caption(
+            f"Active filters ({len(st.session_state.screener_filters)}): "
+            + " · ".join(
+                f"{f.get('dimension')} {f.get('operator')} {f.get('value')}"
+                for f in st.session_state.screener_filters
+            )
+        )
+        refine_query = st.text_input(
+            "Refine your search (follow-up)",
+            placeholder="Also only show stocks with P/E under 30",
+            key="screener_refine",
+        )
+        rc1, rc2 = st.columns([3, 1])
+        if rc1.button("Add Refinement with Claude", key="refine_nl"):
+            with st.spinner("Claude is refining your query..."):
+                try:
+                    from analyzer import parse_nl_screen
+                    context = (
+                        f"Current filters: {st.session_state.screener_filters}\n"
+                        f"Refinement: {refine_query}"
+                    )
+                    parsed = parse_nl_screen(context)
+                    new_filters = parsed.get("filters", [])
+                    if new_filters:
+                        # Merge: new filters override any existing same-dimension filters
+                        existing_dims = {f["dimension"] for f in new_filters}
+                        merged = [
+                            f for f in st.session_state.screener_filters
+                            if f["dimension"] not in existing_dims
+                        ] + new_filters
+                        st.session_state.screener_filters = merged
+                        st.session_state.screener_query_history.append(refine_query)
+                        st.success(f"Refined: {parsed.get('description', '')}")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Refinement failed: {e}")
+        if rc2.button("Clear Filters", key="clear_nl"):
+            st.session_state.screener_filters = []
+            st.session_state.screener_query_history = []
+            st.rerun()
+
+        if len(st.session_state.screener_query_history) > 1:
+            with st.expander("Query history"):
+                for i, q in enumerate(st.session_state.screener_query_history):
+                    st.markdown(f"{i + 1}. {q}")
+
+    filters = st.session_state.screener_filters
+    parsed_filters = filters
 
 # -------------------------------------------------------------------------
 # Run screen
@@ -199,7 +256,8 @@ if st.button("Run Screen", type="primary"):
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     # AI summary of top results (P3.1)
-    if query_mode == "AI natural language query" and nl_query:
+    if query_mode == "AI natural language query" and st.session_state.get("screener_query_history"):
+        _nl_q = st.session_state.screener_query_history[0]
         st.subheader("AI Analysis of Top Results")
         if st.button("Explain top results with Claude"):
             summary_placeholder = st.empty()
@@ -207,7 +265,7 @@ if st.button("Run Screen", type="primary"):
             try:
                 from analyzer import stream_screener_summary
                 with st.spinner("Claude is analyzing top picks..."):
-                    for chunk in stream_screener_summary(results[:10], nl_query):
+                    for chunk in stream_screener_summary(results[:10], _nl_q):
                         summary_text += chunk
                         summary_placeholder.markdown(summary_text)
             except Exception as e:

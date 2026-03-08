@@ -1,15 +1,17 @@
 """Multi-data-source provider with automatic fallback.
 
-Priority: Finnhub (primary) → yfinance (fallback).
+Priority: Finnhub (primary) → yfinance (fallback) → Alpha Vantage (fundamentals).
 
-yfinance is an optional dependency; if not installed the provider
-silently degrades to Finnhub-only mode.
+yfinance and Alpha Vantage are optional dependencies; if not installed the
+provider silently degrades to the next available source.
+
+Alpha Vantage requires ALPHA_VANTAGE_API_KEY in the environment.
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
-
 
 from log_setup import get_logger
 
@@ -22,6 +24,15 @@ try:
 except ImportError:
     _HAS_YFINANCE = False
     log.info("yfinance not installed — Finnhub-only mode")
+
+# Optional requests (for Alpha Vantage REST calls)
+try:
+    import requests as _requests
+    _HAS_REQUESTS = True
+except ImportError:
+    _HAS_REQUESTS = False
+
+_AV_BASE = "https://www.alphavantage.co/query"
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +162,62 @@ def _yf_peers(symbol: str) -> list:
 
 
 # ---------------------------------------------------------------------------
+# P3.5: Alpha Vantage helpers (fundamentals fallback)
+# ---------------------------------------------------------------------------
+
+def _av_financials(symbol: str) -> dict:
+    """Fetch fundamental data from Alpha Vantage OVERVIEW endpoint.
+
+    Requires ALPHA_VANTAGE_API_KEY environment variable.
+    Maps response to Finnhub financials schema.
+    """
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+    if not api_key or api_key == "your_alpha_vantage_key_here":
+        raise ValueError("ALPHA_VANTAGE_API_KEY not configured")
+    if not _HAS_REQUESTS:
+        raise ImportError("requests library not installed")
+
+    resp = _requests.get(
+        _AV_BASE,
+        params={"function": "OVERVIEW", "symbol": symbol, "apikey": api_key},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not data or "Symbol" not in data:
+        raise ValueError(f"No Alpha Vantage data for '{symbol}'")
+
+    def _safe_float(val):
+        try:
+            return float(val) if val and val != "None" else None
+        except (ValueError, TypeError):
+            return None
+
+    mc_raw = _safe_float(data.get("MarketCapitalization"))
+    mc_m = mc_raw / 1e6 if mc_raw else None  # Finnhub uses millions
+
+    div_yield_raw = _safe_float(data.get("DividendYield"))
+    div_yield_pct = div_yield_raw * 100 if div_yield_raw else None
+
+    return {
+        "peBasicExclExtraTTM": _safe_float(data.get("TrailingPE") or data.get("PERatio")),
+        "epsBasicExclExtraItemsTTM": _safe_float(data.get("EPS")),
+        "marketCapitalization": mc_m,
+        "dividendYieldIndicatedAnnual": div_yield_pct,
+        "52WeekHigh": _safe_float(data.get("52WeekHigh")),
+        "52WeekLow": _safe_float(data.get("52WeekLow")),
+        # Additional Alpha Vantage metrics
+        "_av_beta": _safe_float(data.get("Beta")),
+        "_av_operating_margin": _safe_float(data.get("OperatingMarginTTM")),
+        "_av_roe": _safe_float(data.get("ReturnOnEquityTTM")),
+        "_av_profit_margin": _safe_float(data.get("ProfitMargin")),
+        "_av_operating_cashflow": _safe_float(data.get("OperatingCashflowTTM")),
+        "_av_source": "alpha_vantage",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public provider class
 # ---------------------------------------------------------------------------
 
@@ -213,7 +280,18 @@ class DataProvider:
         return self._call("get_profile", _yf_profile, symbol)
 
     def get_financials(self, symbol: str) -> dict:
-        return self._call("get_financials", _yf_financials, symbol)
+        try:
+            return self._call("get_financials", _yf_financials, symbol)
+        except Exception as exc:
+            # Try Alpha Vantage as a third-tier fallback for fundamentals
+            log.warning("Primary/yfinance financials failed for %s (%s); trying Alpha Vantage", symbol, exc)
+            try:
+                result = _av_financials(symbol)
+                self._source_used = "alpha_vantage"
+                return result
+            except Exception as av_exc:
+                log.warning("Alpha Vantage financials also failed for %s: %s", symbol, av_exc)
+                raise exc
 
     def get_daily(self, symbol: str, years: int = 2) -> dict:
         return self._call("get_daily", _yf_daily, symbol, years=years)

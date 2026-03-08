@@ -28,22 +28,26 @@ from analyzer import (
     stream_sentiment_themes,
     stream_portfolio_memo,
     stream_transcript_analysis,
+    stream_forward_looking_analysis,
     build_chat_system_prompt,
     stream_chat_response,
 )
 from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
 from factors import (
     compute_factors, composite_score, composite_label_color,
-    calc_bollinger_bands, calc_obv, calc_vwap,
+    calc_bollinger_bands, calc_obv, calc_vwap, calc_fibonacci_levels,
 )
 from guardrails import compute_risk
 from portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
 from watchlist import (
     get_watchlist, add_to_watchlist, remove_from_watchlist, is_in_watchlist,
 )
-from history import save_analysis, get_score_trend
-from alerts import get_alerts, add_alert, check_alerts, delete_alert, CONDITION_TYPES
-from export import factors_to_csv, price_history_to_csv, analysis_to_html
+from history import save_analysis, get_score_trend, get_latest_two_snapshots
+from alerts import (
+    get_alerts, add_alert, check_alerts, delete_alert, reset_alert,
+    CONDITION_TYPES, start_alert_scheduler, stop_alert_scheduler, is_scheduler_running,
+)
+from export import factors_to_csv, price_history_to_csv, analysis_to_html, analysis_to_pdf
 from cache import get_cache
 from log_setup import get_logger
 
@@ -201,6 +205,50 @@ with st.sidebar:
             n = cache.clear()
             st.success(f"Cleared {n} cached entries.")
             st.cache_data.clear()
+
+    # P4.5: Factor weight settings
+    with st.expander("⚙️ Factor Weights"):
+        from config import cfg
+        current_weights = dict(cfg.factor_weights)
+        weight_keys = [
+            ("valuation", "Valuation (P/E)", 0.15),
+            ("trend", "Trend (SMA)", 0.20),
+            ("rsi", "Momentum (RSI)", 0.10),
+            ("macd", "MACD Signal", 0.10),
+            ("sentiment", "News Sentiment", 0.15),
+            ("earnings", "Earnings Quality", 0.15),
+            ("analyst", "Analyst Consensus", 0.10),
+            ("range", "52-Wk Strength", 0.05),
+        ]
+        new_weights = {}
+        for key, label, default in weight_keys:
+            val = current_weights.get(key, default)
+            new_weights[key] = st.slider(
+                label, 0.0, 0.50, float(val), 0.05,
+                key=f"wt_{key}",
+            )
+        # Normalize weights to sum to 1.0 and update cfg for this run
+        total_w = sum(new_weights.values()) or 1.0
+        cfg.factor_weights = {k: v / total_w for k, v in new_weights.items()}
+        st.caption(f"Total weight: {total_w:.2f} (auto-normalised)")
+        if st.button("Reset Weights"):
+            for key, _, default in weight_keys:
+                st.session_state[f"wt_{key}"] = default
+            st.rerun()
+
+    # P2.5: Background alert scheduler toggle
+    with st.expander("🔔 Background Alerts"):
+        running = is_scheduler_running()
+        st.caption(f"Scheduler: {'🟢 Running' if running else '⚪ Stopped'}")
+        ac1, ac2 = st.columns(2)
+        if ac1.button("Start", disabled=running, key="start_sched"):
+            ok = start_alert_scheduler(interval_seconds=300)
+            st.success("Scheduler started." if ok else "APScheduler not installed.")
+            st.rerun()
+        if ac2.button("Stop", disabled=not running, key="stop_sched"):
+            stop_alert_scheduler()
+            st.rerun()
+        st.caption("Checks cached quotes every 5 min. Sends desktop notification via plyer.")
 
 # Handle watchlist quick-load
 if "symbol_override" in st.session_state:
@@ -382,7 +430,8 @@ if df is not None and len(df) > 0:
         vwap_delta = f"{((price - vwap) / vwap * 100):+.1f}% vs VWAP"
         st.caption(f"VWAP (20d): ${vwap:,.2f}   |   {vwap_delta}")
 
-# --- Price Chart (P1.4: enhanced with BB + Volume) ---
+# --- Price Chart (P1.4: enhanced with BB + Volume + Fibonacci) ---
+_price_chart_fig = None  # stored for PDF export
 if df is not None and len(df) > 0:
     chart_df = df.tail(100).copy()
     close_s = chart_df["Close"]
@@ -393,6 +442,7 @@ if df is not None and len(df) > 0:
     show_smas = st.checkbox("Show SMA(50)/SMA(200)", value=True, key="show_smas")
     show_vol = st.checkbox("Show Volume", value=True, key="show_vol")
     show_obv = st.checkbox("Show OBV", value=False, key="show_obv")
+    show_fib = st.checkbox("Show Fibonacci Retracement", value=False, key="show_fib")
 
     # Build subplot grid
     row_heights = [0.6]
@@ -481,6 +531,31 @@ if df is not None and len(df) > 0:
             ), row=current_row, col=1)
             fig.update_yaxes(title_text="OBV", row=current_row, col=1)
 
+    # P1.4: Fibonacci retracement levels overlay
+    if show_fib:
+        fib_data = calc_fibonacci_levels(chart_df, lookback=100)
+        if fib_data:
+            fib_colors = {
+                "100.0%": "#888888",
+                "78.6%":  "#e05252",
+                "61.8%":  "#f0b429",
+                "50.0%":  "#2da44e",
+                "38.2%":  "#f0b429",
+                "23.6%":  "#e05252",
+                "0.0%":   "#888888",
+            }
+            for label, level_price in fib_data["levels"].items():
+                fig.add_hline(
+                    y=level_price,
+                    line_dash="dot",
+                    line_color=fib_colors.get(label, "#aaa"),
+                    line_width=1,
+                    annotation_text=f"Fib {label} ${level_price:,.2f}",
+                    annotation_position="right",
+                    annotation_font_size=9,
+                    row=1, col=1,
+                )
+
     fig.update_layout(
         xaxis_rangeslider_visible=False,
         height=600,
@@ -488,6 +563,7 @@ if df is not None and len(df) > 0:
     )
     fig.update_xaxes(title_text="Date", row=n_subplots, col=1)
     fig.update_yaxes(title_text="Price (USD)", row=1, col=1)
+    _price_chart_fig = fig
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("Raw Price Data"):
@@ -588,7 +664,7 @@ try:
     with st.spinner("Fetching options data..."):
         opts = fetch_option_metrics(symbol)
     if opts.get("available"):
-        opt_cols = st.columns(4)
+        opt_cols = st.columns(5)
         opt_cols[0].metric("Exp. Date", opts.get("expiry", "N/A"))
         pc = opts.get("put_call_ratio")
         opt_cols[1].metric(
@@ -602,6 +678,33 @@ try:
             "Call Vol / Put Vol",
             f"{opts.get('total_call_volume', 0):,} / {opts.get('total_put_volume', 0):,}",
         )
+        # P2.6: IV-based expected move (30-day horizon)
+        if iv and price:
+            import math as _math
+            expected_move = price * (iv / 100) * _math.sqrt(30 / 365)
+            opt_cols[4].metric(
+                "Expected Move (30d)",
+                f"±${expected_move:,.2f}",
+                f"±{expected_move / price * 100:.1f}% of price",
+            )
+            em_upper = price + expected_move
+            em_lower = price - expected_move
+            fig_em = go.Figure()
+            fig_em.add_trace(go.Scatter(
+                x=["Lower bound", "Current price", "Upper bound"],
+                y=[em_lower, price, em_upper],
+                mode="markers+lines",
+                marker=dict(size=[12, 16, 12],
+                            color=["#e05252", "#2da44e", "#2da44e"]),
+                line=dict(color="#888", width=1, dash="dot"),
+                showlegend=False,
+            ))
+            fig_em.update_layout(
+                height=180, margin=dict(t=10, b=10, l=10, r=10),
+                yaxis_title="Price (USD)",
+                xaxis=dict(tickfont=dict(size=11)),
+            )
+            st.plotly_chart(fig_em, use_container_width=True)
     else:
         st.caption("Options data unavailable for this symbol (may require Finnhub premium tier).")
 except Exception as e:
@@ -717,6 +820,18 @@ try:
                 for chunk in stream_transcript_analysis(symbol, content):
                     t_text += chunk
                     t_placeholder.markdown(t_text)
+
+                # P2.3 extension: Forward-looking statements
+                if st.button("Extract Forward-Looking Statements", key="fwd_btn"):
+                    fl_placeholder = st.empty()
+                    fl_text = ""
+                    try:
+                        with st.spinner("Extracting forward-looking statements..."):
+                            for chunk in stream_forward_looking_analysis(symbol, content):
+                                fl_text += chunk
+                                fl_placeholder.markdown(fl_text)
+                    except Exception as e:
+                        st.error(f"Forward-looking analysis failed: {e}")
             else:
                 st.warning("Transcript content not available.")
     else:
@@ -914,6 +1029,34 @@ if len(trend["dates"]) > 1:
 else:
     st.caption("Run analysis on multiple days to see the score trend chart.")
 
+# P2.2: Compare to previous analysis diff view
+import json as _json
+_snapshots = get_latest_two_snapshots(symbol)
+if len(_snapshots) == 2:
+    with st.expander("Compare to Previous Analysis"):
+        _prev, _curr = _snapshots[0], _snapshots[1]
+        dc1, dc2, dc3 = st.columns(3)
+        _fs_delta = _curr["factor_score"] - _prev["factor_score"]
+        _rs_delta = _curr["risk_score"] - _prev["risk_score"]
+        dc1.metric("Factor Score",
+                   f"{_curr['factor_score']}/100 ({_curr['composite_label']})",
+                   f"{_fs_delta:+d} vs {_prev['date']}")
+        dc2.metric("Risk Score",
+                   f"{_curr['risk_score']}/100 ({_curr['risk_level']})",
+                   f"{_rs_delta:+d} vs {_prev['date']}")
+        dc3.metric("Price", f"${_curr['price']:,.2f}" if _curr.get("price") else "N/A")
+
+        _prev_flags = {f["title"] for f in (_json.loads(_prev.get("flags_json") or "[]"))}
+        _curr_flags = {f["title"] for f in (_json.loads(_curr.get("flags_json") or "[]"))}
+        _new_flags = _curr_flags - _prev_flags
+        _removed_flags = _prev_flags - _curr_flags
+        if _new_flags:
+            st.warning("**New flags since last analysis:** " + " · ".join(_new_flags))
+        if _removed_flags:
+            st.success("**Resolved flags:** " + " · ".join(_removed_flags))
+        if not _new_flags and not _removed_flags:
+            st.info("No flag changes since previous analysis.")
+
 # P2.5: Price Alerts configuration
 with st.expander("Configure Price Alert"):
     a_col1, a_col2, a_col3 = st.columns(3)
@@ -1065,7 +1208,7 @@ if run_analysis:
 # Export full report (P1.3)
 st.divider()
 st.subheader("Download Full Report")
-exp_col1, exp_col2 = st.columns(2)
+exp_col1, exp_col2, exp_col3 = st.columns(3)
 with exp_col1:
     csv_data = factors_to_csv(symbol, _factors, _risk, quote, financials)
     st.download_button(
@@ -1086,6 +1229,32 @@ with exp_col2:
         file_name=f"{symbol}_report.html",
         mime="text/html",
     )
+with exp_col3:
+    # P1.3: PDF export (requires reportlab; chart image requires kaleido)
+    _chart_bytes = None
+    try:
+        if _price_chart_fig is not None:
+            import plotly.io as _pio
+            _chart_bytes = _pio.to_image(
+                _price_chart_fig, format="png", width=1200, height=500, engine="kaleido"
+            )
+    except Exception:
+        pass  # kaleido not installed or export failed
+    try:
+        pdf_data = analysis_to_pdf(
+            symbol=symbol, quote=quote, profile=profile,
+            financials=financials, factors=_factors, risk=_risk,
+            composite_score=_composite, composite_label=_label,
+            chart_image_bytes=_chart_bytes,
+        )
+        st.download_button(
+            "Download PDF Report",
+            data=pdf_data,
+            file_name=f"{symbol}_report.pdf",
+            mime="application/pdf",
+        )
+    except RuntimeError as _pdf_err:
+        st.caption(f"PDF unavailable: {_pdf_err}")
 
 # --- P3.4: Interactive AI Chat ---
 st.divider()
@@ -1154,3 +1323,18 @@ st.session_state["last_analysis"] = {
     "color": _color,
 }
 log.info("Analysis complete for %s: factor=%d risk=%d", symbol, _composite, _rscore)
+
+# P4.3: Developer debug panel (hidden behind DEBUG env flag)
+import os as _os
+if _os.getenv("DEBUG", "").lower() in ("1", "true", "yes"):
+    st.divider()
+    with st.expander("🔧 Developer Debug Panel"):
+        import pathlib as _pathlib
+        _log_file = _pathlib.Path.home() / ".jaja-money" / "jaja_money.log"
+        if _log_file.exists():
+            _log_lines = _log_file.read_text(errors="replace").splitlines()
+            st.code("\n".join(_log_lines[-60:]), language="text")
+        else:
+            st.caption("Log file not found.")
+        with st.expander("Session State"):
+            st.json({k: str(v)[:200] for k, v in st.session_state.items()})

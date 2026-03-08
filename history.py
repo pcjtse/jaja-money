@@ -127,6 +127,30 @@ def get_score_trend(symbol: str, limit: int = 30) -> dict:
     }
 
 
+def get_latest_two_snapshots(symbol: str) -> list[dict]:
+    """Return the two most recent distinct-date analysis snapshots for a symbol.
+
+    Returns a list of 0–2 dicts, sorted oldest-first, so index 0 is the
+    previous snapshot and index 1 is the most recent one.
+    """
+    symbol = symbol.upper()
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM analysis_history
+                   WHERE symbol=?
+                   ORDER BY date DESC
+                   LIMIT 2""",
+                (symbol,),
+            ).fetchall()
+        result = [dict(r) for r in rows]
+        result.reverse()
+        return result
+    except Exception as exc:
+        log.warning("Failed to fetch latest snapshots for %s: %s", symbol, exc)
+        return []
+
+
 def get_tracked_symbols() -> list[str]:
     """Return all symbols that have at least one history entry."""
     try:

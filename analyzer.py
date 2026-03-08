@@ -393,6 +393,53 @@ def stream_transcript_analysis(symbol: str, transcript_text: str):
 
 
 # ---------------------------------------------------------------------------
+# P2.3 extension: Forward-looking statement extraction
+# ---------------------------------------------------------------------------
+
+_FORWARD_LOOKING_SYSTEM = """\
+You are a financial analyst specializing in extracting and evaluating \
+forward-looking statements from corporate earnings calls.
+
+Your tasks:
+1. **Forward-Looking Statements** — extract explicit guidance, forecasts, \
+   projections, and expectations management mentioned (quote exact phrases)
+2. **Cautionary Language** — flag hedging qualifiers: "may", "could", \
+   "subject to", "if", "approximately", "expect", "anticipate", etc.
+3. **Guidance Confidence** — rate each statement: Confident / Cautious / Hedged
+4. **Risks Flagged by Management** — specific risks they acknowledged
+5. **Unspoken Concerns** — what management seemed reluctant to address or omitted
+
+Format as structured markdown with clear headings. Be concise and specific.\
+"""
+
+
+def stream_forward_looking_analysis(symbol: str, transcript_text: str):
+    """Stream a forward-looking statement extraction analysis. Yields text chunks."""
+    client = _get_client()
+
+    prompt = f"""## Forward-Looking Statement Analysis: {symbol}
+
+Analyze the following earnings call transcript excerpt and extract all \
+forward-looking statements, guidance, and cautionary language:
+
+{transcript_text[:6000]}
+"""
+    log.info("Starting forward-looking analysis stream for %s", symbol)
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1500,
+        system=_FORWARD_LOOKING_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
 # P3.1: AI Natural Language Screener
 # ---------------------------------------------------------------------------
 

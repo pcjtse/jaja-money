@@ -7,8 +7,15 @@ anthropic
 transformers
 torch
 pytest
+requests
+# P1.3 PDF export (optional — gracefully skipped if absent)
+reportlab
+kaleido
 # P1.5 disk cache / config
 pyyaml
+# P2.5 background alert polling (optional — gracefully skipped if absent)
+APScheduler
+plyer
 # P3.5 multi-source fallback (optional — gracefully skipped if absent)
 yfinance
 # P4.4 test coverage

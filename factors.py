@@ -120,6 +120,52 @@ def calc_obv(close: pd.Series, volume: pd.Series | None) -> pd.Series | None:
     return obv
 
 
+def calc_fibonacci_levels(df: pd.DataFrame, lookback: int = 100) -> dict | None:
+    """Compute Fibonacci retracement levels from the recent price swing.
+
+    Uses the high and low over the last `lookback` bars to compute standard
+    retracement levels: 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%.
+
+    Returns dict with:
+        swing_high: float
+        swing_low:  float
+        levels:     dict mapping label → price
+        trend:      "up" | "down" (based on close vs midpoint)
+    Returns None if data is insufficient.
+    """
+    if df is None or len(df) < 2:
+        return None
+    required = {"High", "Low", "Close"}
+    if not required.issubset(df.columns):
+        return None
+
+    window = df.tail(lookback)
+    high = float(window["High"].max())
+    low = float(window["Low"].min())
+    if high <= low:
+        return None
+
+    diff = high - low
+    levels = {
+        "100.0%": round(high, 2),
+        "78.6%":  round(high - 0.236 * diff, 2),
+        "61.8%":  round(high - 0.382 * diff, 2),
+        "50.0%":  round(high - 0.500 * diff, 2),
+        "38.2%":  round(high - 0.618 * diff, 2),
+        "23.6%":  round(high - 0.764 * diff, 2),
+        "0.0%":   round(low, 2),
+    }
+    last_close = float(window["Close"].iloc[-1])
+    trend = "up" if last_close >= (high + low) / 2 else "down"
+
+    return {
+        "swing_high": round(high, 2),
+        "swing_low":  round(low, 2),
+        "levels": levels,
+        "trend": trend,
+    }
+
+
 def calc_vwap(df: pd.DataFrame) -> float | None:
     """Compute rolling VWAP (last 20 trading days) from OHLCV DataFrame.
 

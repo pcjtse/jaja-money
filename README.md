@@ -1,5 +1,7 @@
 # Stock Analysis Dashboard
 
+[![CI](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml/badge.svg)](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml)
+
 A Streamlit-based stock analysis app powered by the Finnhub API and Claude AI.
 Enter a stock symbol to get real-time quotes, technicals, AI-driven fundamental
 analysis, FinBERT news sentiment, an 8-factor quantitative score, a risk
@@ -210,6 +212,46 @@ jaja-money/
 │   └── 6_Backtest.py       # Strategy backtesting page
 └── requirements.txt
 ```
+
+---
+
+## Docker Setup
+
+### Quick start with Docker Compose
+
+```bash
+# 1. Copy .env.example and add your API keys
+cp .env.example .env
+# Edit .env:
+#   FINNHUB_API_KEY=your_finnhub_key_here
+#   ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# 2. Build and start
+docker compose up --build
+```
+
+Open `http://localhost:8501` in your browser.
+
+### Build manually
+
+```bash
+docker build -t jaja-money .
+docker run -p 8501:8501 --env-file .env jaja-money
+```
+
+### Notes
+- The container exposes port **8501** (Streamlit default).
+- Persistent data (`history.db`, `watchlist.json`, `alerts.json`, cache) lives
+  inside the container at `~/.jaja-money/`. Mount a volume to persist across
+  container restarts:
+  ```bash
+  docker run -p 8501:8501 --env-file .env \
+    -v "$HOME/.jaja-money:/root/.jaja-money" jaja-money
+  ```
+- The FinBERT model (~500 MB) is downloaded on first run. Pre-download it into
+  the image by uncommenting the relevant line in the `Dockerfile`.
+
+---
 
 ## Rate Limits
 
