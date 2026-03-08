@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,7 +32,6 @@ def _make_api():
 def test_init_requires_api_key(monkeypatch):
     monkeypatch.setenv("FINNHUB_API_KEY", "")
     with patch("finnhub.Client"):
-        from importlib import reload
         import api as _api_mod
         with pytest.raises(ValueError, match="FINNHUB_API_KEY"):
             _api_mod.FinnhubAPI()
