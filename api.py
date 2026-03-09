@@ -5,6 +5,7 @@ Enhanced with:
 - Options market data (P2.6)
 - Earnings call transcript fetch (P2.3)
 - Structured logging (P4.3)
+- Macroeconomic context overlay (P5.6)
 """
 from __future__ import annotations
 
@@ -205,3 +206,54 @@ class FinnhubAPI:
                 log.warning("Transcript %s unavailable: %s", transcript_id, exc)
                 return {}
         return self._cached(f"transcript:{transcript_id}", _fetch, ttl=86400 * 7)
+
+
+# ---------------------------------------------------------------------------
+# P5.6: Macroeconomic Context Overlay (standalone — uses yfinance, not Finnhub)
+# ---------------------------------------------------------------------------
+
+def get_macro_context() -> dict:
+    """Fetch macro indicators via yfinance: VIX and 10Y Treasury yield.
+
+    Returns a dict with:
+        available       bool
+        vix             float | None  — CBOE Volatility Index
+        treasury_10y    float | None  — 10Y Treasury yield (%)
+        vix_regime      str           — "calm" | "elevated" | "fear"
+        curve_signal    str           — "normal" | "watch" | "inverted" (placeholder)
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("yfinance not installed — macro context unavailable")
+        return {"available": False}
+
+    def _last(ticker: str) -> float | None:
+        try:
+            hist = yf.Ticker(ticker).history(period="5d")
+            return float(hist["Close"].iloc[-1]) if not hist.empty else None
+        except Exception as exc:
+            log.warning("yfinance fetch failed for %s: %s", ticker, exc)
+            return None
+
+    vix = _last("^VIX")
+    tnx = _last("^TNX")   # 10Y Treasury yield
+
+    result: dict = {"available": True}
+    result["vix"] = round(vix, 2) if vix else None
+    result["treasury_10y"] = round(tnx, 3) if tnx else None
+
+    if vix is not None:
+        if vix > 30:
+            result["vix_regime"] = "fear"
+        elif vix > 20:
+            result["vix_regime"] = "elevated"
+        else:
+            result["vix_regime"] = "calm"
+    else:
+        result["vix_regime"] = "unknown"
+
+    # Yield curve signal: with only 10Y available, flag as placeholder
+    result["curve_signal"] = "unknown"
+
+    return result

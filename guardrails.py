@@ -2,6 +2,11 @@
 
 Computes a 0-100 risk score from four dimensions and surfaces specific
 red-flag conditions as structured alerts.  No Streamlit imports.
+
+Enhanced with:
+- Volatility regime detection (P8.2): hv_5d, hv_30d, vol_regime fields
+- Liquidity risk flag (P8.1): account_size / max_position_pct parameters
+- Macro context overlay (P5.6): macro_context field
 """
 
 from __future__ import annotations
@@ -25,6 +30,22 @@ def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     log_returns = ratio.apply(math.log)
     daily_std = float(log_returns.tail(window).std())
     return daily_std * math.sqrt(252) * 100   # annualised %
+
+
+def _volatility_regime(hv_5d: float | None, hv_30d: float | None) -> str:
+    """Classify volatility regime from short-term vs long-term realized vol.
+
+    Returns one of: "spike", "sustained", "elevated", "normal", "unknown".
+    """
+    if hv_5d is None or hv_30d is None:
+        return "unknown"
+    if hv_5d > 2 * hv_30d:
+        return "spike"       # transient — likely event-driven
+    if hv_5d > 1.5 * hv_30d and hv_30d > 30:
+        return "sustained"   # both short and long-term elevated
+    if hv_30d > 30:
+        return "elevated"
+    return "normal"
 
 
 def _rsi(close: pd.Series, length: int = 14) -> float | None:
@@ -119,6 +140,8 @@ def _build_flags(
     composite_factor_score: int,
     hv: float | None,
     drawdown_pct: float | None,
+    account_size: float | None = None,
+    max_position_pct: float = 0.05,
 ) -> list[dict]:
     """Return a list of flag dicts: {severity, icon, title, message}."""
     flags = []
@@ -262,6 +285,30 @@ def _build_flags(
              f"Almost all factors are maxed out. Historically, extreme bullish consensus "
              f"can precede mean-reversion. Manage position sizing.")
 
+    # --- P8.1: Liquidity risk flag ---
+    # Requires volume data for a proper ADV check; flag only when we have enough
+    # context (account size + price) to estimate intended position value.
+    if (
+        close is not None
+        and price is not None
+        and account_size is not None
+        and account_size > 0
+        and price > 0
+        and len(close) >= 20
+    ):
+        position_value = account_size * max_position_pct
+        # Volume data is not currently threaded through; flag as informational
+        # when position value is large relative to a thin-volume proxy.
+        if position_value > 100_000:
+            flag(
+                "info",
+                "💧",
+                "Liquidity check recommended",
+                f"Intended position (${position_value:,.0f}) is significant. "
+                f"Verify 20-day average daily volume before sizing — volume data "
+                f"is not available in the current data feed.",
+            )
+
     return flags
 
 
@@ -298,6 +345,9 @@ def compute_risk(
     recommendations: list,
     sentiment_agg: dict | None,
     composite_factor_score: int,
+    account_size: float | None = None,
+    max_position_pct: float = 0.05,
+    macro_context: dict | None = None,
 ) -> dict:
     """Compute risk score and flags from available data.
 
@@ -305,8 +355,12 @@ def compute_risk(
         risk_score          int 0-100  (higher = more risky)
         risk_level          str  ("Low" | "Moderate" | "Elevated" | "High" | "Extreme")
         risk_color          hex color string
-        hv                  float | None  annualised HV %
+        hv                  float | None  20-day annualised HV %
+        hv_5d               float | None  5-day annualised HV %  (P8.2)
+        hv_30d              float | None  30-day annualised HV %  (P8.2)
+        vol_regime          str  volatility regime classification  (P8.2)
         drawdown_pct        float | None  drawdown from 52-week high %
+        macro_context       dict | None  passed-through macro overlay  (P5.6)
         flags               list[dict]   ordered by severity
     """
     price = float(quote.get("c", 0) or 0) or None
@@ -314,6 +368,11 @@ def compute_risk(
     vol_dim,  hv         = _dim_volatility(close)
     dd_dim,   drawdown   = _dim_drawdown(price, financials, close)
     sig_dim              = _dim_signal_risk(composite_factor_score)
+
+    # P8.2: short and long-term realized volatility for regime detection
+    hv_5d  = _hist_vol(close, window=5)
+    hv_30d = _hist_vol(close, window=30)
+    vol_regime = _volatility_regime(hv_5d, hv_30d)
 
     flags = _build_flags(
         close=close,
@@ -325,7 +384,15 @@ def compute_risk(
         composite_factor_score=composite_factor_score,
         hv=hv,
         drawdown_pct=drawdown,
+        account_size=account_size,
+        max_position_pct=max_position_pct,
     )
+
+    # P8.2: sustained/spike elevated vol → raise risk score further
+    if vol_regime == "sustained":
+        sig_dim = _clamp(sig_dim + 10)
+    elif vol_regime == "spike":
+        sig_dim = _clamp(sig_dim + 5)
 
     # Flag count dimension: each flag adds 20 pts, capped at 100
     flag_dim = _clamp(len(flags) * 20)
@@ -349,6 +416,10 @@ def compute_risk(
         risk_level=risk_level,
         risk_color=risk_color,
         hv=hv,
+        hv_5d=hv_5d,
+        hv_30d=hv_30d,
+        vol_regime=vol_regime,
         drawdown_pct=drawdown,
+        macro_context=macro_context,
         flags=flags,
     )

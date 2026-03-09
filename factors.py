@@ -456,6 +456,61 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
 
 
 # ---------------------------------------------------------------------------
+# P5.2: Analyst Estimate Revision Momentum (Factor 9)
+# ---------------------------------------------------------------------------
+
+def _factor_revision_momentum(revisions: dict | None) -> dict:
+    """Factor 9: Analyst EPS estimate revision momentum.
+
+    Args:
+        revisions: Dict with keys:
+            direction       str  "up" | "down" | "flat"
+            magnitude       float  0.0–1.0 (relative size of revision)
+            analyst_count   int | None
+            forward_eps     float | None
+    """
+    weight = 0.10
+
+    if not revisions or not revisions.get("direction"):
+        return {
+            "name": "Estimate Revision",
+            "score": 50,
+            "weight": weight,
+            "label": "No data",
+            "detail": "No analyst revision data available",
+        }
+
+    analyst_count = revisions.get("analyst_count")
+    fwd_eps = revisions.get("forward_eps")
+    direction = revisions.get("direction", "flat")
+    magnitude = float(revisions.get("magnitude") or 0.0)
+
+    if direction == "up":
+        score = _clamp(60 + int(magnitude * 40))
+        label = "Upward revision"
+    elif direction == "down":
+        score = _clamp(40 - int(magnitude * 40))
+        label = "Downward revision"
+    else:
+        score = 50
+        label = "Flat / mixed"
+
+    detail_parts: list[str] = []
+    if fwd_eps is not None:
+        detail_parts.append(f"Fwd EPS: ${fwd_eps:.2f}")
+    if analyst_count is not None:
+        detail_parts.append(f"{analyst_count} analysts")
+
+    return {
+        "name": "Estimate Revision",
+        "score": score,
+        "weight": weight,
+        "label": label,
+        "detail": ", ".join(detail_parts) if detail_parts else direction,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -466,10 +521,12 @@ def compute_factors(
     earnings: list,
     recommendations: list,
     sentiment_agg: dict | None,
+    revisions: dict | None = None,
 ) -> list[dict]:
-    """Compute all 8 factors and return them as a list of dicts.
+    """Compute all factors and return them as a list of dicts.
 
     Each dict has keys: name, score (0–100), label, detail, weight.
+    Passing ``revisions`` enables the optional 9th factor (P5.2).
     """
     _c = quote.get("c")
     price = float(_c) if (_c is not None and float(_c) > 0) else None
@@ -484,6 +541,9 @@ def compute_factors(
         _factor_analyst(recommendations),
         _factor_range_position(financials, price),
     ]
+    if revisions is not None:
+        factors.append(_factor_revision_momentum(revisions))
+
     log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
     return factors
 

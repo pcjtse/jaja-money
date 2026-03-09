@@ -5,18 +5,25 @@ Enhanced with:
 - AI natural language screener parsing (P3.1)
 - Interactive stock Q&A chat (P3.4)
 - Structured logging (P4.3)
+- Response caching (P9.1)
+- Adaptive system prompts (P9.2)
+- Backtest narrative (P9.3)
+- Chat history trimming (P9.5)
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import anthropic
 from dotenv import load_dotenv
 
+from cache import get_cache
 from log_setup import get_logger
 
 load_dotenv()
 
 log = get_logger(__name__)
+_response_cache = get_cache()
 
 _SYSTEM_PROMPT = """\
 You are an expert equity research analyst with deep experience in fundamental \
@@ -39,6 +46,108 @@ Structure your report with these sections:
 Keep the tone professional and the report digestible for a sophisticated \
 but non-specialist reader.\
 """
+
+# P9.2: Default and stock-type-specific system prompts
+_DEFAULT_SYSTEM_PROMPT = _SYSTEM_PROMPT
+
+_STOCK_TYPE_SYSTEM_PROMPTS: dict[str, str] = {
+    "growth": (
+        "You are an expert growth equity analyst. Focus your analysis on revenue "
+        "growth rates, TAM expansion, competitive moats, and the path to profitability. "
+        "Standard P/E metrics are less relevant — emphasise EV/Sales, Rule of 40, "
+        "and user/customer growth metrics instead.\n\n" + _SYSTEM_PROMPT
+    ),
+    "value": (
+        "You are an expert value investor. Focus your analysis on margin of safety, "
+        "asset values, free cash flow yield, and capital allocation discipline. "
+        "Flag risks of value traps. Compare P/E and P/B to historic lows and sector medians.\n\n"
+        + _SYSTEM_PROMPT
+    ),
+    "dividend": (
+        "You are an expert income equity analyst. Focus on dividend sustainability, "
+        "payout ratio, dividend growth history, and coverage ratios. Flag any risk of "
+        "a dividend cut. Emphasise yield vs. peers and bond alternatives.\n\n"
+        + _SYSTEM_PROMPT
+    ),
+    "cyclical": (
+        "You are an expert cyclical equity analyst. Situate the company within its "
+        "economic cycle phase. Focus on commodity prices, utilisation rates, operating "
+        "leverage, and balance sheet resilience through a downturn.\n\n" + _SYSTEM_PROMPT
+    ),
+    "defensive": (
+        "You are an expert defensive equity analyst. Assess recession resilience, "
+        "pricing power, and cash flow stability. Compare valuation premium to market "
+        "vs. historical norms and validate whether the premium is justified.\n\n"
+        + _SYSTEM_PROMPT
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# P9.1: Response caching helpers
+# ---------------------------------------------------------------------------
+
+def _compute_context_hash(prompt: str) -> str:
+    """Return a SHA-256 hex digest of the prompt for cache keying."""
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
+def _get_cached_response(context_hash: str) -> str | None:
+    """Return cached Claude response string, or None if not found."""
+    return _response_cache.get(f"claude_response:{context_hash}")
+
+
+def _store_cached_response(context_hash: str, response: str, ttl: int = 1800) -> None:
+    """Store a Claude response in the disk cache with a 30-minute TTL."""
+    _response_cache.set(f"claude_response:{context_hash}", response, ttl=ttl)
+
+
+# ---------------------------------------------------------------------------
+# P9.5: Chat history trimming helpers
+# ---------------------------------------------------------------------------
+
+def _estimate_tokens(text: str) -> float:
+    """Estimate token count as word count × 1.3 (rough approximation)."""
+    return len(text.split()) * 1.3
+
+
+def trim_chat_history(
+    system: str,
+    history: list[dict],
+    max_budget_tokens: int = 100_000,
+    budget_ratio: float = 0.8,
+) -> tuple[list[dict], bool]:
+    """Trim oldest chat turns so history fits within the token budget.
+
+    Args:
+        system: System prompt text (not trimmed, just counted).
+        history: List of {"role": ..., "content": ...} dicts.
+        max_budget_tokens: Context budget in tokens.
+        budget_ratio: Fraction of budget reserved for history (default 0.8).
+
+    Returns:
+        (trimmed_history, was_trimmed) tuple.
+    """
+    budget = max_budget_tokens * budget_ratio
+    system_tokens = _estimate_tokens(system)
+    remaining = budget - system_tokens
+
+    # Walk history newest-first, accumulate until budget exceeded
+    kept: list[dict] = []
+    running = 0.0
+    for msg in reversed(history):
+        tokens = _estimate_tokens(msg.get("content", ""))
+        if running + tokens > remaining and kept:
+            # Budget exceeded — stop here; always keep at least the newest message
+            break
+        kept.append(msg)
+        running += tokens
+
+    trimmed = list(reversed(kept))
+    was_trimmed = len(trimmed) < len(history)
+    if was_trimmed:
+        log.info("Chat history trimmed: %d → %d messages", len(history), len(trimmed))
+    return trimmed, was_trimmed
 
 
 def _get_client() -> anthropic.Anthropic:
@@ -164,15 +273,23 @@ def build_data_prompt(
     return "\n".join(lines)
 
 
-def stream_fundamental_analysis(prompt: str):
-    """Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking."""
+def stream_fundamental_analysis(prompt: str, stock_type: str | None = None):
+    """Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking.
+
+    Args:
+        prompt: The assembled data prompt.
+        stock_type: Optional stock type key from _STOCK_TYPE_SYSTEM_PROMPTS
+                    (e.g. "growth", "value", "dividend", "cyclical", "defensive").
+                    Falls back to _DEFAULT_SYSTEM_PROMPT when None or unrecognised.
+    """
     client = _get_client()
-    log.info("Starting fundamental analysis stream")
+    system = _STOCK_TYPE_SYSTEM_PROMPTS.get(stock_type or "", _DEFAULT_SYSTEM_PROMPT)
+    log.info("Starting fundamental analysis stream (stock_type=%s)", stock_type)
     with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=4096,
         thinking={"type": "adaptive"},
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         for event in stream:
@@ -623,3 +740,91 @@ def stream_chat_response(
                 and event.delta.type == "text_delta"
             ):
                 yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
+# P9.3: Claude Backtest Narrative
+# ---------------------------------------------------------------------------
+
+_BACKTEST_NARRATIVE_SYSTEM = """\
+You are a quantitative portfolio analyst reviewing backtesting results.
+Analyze the provided backtest metrics and trade log to produce a concise
+strategy assessment.
+
+Structure your response with:
+1. **Performance Summary** — key metrics interpretation (return, Sharpe, drawdown)
+2. **Regime Analysis** — identify periods of outperformance/underperformance
+3. **Signal Quality** — comment on win rate, trade frequency, and consistency
+4. **Robustness Assessment** — is the strategy likely to generalise, or is it overfit?
+5. **Improvement Suggestions** — 2-3 specific, actionable refinements
+
+Be direct and quantitative. Reference actual numbers. Write for a sophisticated investor.\
+"""
+
+
+def stream_backtest_narrative(metrics: dict, trade_log: list):
+    """Stream a Claude commentary on backtest results. Yields text chunks.
+
+    Args:
+        metrics: Dict with keys like total_return, sharpe, max_drawdown, win_rate, etc.
+        trade_log: List of trade dicts from the backtest engine.
+    """
+    client = _get_client()
+
+    trade_summary = ""
+    if trade_log:
+        wins = sum(1 for t in trade_log if t.get("pnl_pct", 0) > 0)
+        losses = len(trade_log) - wins
+        avg_win = (
+            sum(t["pnl_pct"] for t in trade_log if t.get("pnl_pct", 0) > 0) / wins
+            if wins > 0 else 0
+        )
+        avg_loss = (
+            sum(t["pnl_pct"] for t in trade_log if t.get("pnl_pct", 0) <= 0) / losses
+            if losses > 0 else 0
+        )
+        trade_summary = (
+            f"\n\n### Trade Log Summary\n"
+            f"- Total trades: {len(trade_log)}\n"
+            f"- Wins: {wins} | Losses: {losses}\n"
+            f"- Avg win: {avg_win:.1f}% | Avg loss: {avg_loss:.1f}%\n"
+        )
+
+    prompt = f"""## Backtest Results
+
+### Performance Metrics
+- Total Return: {metrics.get('total_return_pct', 'N/A')}%
+- Buy-and-Hold Return: {metrics.get('bh_return_pct', 'N/A')}%
+- Sharpe Ratio: {metrics.get('sharpe', 'N/A')}
+- Max Drawdown: {metrics.get('max_drawdown_pct', 'N/A')}%
+- Win Rate: {metrics.get('win_rate_pct', 'N/A')}%
+- Number of Trades: {metrics.get('num_trades', 'N/A')}
+- Annualised Return: {metrics.get('annualised_return_pct', 'N/A')}%
+{trade_summary}
+Please analyse these backtest results and provide your assessment.\
+"""
+
+    context_hash = _compute_context_hash(prompt)
+    cached = _get_cached_response(context_hash)
+    if cached:
+        log.info("Backtest narrative served from cache (hash=%s)", context_hash[:8])
+        yield cached
+        return
+
+    log.info("Starting backtest narrative stream")
+    full_response = []
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1500,
+        system=_BACKTEST_NARRATIVE_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                full_response.append(event.delta.text)
+                yield event.delta.text
+
+    _store_cached_response(context_hash, "".join(full_response))

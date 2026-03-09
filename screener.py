@@ -1,15 +1,25 @@
-"""Stock Screener engine (P2.1 + P3.1).
+"""Stock Screener engine (P2.1 + P3.1 + P7.3).
 
 Runs factor + risk computation for a list of tickers and applies
 structured filter criteria.  Supports both rule-based filters and
 Claude-parsed natural language queries.
+
+Enhanced with:
+- Screen templates: save/load/delete (P7.3)
+- CSV export (P7.3)
+- Sentiment-skip warning (P7.3)
 
 Usage:
     from screener import run_screen, apply_filters
 """
 from __future__ import annotations
 
+import csv
+import io
+import json
+import os
 import time
+from pathlib import Path
 
 from config import cfg
 from log_setup import get_logger
@@ -215,3 +225,89 @@ def run_screen(
 def default_universe() -> list[str]:
     """Return the configured default ticker universe for screening."""
     return cfg.screener_universe
+
+
+# ---------------------------------------------------------------------------
+# P7.3: Screen templates (save / load / delete)
+# ---------------------------------------------------------------------------
+
+_TEMPLATE_DIR = Path(os.path.expanduser("~/.jaja-money/templates"))
+
+
+def _ensure_template_dir() -> None:
+    _TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_template(name: str, filters: list[dict]) -> None:
+    """Persist a filter set under ``name`` for later retrieval."""
+    _ensure_template_dir()
+    path = _TEMPLATE_DIR / f"{name}.json"
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"name": name, "filters": filters}, fh, indent=2)
+    log.info("Template saved: %s", path)
+
+
+def load_template(name: str) -> list[dict]:
+    """Load a saved filter template by name.  Raises FileNotFoundError if absent."""
+    path = _TEMPLATE_DIR / f"{name}.json"
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data.get("filters", [])
+
+
+def delete_template(name: str) -> bool:
+    """Delete a saved template.  Returns True if deleted, False if not found."""
+    path = _TEMPLATE_DIR / f"{name}.json"
+    if path.exists():
+        path.unlink()
+        log.info("Template deleted: %s", name)
+        return True
+    return False
+
+
+def list_templates() -> list[str]:
+    """Return names of all saved screen templates."""
+    if not _TEMPLATE_DIR.exists():
+        return []
+    return [p.stem for p in sorted(_TEMPLATE_DIR.glob("*.json"))]
+
+
+# ---------------------------------------------------------------------------
+# P7.3: CSV export
+# ---------------------------------------------------------------------------
+
+_CSV_COLUMNS = [
+    "symbol", "name", "sector", "price",
+    "factor_score", "composite_label",
+    "risk_score", "risk_level", "flag_count",
+    "pe_ratio", "market_cap_b", "rsi",
+]
+
+
+def export_results_to_csv(results: list[dict]) -> str:
+    """Serialise screener results to a CSV string.
+
+    Returns the CSV content as a plain string (suitable for Streamlit download).
+    """
+    buf = io.StringIO()
+    writer = csv.DictWriter(
+        buf,
+        fieldnames=_CSV_COLUMNS,
+        extrasaction="ignore",
+        lineterminator="\n",
+    )
+    writer.writeheader()
+    for row in results:
+        writer.writerow({col: row.get(col, "") for col in _CSV_COLUMNS})
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# P7.3: Sentiment-skip warning helper
+# ---------------------------------------------------------------------------
+
+SENTIMENT_SKIP_WARNING = (
+    "FinBERT sentiment analysis was skipped during bulk screening to improve speed. "
+    "Sentiment factor scores are set to neutral (50/100). "
+    "Run a full single-ticker analysis for sentiment-adjusted scores."
+)
