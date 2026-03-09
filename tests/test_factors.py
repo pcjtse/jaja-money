@@ -477,7 +477,7 @@ def test_label_color_is_hex():
 # compute_factors — smoke test (all 8 factors returned)
 # ---------------------------------------------------------------------------
 
-def test_compute_factors_returns_8():
+def test_compute_factors_returns_10():
     result = compute_factors(
         quote=QUOTE_100,
         financials={"peBasicExclExtraTTM": 20, "52WeekHigh": 120, "52WeekLow": 80},
@@ -488,7 +488,7 @@ def test_compute_factors_returns_8():
         sentiment_agg={"net_score": 0.4, "signal": "Bullish",
                        "counts": {"positive": 7, "negative": 2, "neutral": 1}},
     )
-    assert len(result) == 8
+    assert len(result) == 10  # 8 original + dividend yield + estimate revisions
 
 def test_compute_factors_keys():
     result = compute_factors(
@@ -517,7 +517,7 @@ def test_compute_factors_zero_price_handled():
         recommendations=[],
         sentiment_agg=None,
     )
-    assert len(result) == 8
+    assert len(result) == 10  # 8 original + dividend yield + estimate revisions
 
 def test_compute_factors_all_none():
     result = compute_factors(

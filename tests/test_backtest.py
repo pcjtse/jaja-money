@@ -66,8 +66,10 @@ def test_trades_are_coherent():
         assert trade.entry_price > 0
         assert trade.exit_price > 0
         assert isinstance(trade.is_win, bool)
+        # pnl_pct includes transaction costs (commission + 2×slippage) so
+        # the raw price-based check will differ by up to the round-trip cost (~0.2%)
         pnl_check = (trade.exit_price - trade.entry_price) / trade.entry_price * 100
-        assert abs(pnl_check - trade.pnl_pct) < 0.02
+        assert abs(pnl_check - trade.pnl_pct) < 0.25
 
 
 def test_win_rate_matches_trades():
