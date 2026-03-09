@@ -13,6 +13,15 @@ Main analysis page.  Integrates all enhancements:
 - Structured logging (P4.3)
 - Disk cache (P1.5)
 - Config-driven weights (P4.5)
+- Sector-relative valuation (P5.1)
+- Analyst estimate revision momentum (P5.2)
+- Earnings calendar integration (P5.3)
+- Insider trading signal (P5.4)
+- Short interest tracking (P5.5)
+- Macroeconomic context overlay (P5.6)
+- Dividend yield factor (P5.7)
+- Adaptive system prompts (P9.2)
+- Chat history trimming (P9.5)
 """
 
 import json
@@ -33,6 +42,8 @@ from analyzer import (
     stream_forward_looking_analysis,
     build_chat_system_prompt,
     stream_chat_response,
+    classify_stock_type,
+    trim_chat_history,
 )
 from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
 from factors import (
@@ -148,6 +159,26 @@ def fetch_transcripts_list(symbol: str) -> list:
 @st.cache_data(ttl=86400 * 7)
 def fetch_transcript(tid: str) -> dict:
     return FinnhubAPI().get_transcript(tid)
+
+@st.cache_data(ttl=3600 * 6)
+def fetch_earnings_calendar(symbol: str) -> dict:
+    return FinnhubAPI().get_earnings_calendar(symbol)
+
+@st.cache_data(ttl=3600 * 12)
+def fetch_insider_transactions(symbol: str) -> list:
+    return FinnhubAPI().get_insider_transactions(symbol)
+
+@st.cache_data(ttl=3600 * 6)
+def fetch_short_interest(symbol: str) -> dict:
+    return FinnhubAPI().get_short_interest(symbol)
+
+@st.cache_data(ttl=3600 * 24)
+def fetch_macro_context() -> dict:
+    return FinnhubAPI().get_macro_context()
+
+@st.cache_data(ttl=3600 * 12)
+def fetch_estimate_revisions(symbol: str) -> dict:
+    return FinnhubAPI().get_estimate_revisions(symbol)
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +338,35 @@ col2.metric("Day High", f"${high:,.2f}")
 col3.metric("Day Low", f"${low:,.2f}")
 col4.metric("Previous Close", f"${prev_close:,.2f}")
 
+# P5.6: Macroeconomic context banner
+_macro = None
+_rfr = 0.05
+try:
+    _macro = fetch_macro_context()
+    _vix = _macro.get("vix")
+    _spread = _macro.get("spread_2y10y")
+    _rfr = _macro.get("risk_free_rate", 0.05)
+    _macro_warnings = []
+    if _vix is not None and _vix > 30:
+        _macro_warnings.append(f"VIX={_vix:.1f} (elevated market fear — above 30)")
+    if _spread is not None and _spread < 0:
+        _macro_warnings.append(f"Yield curve inverted (spread={_spread:.2f}%)")
+    if _macro_warnings:
+        st.warning("🌐 **Macro Risk Alert:** " + " · ".join(_macro_warnings) +
+                   " — Individual stock risk scores may understate tail risk.")
+    _macro_caption_parts = []
+    if _vix is not None:
+        _macro_caption_parts.append(f"VIX: {_vix:.1f}")
+    if _macro.get("yield_10y"):
+        _macro_caption_parts.append(f"10Y: {_macro['yield_10y']:.2f}%")
+    if _macro.get("tbill_3m"):
+        _macro_caption_parts.append(f"3M T-Bill: {_macro['tbill_3m']:.2f}%")
+    if _macro_caption_parts:
+        st.caption("Macro context: " + "  |  ".join(_macro_caption_parts) +
+                   f"  |  Risk-free rate used: {_rfr*100:.2f}%")
+except Exception:
+    pass
+
 # --- Company Overview ---
 profile = None
 financials = None
@@ -318,6 +378,7 @@ try:
 except Exception as e:
     st.warning(f"Could not fetch company overview: {e}")
 
+_stock_type = "Value"  # default, will be updated when profile is available
 if profile:
     st.header("Company Overview")
     name = profile.get("name", symbol)
@@ -346,12 +407,35 @@ if profile:
     col3.metric("P/E Ratio", f"{pe:.2f}" if pe is not None else "N/A")
     col4.metric("EPS", f"${eps:.2f}" if eps is not None else "N/A")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Dividend Yield", f"{div_yield:.2f}%" if div_yield is not None else "N/A")
     col2.metric(
         "52-Week Range",
         f"${low_52:,.2f} – ${high_52:,.2f}" if (high_52 and low_52) else "N/A",
     )
+
+    # P5.3: Earnings calendar badge
+    _earn_cal = None
+    try:
+        _earn_cal = fetch_earnings_calendar(symbol)
+        _days_to_earn = _earn_cal.get("days_to_earnings")
+        _next_earn = _earn_cal.get("next_date")
+        if _next_earn:
+            _earn_badge = (f"🔴 In {_days_to_earn}d" if _days_to_earn is not None and _days_to_earn <= 14
+                           else f"{_next_earn}")
+            col3.metric("Next Earnings", _earn_badge)
+        else:
+            col3.metric("Next Earnings", "N/A")
+    except Exception:
+        col3.metric("Next Earnings", "N/A")
+
+    # P9.2: Stock type classification display
+    _stock_type = classify_stock_type(
+        sector=profile.get("finnhubIndustry"),
+        pe_ratio=pe,
+        div_yield=div_yield,
+    )
+    st.caption(f"**Stock type (auto-detected):** {_stock_type} — Claude will use an adaptive analysis lens.")
 
     # Watchlist button
     in_wl = is_in_watchlist(symbol)
@@ -854,6 +938,28 @@ _close = df["Close"] if df is not None and len(df) > 0 else None
 _recs_for_factors = recs
 _earnings_for_factors = earnings
 
+# Fetch additional data for new factors and guardrails
+_insider_txns = []
+_short_int = {}
+_revisions = {}
+try:
+    with st.spinner("Fetching insider transactions..."):
+        _insider_txns = fetch_insider_transactions(symbol)
+except Exception:
+    pass
+try:
+    with st.spinner("Fetching short interest..."):
+        _short_int = fetch_short_interest(symbol)
+except Exception:
+    pass
+try:
+    with st.spinner("Fetching estimate revisions..."):
+        _revisions = fetch_estimate_revisions(symbol)
+except Exception:
+    pass
+
+# P5.2, P5.1, P5.7: Include sector, revisions in factor computation
+_sector = (profile or {}).get("finnhubIndustry") if profile else None
 _factors = compute_factors(
     quote=quote,
     financials=financials,
@@ -861,6 +967,8 @@ _factors = compute_factors(
     earnings=_earnings_for_factors,
     recommendations=_recs_for_factors,
     sentiment_agg=agg,
+    sector=_sector,
+    revisions=_revisions if _revisions else None,
 )
 _composite = composite_score(_factors)
 _label, _color = composite_label_color(_composite)
@@ -946,6 +1054,10 @@ _risk = compute_risk(
     quote=quote, financials=financials, close=_close,
     earnings=_earnings_for_factors, recommendations=_recs_for_factors,
     sentiment_agg=agg, composite_factor_score=_composite,
+    earnings_calendar=_earn_cal,
+    insider_transactions=_insider_txns if _insider_txns else None,
+    short_interest=_short_int if _short_int else None,
+    macro_context=_macro,
 )
 
 risk_gauge_col, risk_meta_col = st.columns([1, 1])
@@ -979,11 +1091,31 @@ with risk_gauge_col:
 with risk_meta_col:
     _hv = _risk.get("hv")
     _dd = _risk.get("drawdown_pct")
-    m1, m2 = st.columns(2)
+    _vol_regime = _risk.get("vol_regime", "normal")
+    m1, m2, m3 = st.columns(3)
     m1.metric("Annualised Volatility (20d)", f"{_hv:.1f}%" if _hv is not None else "N/A")
     m2.metric("Drawdown from 52-Wk High", f"{_dd:.1f}%" if _dd is not None else "N/A")
+    m3.metric("Vol Regime", _vol_regime.capitalize())
     m1.metric("Active Risk Flags", len(_risk["flags"]))
     m2.metric("Factor Score (context)", f"{_composite} / 100")
+    # P5.5: Short interest display
+    if _short_int and _short_int.get("available"):
+        _si_pct = _short_int.get("short_pct_float")
+        _si_dtc = _short_int.get("days_to_cover")
+        m3.metric(
+            "Short Interest",
+            f"{_si_pct:.1f}% of float" if _si_pct else "N/A",
+            f"{_si_dtc:.1f}d to cover" if _si_dtc else None,
+        )
+    # P5.4: Insider activity summary
+    if _insider_txns:
+        from datetime import date, timedelta
+        _cutoff = (date.today() - timedelta(days=90)).isoformat()
+        _recent_ins = [t for t in _insider_txns if t.get("transactionDate", "") >= _cutoff]
+        _ins_buys = sum(1 for t in _recent_ins if t.get("transactionCode") == "P")
+        _ins_sells = sum(1 for t in _recent_ins if t.get("transactionCode") == "S")
+        if _ins_buys > 0 or _ins_sells > 0:
+            st.caption(f"Insider activity (90d): {_ins_buys} purchase(s) · {_ins_sells} sale(s)")
 
 _flags = _risk["flags"]
 if not _flags:
@@ -1163,7 +1295,18 @@ if _run_memo:
 # --- Fundamental Analyzer ---
 st.divider()
 st.header("Fundamental Analyzer")
-st.caption("Powered by Claude Opus 4.6 with adaptive thinking.")
+st.caption(f"Powered by Claude Opus 4.6 with adaptive thinking. "
+           f"Using **{_stock_type}** analysis lens.")
+
+_use_analysis_cache = st.checkbox("Use cached analysis if available", value=True, key="analysis_cache")
+_override_stock_type = st.selectbox(
+    "Override stock type (P9.2)",
+    ["Auto-detect", "Growth", "Value", "Dividend", "Cyclical", "Defensive"],
+)
+_effective_stock_type = (
+    None if _override_stock_type == "Auto-detect"
+    else _override_stock_type
+) or (_stock_type if '_stock_type' in dir() else None)
 
 run_analysis = st.button("Run Fundamental Analysis", type="primary")
 
@@ -1199,8 +1342,12 @@ if run_analysis:
     report_placeholder = st.empty()
     report_text = ""
     try:
-        with st.spinner("Claude is analyzing..."):
-            for chunk in stream_fundamental_analysis(data_prompt):
+        with st.spinner(f"Claude is analyzing ({_effective_stock_type or 'default'} lens)..."):
+            for chunk in stream_fundamental_analysis(
+                data_prompt,
+                stock_type=_effective_stock_type,
+                use_cache=_use_analysis_cache,
+            ):
                 report_text += chunk
                 report_placeholder.markdown(report_text)
     except Exception as e:
@@ -1283,6 +1430,15 @@ _chat_system = build_chat_system_prompt(
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+# P9.5: Chat history trimming
+_trimmed_history, _was_trimmed = trim_chat_history(
+    system_prompt=_chat_system,
+    conversation_history=st.session_state.chat_history,
+)
+if _was_trimmed:
+    st.session_state.chat_history = _trimmed_history
+    st.info("💬 Chat history trimmed to fit context window (kept most recent exchanges).")
 
 # Chat input
 if user_q := st.chat_input(f"Ask about {symbol}..."):

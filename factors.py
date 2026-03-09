@@ -456,6 +456,171 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
 
 
 # ---------------------------------------------------------------------------
+# P5.1: Sector-median P/E reference table
+# ---------------------------------------------------------------------------
+
+# Approximate trailing P/E sector medians (updated periodically)
+_SECTOR_PE_MEDIANS: dict[str, float] = {
+    "Technology": 28.0,
+    "Software": 35.0,
+    "Semiconductors": 22.0,
+    "Healthcare": 22.0,
+    "Biotechnology": 25.0,
+    "Pharmaceuticals": 18.0,
+    "Financial Services": 13.0,
+    "Banks": 11.0,
+    "Insurance": 12.0,
+    "Consumer Discretionary": 22.0,
+    "Retail": 20.0,
+    "Consumer Staples": 20.0,
+    "Energy": 12.0,
+    "Utilities": 18.0,
+    "Real Estate": 25.0,
+    "REITs": 25.0,
+    "Communication Services": 20.0,
+    "Media": 18.0,
+    "Industrials": 20.0,
+    "Materials": 16.0,
+    "Transportation": 18.0,
+    "default": 20.0,
+}
+
+
+def _get_sector_pe_median(sector: str | None) -> float:
+    """Look up sector median P/E, with fuzzy matching."""
+    if not sector:
+        return _SECTOR_PE_MEDIANS["default"]
+    sector_l = sector.lower()
+    for key, val in _SECTOR_PE_MEDIANS.items():
+        if key.lower() in sector_l or sector_l in key.lower():
+            return val
+    return _SECTOR_PE_MEDIANS["default"]
+
+
+def _factor_valuation_sector_adjusted(financials: dict | None, sector: str | None) -> dict:
+    """Sector-relative P/E valuation.  Compares stock P/E to sector median."""
+    weight = _get_weight("valuation", 0.15)
+    pe = (financials or {}).get("peBasicExclExtraTTM")
+
+    if pe is None:
+        return dict(name="Valuation (P/E)", score=50, weight=weight,
+                    label="No data", detail="P/E ratio unavailable")
+    pe = float(pe)
+    if pe <= 0:
+        return dict(name="Valuation (P/E)", score=25, weight=weight,
+                    label="Negative earnings", detail=f"P/E={pe:.1f} — company is not yet profitable")
+
+    sector_median = _get_sector_pe_median(sector)
+    relative = pe / sector_median  # 1.0 = at sector median
+
+    if relative < 0.6:
+        s, lbl = 92, "Deep value vs. sector"
+    elif relative < 0.8:
+        s, lbl = 80, "Discounted vs. sector"
+    elif relative < 1.0:
+        s, lbl = 68, "Slight discount vs. sector"
+    elif relative < 1.2:
+        s, lbl = 55, "Near sector median"
+    elif relative < 1.5:
+        s, lbl = 40, "Premium vs. sector"
+    elif relative < 2.0:
+        s, lbl = 26, "Significant premium vs. sector"
+    else:
+        s, lbl = 12, "Extreme premium vs. sector"
+
+    return dict(
+        name="Valuation (P/E)",
+        score=s,
+        weight=weight,
+        label=lbl,
+        detail=f"P/E: {pe:.1f}× | Sector median: {sector_median:.1f}× | Relative: {relative:.2f}×",
+    )
+
+
+# ---------------------------------------------------------------------------
+# P5.7: Dividend Yield Factor
+# ---------------------------------------------------------------------------
+
+def _factor_dividend_yield(financials: dict | None) -> dict:
+    """Dividend yield factor.  Higher sustainable yield = positive signal."""
+    weight = _get_weight("dividend", 0.05)
+    metrics = financials or {}
+    div_yield = metrics.get("dividendYieldIndicatedAnnual")
+    payout_ratio = metrics.get("payoutRatioTTM")
+
+    if div_yield is None:
+        return dict(name="Dividend Yield", score=50, weight=weight,
+                    label="No data", detail="Dividend data unavailable")
+
+    div_yield = float(div_yield)
+
+    if div_yield <= 0:
+        s, lbl = 48, "No dividend"
+        detail = "No dividend paid"
+    elif div_yield < 1.5:
+        s, lbl = 55, "Low yield"
+        detail = f"Yield: {div_yield:.2f}%"
+    elif div_yield < 3.0:
+        s, lbl = 70, "Moderate yield"
+        detail = f"Yield: {div_yield:.2f}%"
+    elif div_yield < 5.0:
+        s, lbl = 82, "Attractive yield"
+        detail = f"Yield: {div_yield:.2f}%"
+    else:
+        s, lbl = 75, "High yield (verify sustainability)"
+        detail = f"Yield: {div_yield:.2f}% — verify payout ratio"
+
+    # Penalize unsustainable payout ratio
+    if payout_ratio is not None:
+        pr = float(payout_ratio)
+        if pr > 100:
+            s = max(20, s - 25)
+            lbl = "Unsustainable payout"
+            detail += f" | Payout ratio: {pr:.1f}% (>100% = paying more than earnings)"
+        elif pr > 80:
+            s = max(35, s - 10)
+            detail += f" | Payout ratio: {pr:.1f}% (elevated)"
+        else:
+            detail += f" | Payout ratio: {pr:.1f}%"
+
+    return dict(name="Dividend Yield", score=s, weight=weight, label=lbl, detail=detail)
+
+
+# ---------------------------------------------------------------------------
+# P5.2: Analyst Estimate Revision Momentum
+# ---------------------------------------------------------------------------
+
+def _factor_estimate_revisions(revisions: dict | None) -> dict:
+    """EPS estimate revision direction as a factor signal."""
+    weight = _get_weight("estimate_revision", 0.08)
+
+    if not revisions or not revisions.get("available"):
+        return dict(name="Estimate Revisions", score=50, weight=weight,
+                    label="No data", detail="Estimate revision data unavailable")
+
+    direction = revisions.get("revision_direction", "flat")
+    analyst_count = revisions.get("analyst_count")
+    fwd_eps = revisions.get("forward_eps")
+    trail_eps = revisions.get("trailing_eps")
+
+    if direction == "up":
+        s, lbl = 78, "Upward revisions"
+    elif direction == "down":
+        s, lbl = 28, "Downward revisions"
+    else:
+        s, lbl = 52, "Stable estimates"
+
+    detail_parts = [f"Direction: {direction}"]
+    if analyst_count:
+        detail_parts.append(f"{analyst_count} analysts")
+    if fwd_eps is not None:
+        detail_parts.append(f"Fwd EPS: ${fwd_eps:.2f}")
+    detail = " | ".join(detail_parts)
+
+    return dict(name="Estimate Revisions", score=s, weight=weight, label=lbl, detail=detail)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -466,16 +631,20 @@ def compute_factors(
     earnings: list,
     recommendations: list,
     sentiment_agg: dict | None,
+    sector: str | None = None,
+    revisions: dict | None = None,
 ) -> list[dict]:
-    """Compute all 8 factors and return them as a list of dicts.
+    """Compute factors and return them as a list of dicts.
 
     Each dict has keys: name, score (0–100), label, detail, weight.
+    Now includes sector-relative valuation (P5.1), dividend yield (P5.7),
+    and estimate revision momentum (P5.2).
     """
     _c = quote.get("c")
     price = float(_c) if (_c is not None and float(_c) > 0) else None
 
     factors = [
-        _factor_valuation(financials),
+        _factor_valuation_sector_adjusted(financials, sector),
         _factor_trend(close, price),
         _factor_rsi(close),
         _factor_macd(close),
@@ -483,6 +652,8 @@ def compute_factors(
         _factor_earnings(earnings),
         _factor_analyst(recommendations),
         _factor_range_position(financials, price),
+        _factor_dividend_yield(financials),
+        _factor_estimate_revisions(revisions),
     ]
     log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
     return factors

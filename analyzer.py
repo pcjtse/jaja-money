@@ -5,20 +5,181 @@ Enhanced with:
 - AI natural language screener parsing (P3.1)
 - Interactive stock Q&A chat (P3.4)
 - Structured logging (P4.3)
+- Claude response caching (P9.1)
+- Adaptive system prompts by stock type (P9.2)
+- Backtest narrative (P9.3)
+- Sector rotation narrative (P9.4)
+- Chat history trimming (P9.5)
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import anthropic
 from dotenv import load_dotenv
 
+from cache import get_cache
 from log_setup import get_logger
 
 load_dotenv()
 
 log = get_logger(__name__)
+_disk_cache = get_cache()
 
-_SYSTEM_PROMPT = """\
+# ---------------------------------------------------------------------------
+# P9.1: Claude response caching helpers
+# ---------------------------------------------------------------------------
+
+_CLAUDE_CACHE_TTL = 1800  # 30 minutes
+
+
+def _compute_context_hash(context: str) -> str:
+    """Compute a stable hash of the Claude input context."""
+    return hashlib.sha256(context.encode("utf-8")).hexdigest()[:16]
+
+
+def _get_cached_response(cache_key: str) -> str | None:
+    """Return cached Claude text response or None."""
+    result = _disk_cache.get(f"claude:{cache_key}")
+    if result is not None:
+        log.info("Claude cache hit for key=%s", cache_key[:12])
+    return result
+
+
+def _store_cached_response(cache_key: str, text: str) -> None:
+    """Store Claude text response in disk cache."""
+    _disk_cache.set(f"claude:{cache_key}", text, ttl=_CLAUDE_CACHE_TTL)
+    log.info("Claude response cached for key=%s", cache_key[:12])
+
+
+# ---------------------------------------------------------------------------
+# P9.2: Adaptive system prompts — stock type classification
+# ---------------------------------------------------------------------------
+
+def classify_stock_type(
+    sector: str | None,
+    pe_ratio: float | None,
+    div_yield: float | None,
+    revenue_growth: float | None = None,
+) -> str:
+    """Classify stock type for adaptive prompt selection.
+
+    Returns: 'Growth' | 'Value' | 'Dividend' | 'Cyclical' | 'Defensive'
+    """
+    sector_lower = (sector or "").lower()
+
+    # Dividend income stocks
+    if div_yield is not None and div_yield >= 3.0:
+        return "Dividend"
+
+    # Defensive sectors
+    defensive_sectors = {"utilities", "consumer staples", "healthcare"}
+    if any(d in sector_lower for d in defensive_sectors):
+        return "Defensive"
+
+    # Cyclical sectors
+    cyclical_sectors = {"energy", "materials", "industrials", "consumer discretionary", "financials"}
+    if any(c in sector_lower for c in cyclical_sectors):
+        return "Cyclical"
+
+    # Growth (high P/E or tech/biotech sectors)
+    growth_sectors = {"technology", "software", "semiconductor", "biotech", "communication"}
+    if any(g in sector_lower for g in growth_sectors):
+        return "Growth"
+    if pe_ratio is not None and pe_ratio > 30:
+        return "Growth"
+
+    # Value (low P/E, no strong sector signal)
+    if pe_ratio is not None and pe_ratio < 15:
+        return "Value"
+
+    return "Value"  # default fallback
+
+
+_STOCK_TYPE_SYSTEM_PROMPTS: dict[str, str] = {
+    "Growth": """\
+You are an expert growth equity analyst specializing in high-growth companies,
+technology disruption, and innovation-driven investment theses. You evaluate
+stocks through the lens of revenue growth rates, total addressable market,
+competitive moats, and path to profitability.
+
+Structure your report:
+1. **Company Snapshot** — business model, growth vectors, and TAM
+2. **Growth Metrics** — revenue growth, gross margin trajectory, unit economics
+3. **Competitive Position** — moat, product differentiation, customer retention
+4. **Valuation** — P/S, PEG ratio, price-to-FCF; is growth priced in?
+5. **Technical Posture** — price vs. SMAs, RSI, MACD signal
+6. **Key Risks & Catalysts** — top growth vs. deceleration risks
+7. **Investment Thesis** — buy/hold/sell with growth-specific rationale
+
+Be analytical, cite numbers, and don't fabricate data.\
+""",
+    "Value": """\
+You are an expert value investor and equity analyst focused on identifying
+undervalued companies with strong fundamentals, reasonable valuations, and
+margin of safety.
+
+Structure your report:
+1. **Company Snapshot** — business description and value proposition
+2. **Valuation** — P/E, P/B, EV/EBITDA; discount to intrinsic value estimate
+3. **Financial Health** — earnings trends, FCF, debt levels, balance sheet
+4. **Catalyst for Re-rating** — what would unlock value (buybacks, management, cycle)
+5. **Technical Posture** — price vs. SMAs, RSI, MACD signal
+6. **Key Risks** — value traps, structural decline risks
+7. **Investment Thesis** — buy/hold/sell with margin of safety rationale
+
+Be specific, cite numbers, and maintain a contrarian but disciplined lens.\
+""",
+    "Dividend": """\
+You are an expert income equity analyst specializing in dividend-paying stocks,
+yield sustainability, and income generation strategies for conservative investors.
+
+Structure your report:
+1. **Company Snapshot** — business model and dividend history
+2. **Income Analysis** — yield, payout ratio, dividend growth rate, coverage ratio
+3. **Financial Sustainability** — FCF vs. dividend, debt levels, earnings stability
+4. **Dividend Safety** — probability of dividend cut/raise; key triggers to watch
+5. **Technical Posture** — price vs. SMAs, RSI, MACD signal
+6. **Risk Factors** — interest rate sensitivity, sector-specific income risks
+7. **Investment Thesis** — income-focused buy/hold/sell recommendation
+
+Prioritize dividend sustainability over price appreciation. Cite actual numbers.\
+""",
+    "Cyclical": """\
+You are an expert cyclical equity analyst specializing in economically sensitive
+sectors including energy, materials, industrials, and consumer discretionary.
+
+Structure your report:
+1. **Company Snapshot** — business model and cycle sensitivity
+2. **Cycle Positioning** — where are we in the industry/economic cycle?
+3. **Commodity/Macro Drivers** — key inputs/outputs and their current trend
+4. **Valuation** — cycle-adjusted P/E, EV/EBITDA vs. trough vs. peak
+5. **Technical Posture** — price vs. SMAs, RSI, MACD signal
+6. **Key Risks & Catalysts** — cycle turn signals, supply/demand dynamics
+7. **Investment Thesis** — cycle-aware buy/hold/sell recommendation
+
+Account for where we are in the cycle. Cite actual numbers.\
+""",
+    "Defensive": """\
+You are an expert defensive equity analyst specializing in utilities, healthcare,
+and consumer staples — companies known for earnings stability and recession resilience.
+
+Structure your report:
+1. **Company Snapshot** — business model and defensive characteristics
+2. **Earnings Stability** — revenue predictability, regulated vs. unregulated
+3. **Valuation vs. Safety Premium** — is the defensive premium justified?
+4. **Financial Health** — debt, FCF, regulatory environment
+5. **Technical Posture** — price vs. SMAs, RSI, MACD signal
+6. **Key Risks** — regulatory changes, disruption risk, rising rate sensitivity
+7. **Investment Thesis** — buy/hold/sell for defensive allocation
+
+Balance income safety vs. growth potential. Cite actual numbers.\
+""",
+}
+
+# Fallback to original system prompt
+_DEFAULT_SYSTEM_PROMPT = """\
 You are an expert equity research analyst with deep experience in fundamental \
 analysis, financial statement interpretation, and investment research. \
 Your job is to produce a clear, structured fundamental analysis report based \
@@ -39,7 +200,6 @@ Structure your report with these sections:
 Keep the tone professional and the report digestible for a sophisticated \
 but non-specialist reader.\
 """
-
 
 def _get_client() -> anthropic.Anthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -164,15 +324,37 @@ def build_data_prompt(
     return "\n".join(lines)
 
 
-def stream_fundamental_analysis(prompt: str):
-    """Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking."""
+def stream_fundamental_analysis(
+    prompt: str,
+    stock_type: str | None = None,
+    use_cache: bool = True,
+):
+    """Stream a fundamental analysis from Claude Opus 4.6 with adaptive thinking.
+
+    Parameters
+    ----------
+    prompt     : The assembled data prompt
+    stock_type : Optional stock type for adaptive system prompt selection
+    use_cache  : If True, return cached response if available (P9.1)
+    """
+    system = _STOCK_TYPE_SYSTEM_PROMPTS.get(stock_type or "", _DEFAULT_SYSTEM_PROMPT)
     client = _get_client()
-    log.info("Starting fundamental analysis stream")
+
+    # P9.1: Check cache
+    if use_cache:
+        cache_key = _compute_context_hash(system + prompt)
+        cached = _get_cached_response(cache_key)
+        if cached:
+            yield cached
+            return
+
+    log.info("Starting fundamental analysis stream (stock_type=%s)", stock_type)
+    full_text = ""
     with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=4096,
         thinking={"type": "adaptive"},
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         for event in stream:
@@ -180,7 +362,13 @@ def stream_fundamental_analysis(prompt: str):
                 event.type == "content_block_delta"
                 and event.delta.type == "text_delta"
             ):
+                full_text += event.delta.text
                 yield event.delta.text
+
+    # P9.1: Cache the full response
+    if use_cache and full_text:
+        cache_key = _compute_context_hash(system + prompt)
+        _store_cached_response(cache_key, full_text)
 
 
 _SENTIMENT_THEMES_SYSTEM = """\
@@ -623,3 +811,195 @@ def stream_chat_response(
                 and event.delta.type == "text_delta"
             ):
                 yield event.delta.text
+
+
+# ---------------------------------------------------------------------------
+# P9.3: Claude Backtest Narrative
+# ---------------------------------------------------------------------------
+
+_BACKTEST_NARRATIVE_SYSTEM = """\
+You are a quantitative analyst reviewing backtesting results for a trading strategy.
+Analyze the provided backtest metrics and provide an honest, nuanced assessment.
+
+Cover:
+1. **Performance Assessment** — is the strategy adding value over buy-and-hold?
+2. **Risk-Adjusted Returns** — Sharpe ratio interpretation, drawdown risk
+3. **Strategy Robustness** — could this be genuine alpha or overfitting/luck?
+4. **Regime Analysis** — what market environments might this strategy favor or suffer in?
+5. **Weaknesses & Limitations** — look-ahead bias risks, transaction costs, sample size
+6. **Actionable Improvements** — 2-3 concrete suggestions to improve the signal
+
+Be honest about limitations. Reference actual numbers. Write for a sophisticated investor.\
+"""
+
+
+def stream_backtest_narrative(result, use_cache: bool = True):
+    """Stream a Claude backtest analysis. Yields text chunks.
+
+    Parameters
+    ----------
+    result : BacktestResult dataclass
+    use_cache : Cache the response (P9.1)
+    """
+    client = _get_client()
+
+    prompt = f"""## Backtest Analysis: {result.symbol}
+
+**Strategy:** Price-based factor signal (SMA trend 40% + RSI 30% + MACD 30%)
+**Entry threshold:** {result.entry_threshold} | **Exit threshold:** {result.exit_threshold}
+**Period:** {result.start_date} to {result.end_date}
+**In-sample:** {result.is_insample}
+
+**Performance Results:**
+- Gross return: {result.gross_return_pct:+.1f}%
+- Net return (after costs): {result.total_return_pct:+.1f}%
+- Total transaction costs: {result.total_cost_pct:.2f}%
+- Buy-and-hold return: {result.benchmark_return_pct:+.1f}%
+- Alpha vs. buy-and-hold: {result.total_return_pct - result.benchmark_return_pct:+.1f}%
+- CAGR: {result.cagr_pct:+.1f}%
+- Sharpe ratio: {result.sharpe_ratio}
+- Max drawdown: {result.max_drawdown_pct:.1f}%
+- Win rate: {result.win_rate_pct:.1f}% ({result.total_trades} trades)
+
+Analyze this strategy comprehensively."""
+
+    if use_cache:
+        cache_key = _compute_context_hash(prompt)
+        cached = _get_cached_response(cache_key)
+        if cached:
+            yield cached
+            return
+
+    log.info("Starting backtest narrative stream for %s", result.symbol)
+    full_text = ""
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1200,
+        system=_BACKTEST_NARRATIVE_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (event.type == "content_block_delta" and
+                    event.delta.type == "text_delta"):
+                full_text += event.delta.text
+                yield event.delta.text
+
+    if use_cache and full_text:
+        _store_cached_response(_compute_context_hash(prompt), full_text)
+
+
+# ---------------------------------------------------------------------------
+# P9.4: Claude Sector Rotation Narrative
+# ---------------------------------------------------------------------------
+
+_SECTOR_ROTATION_SYSTEM = """\
+You are a macro equity strategist specializing in sector rotation analysis.
+Analyze the provided sector momentum data and provide a market-cycle interpretation.
+
+Structure your analysis:
+1. **Leading Sectors** — what's driving them and the macro narrative
+2. **Lagging Sectors** — key headwinds and potential turning points
+3. **Rotation Signals** — notable rotation patterns (defensive/cyclical, value/growth)
+4. **Macro Cycle Interpretation** — where are we in the economic cycle?
+5. **Tactical Positioning** — 2-3 actionable sector allocation ideas
+
+Be specific and data-driven. Reference actual performance numbers from the data.\
+"""
+
+
+def stream_sector_rotation_narrative(sector_data: list[dict], use_cache: bool = True):
+    """Stream a Claude sector rotation analysis. Yields text chunks."""
+    client = _get_client()
+
+    sector_summary = "\n".join(
+        f"- {d['ticker']} ({d['name']}): score={d.get('score', 'N/A')}, "
+        f"phase={d.get('phase', 'N/A')}, "
+        f"1M={d['perf_1m']:+.1f}%, 3M={d['perf_3m']:+.1f}%, RSI={d.get('rsi', 'N/A')}"
+        if d.get('perf_1m') is not None and d.get('perf_3m') is not None
+        else f"- {d['ticker']} ({d['name']}): data unavailable"
+        for d in sector_data
+    )
+
+    prompt = f"""## Sector Rotation Analysis
+
+**Current Sector Momentum Scores (sorted by score):**
+{sector_summary}
+
+Provide a comprehensive sector rotation analysis with actionable insights."""
+
+    if use_cache:
+        cache_key = _compute_context_hash(prompt)
+        cached = _get_cached_response(cache_key)
+        if cached:
+            yield cached
+            return
+
+    log.info("Starting sector rotation narrative stream")
+    full_text = ""
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1200,
+        system=_SECTOR_ROTATION_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for event in stream:
+            if (event.type == "content_block_delta" and
+                    event.delta.type == "text_delta"):
+                full_text += event.delta.text
+                yield event.delta.text
+
+    if use_cache and full_text:
+        _store_cached_response(_compute_context_hash(prompt), full_text)
+
+
+# ---------------------------------------------------------------------------
+# P9.5: Chat history trimming
+# ---------------------------------------------------------------------------
+
+_CONTEXT_BUDGET_TOKENS = 180_000  # Claude Opus 4.6 context window
+_CHAT_BUDGET_RATIO = 0.80  # trim when history exceeds 80%
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token count estimate: words × 1.3."""
+    return int(len(text.split()) * 1.3)
+
+
+def trim_chat_history(
+    system_prompt: str,
+    conversation_history: list[dict],
+    max_budget_tokens: int = _CONTEXT_BUDGET_TOKENS,
+    budget_ratio: float = _CHAT_BUDGET_RATIO,
+) -> tuple[list[dict], bool]:
+    """Trim chat history to fit within context budget.
+
+    Keeps system prompt + most recent exchanges.
+    Returns (trimmed_history, was_trimmed).
+    """
+    system_tokens = _estimate_tokens(system_prompt)
+    budget = int(max_budget_tokens * budget_ratio) - system_tokens
+
+    total_tokens = sum(
+        _estimate_tokens(m.get("content", "")) for m in conversation_history
+    )
+
+    if total_tokens <= budget:
+        return conversation_history, False
+
+    # Drop oldest turns (preserve pairs: user+assistant) from front
+    trimmed = list(conversation_history)
+    while trimmed and _estimate_tokens(
+        " ".join(m.get("content", "") for m in trimmed)
+    ) > budget:
+        # Drop oldest user+assistant pair
+        if len(trimmed) >= 2:
+            trimmed = trimmed[2:]
+        else:
+            trimmed = trimmed[1:]
+
+    log.info(
+        "Chat history trimmed: %d → %d messages (est. tokens: %d → %d)",
+        len(conversation_history), len(trimmed),
+        total_tokens, _estimate_tokens(" ".join(m.get("content", "") for m in trimmed)),
+    )
+    return trimmed, True

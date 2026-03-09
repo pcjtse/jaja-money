@@ -1,11 +1,16 @@
-"""Backtesting Engine (P3.2).
+"""Backtesting Engine (P3.2 + P6.1 + P6.2 + P6.3).
 
 Validates the factor model's predictive power by simulating historical
 trades based on price-derived signals (RSI, MACD, SMA trend) against
 forward price returns.
 
+Enhancements:
+- P6.1: Rolling/expanding window signal (no look-ahead bias), walk-forward validation
+- P6.2: Parameter sensitivity sweep with heatmap data
+- P6.3: Configurable transaction costs (commission + slippage)
+
 Usage:
-    from backtest import run_backtest, BacktestResult
+    from backtest import run_backtest, BacktestResult, run_parameter_sweep, run_walk_forward
 """
 from __future__ import annotations
 
@@ -123,6 +128,11 @@ class BacktestResult:
     equity_curve: list[float] = field(default_factory=list)
     equity_dates: list[str] = field(default_factory=list)
     benchmark_curve: list[float] = field(default_factory=list)
+    # P6.3: Transaction cost breakdown
+    gross_return_pct: float = 0.0
+    total_cost_pct: float = 0.0
+    # P6.1: Walk-forward metadata
+    is_insample: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +145,9 @@ def run_backtest(
     entry_threshold: int = 65,
     exit_threshold: int = 40,
     lookback_years: float = 2.0,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    is_insample: bool = True,
 ) -> BacktestResult:
     """Run a signal-based backtest.
 
@@ -145,10 +158,16 @@ def run_backtest(
     entry_threshold  : Buy when signal score >= this value
     exit_threshold   : Sell when signal score <= this value
     lookback_years   : Only backtest the last N years of data
+    commission_pct   : Round-trip commission per trade (default 0.1%)
+    slippage_pct     : One-way slippage per trade (default 0.05%)
+    is_insample      : Label this as in-sample or out-of-sample period
 
     Returns
     -------
     BacktestResult with performance metrics and equity curve.
+
+    Note: Signal computation uses only data available up to each bar
+    (expanding window), so there is no look-ahead bias.
     """
     if df is None or len(df) < 60:
         raise ValueError("Insufficient price history for backtesting (need 60+ days)")
@@ -177,6 +196,9 @@ def run_backtest(
         sig = _compute_signal(df["Close"], full_idx)
         signals.append(sig)
 
+    # Transaction cost per trade (round-trip = entry + exit slippage + commission)
+    round_trip_cost_pct = (commission_pct + 2 * slippage_pct) * 100
+
     # Simulate trades
     in_position = False
     entry_price = 0.0
@@ -184,8 +206,11 @@ def run_backtest(
     entry_signal = 0
     trades: list[Trade] = []
     equity = [1.0]
+    equity_gross = [1.0]  # before transaction costs
     equity_dates = [dates[0]] if dates else []
     position_mult = 1.0
+    position_mult_gross = 1.0
+    total_cost_pct = 0.0
 
     for i in range(1, n):
         s = signals[i]
@@ -195,42 +220,54 @@ def run_backtest(
         if not in_position:
             if s >= entry_threshold:
                 in_position = True
-                entry_price = p
+                # Apply entry slippage (effective entry price is slightly higher)
+                entry_price = p * (1 + slippage_pct)
                 entry_date = d
                 entry_signal = s
         else:
             if s <= exit_threshold:
-                pnl_pct = (p - entry_price) / entry_price * 100
+                # Apply exit slippage (effective exit price is slightly lower)
+                exit_price = p * (1 - slippage_pct)
+                pnl_gross = (p - entry_price / (1 + slippage_pct)) / (entry_price / (1 + slippage_pct)) * 100
+                pnl_pct = pnl_gross - round_trip_cost_pct
                 trade = Trade(
                     entry_date=entry_date,
                     exit_date=d,
                     entry_price=round(entry_price, 2),
-                    exit_price=round(p, 2),
+                    exit_price=round(exit_price, 2),
                     pnl_pct=round(pnl_pct, 2),
                     signal_at_entry=entry_signal,
                     is_win=pnl_pct > 0,
                 )
                 trades.append(trade)
+                position_mult_gross *= (1 + pnl_gross / 100)
                 position_mult *= (1 + pnl_pct / 100)
+                total_cost_pct += round_trip_cost_pct
                 in_position = False
 
         equity.append(position_mult)
+        equity_gross.append(position_mult_gross)
         equity_dates.append(d)
 
     # Close open position at last price
     if in_position and n > 0:
-        pnl_pct = (prices[-1] - entry_price) / entry_price * 100
+        exit_price = prices[-1] * (1 - slippage_pct)
+        pnl_gross = (prices[-1] - entry_price / (1 + slippage_pct)) / (entry_price / (1 + slippage_pct)) * 100
+        pnl_pct = pnl_gross - round_trip_cost_pct
         trades.append(Trade(
             entry_date=entry_date,
             exit_date=dates[-1],
             entry_price=round(entry_price, 2),
-            exit_price=round(prices[-1], 2),
+            exit_price=round(exit_price, 2),
             pnl_pct=round(pnl_pct, 2),
             signal_at_entry=entry_signal,
             is_win=pnl_pct > 0,
         ))
+        position_mult_gross *= (1 + pnl_gross / 100)
         position_mult *= (1 + pnl_pct / 100)
+        total_cost_pct += round_trip_cost_pct
         equity[-1] = position_mult
+        equity_gross[-1] = position_mult_gross
 
     # Metrics
     total_return_pct = (position_mult - 1) * 100
@@ -262,6 +299,8 @@ def run_backtest(
     win_count = sum(1 for t in trades if t.is_win)
     win_rate = (win_count / len(trades) * 100) if trades else 0
 
+    gross_return_pct = (position_mult_gross - 1) * 100
+
     return BacktestResult(
         symbol=symbol,
         start_date=dates[0] if dates else "",
@@ -279,4 +318,158 @@ def run_backtest(
         equity_curve=equity,
         equity_dates=equity_dates,
         benchmark_curve=benchmark_curve,
+        gross_return_pct=round(gross_return_pct, 2),
+        total_cost_pct=round(total_cost_pct, 2),
+        is_insample=is_insample,
     )
+
+
+# ---------------------------------------------------------------------------
+# P6.1: Walk-forward validation
+# ---------------------------------------------------------------------------
+
+def run_walk_forward(
+    df: pd.DataFrame,
+    symbol: str,
+    entry_threshold: int = 65,
+    exit_threshold: int = 40,
+    insample_pct: float = 0.70,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+) -> tuple[BacktestResult, BacktestResult]:
+    """Run walk-forward validation by splitting history into in-sample and out-of-sample.
+
+    Parameters
+    ----------
+    df               : Full price history DataFrame
+    symbol           : Ticker symbol
+    entry_threshold  : Entry signal threshold
+    exit_threshold   : Exit signal threshold
+    insample_pct     : Fraction of history for in-sample (default 70%)
+    commission_pct   : Commission per trade
+    slippage_pct     : Slippage per trade
+
+    Returns
+    -------
+    (in_sample_result, out_of_sample_result) tuple of BacktestResult
+    """
+    if df is None or len(df) < 100:
+        raise ValueError("Insufficient data for walk-forward validation (need 100+ days)")
+
+    df = df.sort_values("Date").reset_index(drop=True)
+    split_idx = int(len(df) * insample_pct)
+    df_in = df.iloc[:split_idx].copy()
+    # For out-of-sample, we pass the full df so signals use full history up to each bar
+    df_out_slice = df.iloc[split_idx:].copy()
+
+    in_result = run_backtest(
+        df=df_in,
+        symbol=symbol,
+        entry_threshold=entry_threshold,
+        exit_threshold=exit_threshold,
+        lookback_years=50,  # use all available in-sample data
+        commission_pct=commission_pct,
+        slippage_pct=slippage_pct,
+        is_insample=True,
+    )
+
+    # For out-of-sample, pass full df for signal computation but only trade in the OOS period
+    # We need at least some rows in OOS
+    if len(df_out_slice) < 30:
+        raise ValueError("Not enough out-of-sample data (need 30+ days)")
+
+    out_result = run_backtest(
+        df=df,  # pass full df for proper signal computation (uses expanding window)
+        symbol=symbol,
+        entry_threshold=entry_threshold,
+        exit_threshold=exit_threshold,
+        lookback_years=round(len(df_out_slice) / 252, 2),  # OOS period only
+        commission_pct=commission_pct,
+        slippage_pct=slippage_pct,
+        is_insample=False,
+    )
+
+    return in_result, out_result
+
+
+# ---------------------------------------------------------------------------
+# P6.2: Parameter sensitivity sweep
+# ---------------------------------------------------------------------------
+
+def run_parameter_sweep(
+    df: pd.DataFrame,
+    symbol: str,
+    entry_values: list[int] | None = None,
+    exit_values: list[int] | None = None,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    lookback_years: float = 2.0,
+) -> dict:
+    """Test all combinations of entry/exit thresholds.
+
+    Returns dict with:
+        grid: DataFrame (entry as rows, exit as cols) of Sharpe ratios
+        grid_return: DataFrame of total returns
+        best_params: {entry, exit, sharpe, total_return}
+        boundary_warning: bool (True if optimal params are at boundary)
+    """
+    if entry_values is None:
+        entry_values = [55, 60, 65, 70]
+    if exit_values is None:
+        exit_values = [30, 35, 40, 45]
+
+    sharpe_grid = {}
+    return_grid = {}
+    best_sharpe = -999.0
+    best_params = {"entry": entry_values[0], "exit": exit_values[0], "sharpe": None, "total_return": None}
+
+    for entry in entry_values:
+        sharpe_grid[entry] = {}
+        return_grid[entry] = {}
+        for exit_ in exit_values:
+            if exit_ >= entry:
+                sharpe_grid[entry][exit_] = None
+                return_grid[entry][exit_] = None
+                continue
+            try:
+                result = run_backtest(
+                    df=df,
+                    symbol=symbol,
+                    entry_threshold=entry,
+                    exit_threshold=exit_,
+                    lookback_years=lookback_years,
+                    commission_pct=commission_pct,
+                    slippage_pct=slippage_pct,
+                )
+                sharpe = result.sharpe_ratio
+                ret = result.total_return_pct
+                sharpe_grid[entry][exit_] = sharpe
+                return_grid[entry][exit_] = ret
+                if sharpe is not None and sharpe > best_sharpe:
+                    best_sharpe = sharpe
+                    best_params = {
+                        "entry": entry,
+                        "exit": exit_,
+                        "sharpe": sharpe,
+                        "total_return": ret,
+                    }
+            except Exception:
+                sharpe_grid[entry][exit_] = None
+                return_grid[entry][exit_] = None
+
+    import pandas as pd
+    sharpe_df = pd.DataFrame(sharpe_grid).T  # entry as rows, exit as cols
+    return_df = pd.DataFrame(return_grid).T
+
+    # Boundary warning: optimal params are at min/max of the tested range
+    boundary_warning = (
+        best_params["entry"] in [min(entry_values), max(entry_values)]
+        or best_params["exit"] in [min(exit_values), max(exit_values)]
+    )
+
+    return {
+        "grid_sharpe": sharpe_df,
+        "grid_return": return_df,
+        "best_params": best_params,
+        "boundary_warning": boundary_warning,
+    }
