@@ -63,7 +63,8 @@ def test_trim_chat_history_short_history_unchanged():
 
 
 def test_trim_chat_history_truncates_long_history():
-    history = _make_history(200, words_per_msg=100)
+    # 500 msgs × 100 words × 1.3 ≈ 65,000 tokens > budget of 50,000 × 0.8 = 40,000
+    history = _make_history(500, words_per_msg=100)
     trimmed, was_trimmed = trim_chat_history(
         "System.", history, max_budget_tokens=50000, budget_ratio=0.8
     )

@@ -769,8 +769,6 @@ def stream_backtest_narrative(metrics: dict, trade_log: list):
         metrics: Dict with keys like total_return, sharpe, max_drawdown, win_rate, etc.
         trade_log: List of trade dicts from the backtest engine.
     """
-    client = _get_client()
-
     trade_summary = ""
     if trade_log:
         wins = sum(1 for t in trade_log if t.get("pnl_pct", 0) > 0)
@@ -811,6 +809,7 @@ Please analyse these backtest results and provide your assessment.\
         yield cached
         return
 
+    client = _get_client()
     log.info("Starting backtest narrative stream")
     full_response = []
     with client.messages.stream(
