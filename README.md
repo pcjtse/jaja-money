@@ -253,14 +253,55 @@ docker run -p 8501:8501 --env-file .env jaja-money
 
 ---
 
-## Rate Limits
+## ⚠️ Set API Usage Limits Before Running
+
+**Configure hard spending and rate limits on both APIs before running bulk
+operations.** The Screener and Sector pages can make hundreds of API calls and
+trigger significant Claude token usage in a single session.
+
+### Anthropic (Claude) — Spend Limits
+
+1. Go to [console.anthropic.com](https://console.anthropic.com) → **Settings → Billing**.
+2. Set a **monthly spend limit** appropriate for your usage (e.g. $10–20 for
+   light use, $50+ for heavy screener/backtest workflows).
+3. Optionally set a lower **monthly notification threshold** to receive an email
+   before you approach your cap.
+
+**Why this matters:**
+- Every "Analyze with Claude" call streams a full investment research report
+  (~1 000–3 000 tokens output with Claude Opus 4.6).
+- The Screener's "Explain top results with Claude" + the Sector and Backtest
+  commentary buttons each trigger separate API calls.
+- Claude responses are disk-cached for 30 minutes (keyed by content hash), so
+  re-running the same analysis is free — but new symbols or changed data always
+  hit the API.
+
+### Finnhub — Rate Limits & Monitoring
 
 The free Finnhub plan allows **60 requests per minute**. Each full analysis
-uses approximately 8 API calls (quote, profile, financials, daily candles,
-recommendations, earnings, peers, news). Technical indicators and all factor/
-risk computations run locally from the fetched price data — no extra API calls.
-Results are cached for 5 minutes (disk cache with TTL), so repeated lookups
-within that window cost 0 additional calls.
+uses approximately 8–12 API calls (quote, profile, financials, daily candles,
+recommendations, earnings, peers, news, earnings calendar, insider transactions).
+Technical indicators and all factor/risk computations run locally from the
+fetched price data — no extra API calls. Results are cached for 5 minutes
+(disk cache with TTL), so repeated lookups within that window cost 0 additional
+calls.
 
-The Screener and Sector pages batch-fetch multiple tickers; use the default
-universe sizes or limit custom universes to avoid hitting rate limits.
+**Bulk-operation call counts (approx.):**
+
+| Page | Calls per run |
+|------|--------------|
+| Main analysis (single stock) | ~12 |
+| Compare (5 stocks) | ~25 |
+| Sector Rotation (11 ETFs) | ~55 |
+| Screener — S&P 500 default (100 tickers) | ~400–500 |
+| Screener — Russell 1000 (500 tickers) | ~2 000–2 500 |
+
+**Recommendations:**
+- Monitor your Finnhub usage at [finnhub.io/dashboard](https://finnhub.io/dashboard).
+- For the Screener, prefer the **Default (config sample)** or **S&P 500** universe
+  rather than Russell 1000 to stay within free-tier limits.
+- If you see `429 Too Many Requests` errors, wait 60 seconds before retrying;
+  the built-in 0.3 s delay between screener requests helps but cannot fully
+  prevent rate limiting on large universes.
+- Consider upgrading to a paid Finnhub plan if you plan to run the Screener
+  or Sector Rotation repeatedly throughout the day.
