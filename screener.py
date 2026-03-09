@@ -1,24 +1,95 @@
-"""Stock Screener engine (P2.1 + P3.1).
+"""Stock Screener engine (P2.1 + P3.1 + P7.1 + P7.2 + P7.3).
 
 Runs factor + risk computation for a list of tickers and applies
 structured filter criteria.  Supports both rule-based filters and
 Claude-parsed natural language queries.
 
+Enhancements:
+- P7.1: Larger screener universe (S&P 500, Russell 1000 from CSV files)
+- P7.2: OR-logic filter support with filter groups
+- P7.3: Sentiment warning and CSV export
+
 Usage:
-    from screener import run_screen, apply_filters
+    from screener import run_screen, apply_filters, load_universe
 """
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 from config import cfg
 from log_setup import get_logger
 
 log = get_logger(__name__)
 
+# Path to bundled ticker universe CSV files
+_DATA_DIR = Path(__file__).parent / "data"
+
 
 # ---------------------------------------------------------------------------
-# Filter application
+# P7.1: Universe loaders
+# ---------------------------------------------------------------------------
+
+def load_sp500() -> list[str]:
+    """Load S&P 500 tickers from data/sp500.csv."""
+    csv_path = _DATA_DIR / "sp500.csv"
+    if not csv_path.exists():
+        log.warning("sp500.csv not found, using config default")
+        return cfg.screener_universe
+    try:
+        tickers = []
+        with open(csv_path) as f:
+            for line in f:
+                t = line.strip().upper()
+                if t and not t.startswith("#"):
+                    tickers.append(t)
+        log.info("Loaded %d S&P 500 tickers from CSV", len(tickers))
+        return tickers
+    except Exception as exc:
+        log.warning("Failed to load sp500.csv: %s", exc)
+        return cfg.screener_universe
+
+
+def load_russell1000() -> list[str]:
+    """Load Russell 1000 tickers from data/russell1000.csv."""
+    csv_path = _DATA_DIR / "russell1000.csv"
+    if not csv_path.exists():
+        log.warning("russell1000.csv not found, falling back to S&P 500")
+        return load_sp500()
+    try:
+        tickers = []
+        with open(csv_path) as f:
+            for line in f:
+                t = line.strip().upper()
+                if t and not t.startswith("#"):
+                    tickers.append(t)
+        log.info("Loaded %d Russell 1000 tickers from CSV", len(tickers))
+        return tickers
+    except Exception as exc:
+        log.warning("Failed to load russell1000.csv: %s", exc)
+        return load_sp500()
+
+
+def load_universe(name: str = "default", sector_filter: str | None = None) -> list[str]:
+    """Load a named ticker universe, with optional sector pre-filter.
+
+    name: 'default' | 'sp500' | 'russell1000'
+    sector_filter: if provided, filter to tickers where known sector matches.
+    """
+    if name == "sp500":
+        tickers = load_sp500()
+    elif name == "russell1000":
+        tickers = load_russell1000()
+    else:
+        tickers = cfg.screener_universe
+
+    # Sector filter is applied during screening since we don't have sector metadata in CSV
+    return tickers
+
+
+# ---------------------------------------------------------------------------
+# P7.2: Filter application with AND/OR group support
 # ---------------------------------------------------------------------------
 
 _OP_MAP = {
@@ -31,19 +102,89 @@ _OP_MAP = {
 }
 
 
+def _evaluate_filter(result: dict, filt: dict) -> bool:
+    """Evaluate a single filter against a result."""
+    dim = filt.get("dimension", "")
+    op = filt.get("operator", ">")
+    thresh = filt.get("value")
+    fn = _OP_MAP.get(op)
+    if fn is None:
+        return True
+    val = result.get(dim)
+    return fn(val, thresh)
+
+
+def _evaluate_group(result: dict, group: dict) -> bool:
+    """Evaluate a filter group (AND or OR connector)."""
+    connector = group.get("connector", "AND").upper()
+    filters = group.get("filters", [])
+    if not filters:
+        return True
+    if connector == "OR":
+        return any(_evaluate_filter(result, f) for f in filters)
+    else:  # AND
+        return all(_evaluate_filter(result, f) for f in filters)
+
+
 def apply_filters(result: dict, filters: list[dict]) -> bool:
-    """Return True if a screener result passes all filters."""
+    """Return True if a screener result passes all filters.
+
+    Supports both flat lists (all AND) and grouped filters with AND/OR.
+    A group has the structure: {"connector": "AND"|"OR", "filters": [...]}
+    A flat filter has: {"dimension": ..., "operator": ..., "value": ...}
+    """
     for filt in filters:
-        dim = filt.get("dimension", "")
-        op = filt.get("operator", ">")
-        thresh = filt.get("value")
-        fn = _OP_MAP.get(op)
-        if fn is None:
-            continue
-        val = result.get(dim)
-        if not fn(val, thresh):
-            return False
+        if "connector" in filt:
+            # This is a filter group
+            if not _evaluate_group(result, filt):
+                return False
+        else:
+            # Plain filter — treat as AND
+            if not _evaluate_filter(result, filt):
+                return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# P7.3: Screen template persistence
+# ---------------------------------------------------------------------------
+
+_TEMPLATES_FILE = Path.home() / ".jaja-money" / "screen_templates.json"
+
+
+def save_screen_template(name: str, filters: list[dict]) -> None:
+    """Save a screen template to disk."""
+    _TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        templates = load_screen_templates()
+        templates[name] = filters
+        with open(_TEMPLATES_FILE, "w") as f:
+            json.dump(templates, f, indent=2)
+        log.info("Saved screen template: %s", name)
+    except Exception as exc:
+        log.warning("Could not save screen template: %s", exc)
+
+
+def load_screen_templates() -> dict[str, list]:
+    """Load all saved screen templates."""
+    if not _TEMPLATES_FILE.exists():
+        return {}
+    try:
+        with open(_TEMPLATES_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def delete_screen_template(name: str) -> None:
+    """Delete a saved screen template."""
+    templates = load_screen_templates()
+    templates.pop(name, None)
+    try:
+        with open(_TEMPLATES_FILE, "w") as f:
+            json.dump(templates, f, indent=2)
+    except Exception as exc:
+        log.warning("Could not delete screen template: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -215,3 +356,28 @@ def run_screen(
 def default_universe() -> list[str]:
     """Return the configured default ticker universe for screening."""
     return cfg.screener_universe
+
+
+def results_to_csv(results: list[dict]) -> str:
+    """Convert screener results to CSV string for download (P7.3)."""
+    import io
+    import csv
+    if not results:
+        return ""
+    fieldnames = ["symbol", "name", "sector", "price", "factor_score",
+                  "composite_label", "risk_score", "risk_level",
+                  "pe_ratio", "market_cap_b", "rsi", "trend", "flag_count"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(results)
+    return buf.getvalue()
+
+
+def sentiment_skipped_warning() -> str:
+    """Return a human-readable warning about FinBERT being skipped (P7.3)."""
+    return (
+        "⚠️ **Note:** FinBERT sentiment analysis is skipped during bulk screening "
+        "for performance reasons. Factor scores may be slightly lower than in the "
+        "full single-stock analysis, which includes news sentiment scoring."
+    )

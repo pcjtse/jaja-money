@@ -297,10 +297,10 @@ Allow power users to customize factor weights, risk thresholds, and display pref
 ### 5.1 Relative / Sector-Adjusted Valuation
 Replace absolute P/E thresholds with sector-median comparisons so valuation scores are apples-to-apples across industries.
 
-- [ ] Fetch sector-median P/E from a reference table or computed from sector ETF constituents
-- [ ] Score valuation factor as `stock P/E vs. sector median` percentile rather than fixed thresholds
-- [ ] Apply same relative approach to Price/Book and EV/EBITDA if available
-- [ ] Update factor engine tests to cover sector-relative logic
+- [x] Fetch sector-median P/E from a reference table or computed from sector ETF constituents
+- [x] Score valuation factor as `stock P/E vs. sector median` percentile rather than fixed thresholds
+- [x] Apply same relative approach to Price/Book and EV/EBITDA if available
+- [x] Update factor engine tests to cover sector-relative logic
 
 **Files:** `factors.py`, `api.py`
 
@@ -309,10 +309,10 @@ Replace absolute P/E thresholds with sector-median comparisons so valuation scor
 ### 5.2 Analyst Estimate Revision Momentum
 Track the direction of consensus EPS estimate changes over the last 30/60/90 days — a well-documented alpha factor.
 
-- [ ] Fetch historical estimate snapshots from Finnhub or yfinance
-- [ ] Compute 30d, 60d, 90d revision direction (positive / flat / negative)
-- [ ] Add as a 9th factor (weight ~10%, reduce other weights proportionally)
-- [ ] Display estimate revision trend chart in the Fundamental Analysis section
+- [x] Fetch historical estimate snapshots from Finnhub or yfinance
+- [x] Compute 30d, 60d, 90d revision direction (positive / flat / negative)
+- [x] Add as a 9th factor (weight ~10%, reduce other weights proportionally)
+- [x] Display estimate revision trend chart in the Fundamental Analysis section
 
 **Files:** `factors.py`, `api.py`, `app.py`
 
@@ -321,10 +321,10 @@ Track the direction of consensus EPS estimate changes over the last 30/60/90 day
 ### 5.3 Earnings Calendar Integration
 Surface upcoming earnings dates and flag the associated event risk prominently.
 
-- [ ] Fetch next earnings date from Finnhub earnings calendar endpoint
-- [ ] Display days-to-earnings badge in the quote header
-- [ ] Add an "earnings within 14 days" red flag in the risk guardrails
-- [ ] Show historical earnings reaction (day-after price change) for last 4 quarters
+- [x] Fetch next earnings date from Finnhub earnings calendar endpoint
+- [x] Display days-to-earnings badge in the quote header
+- [x] Add an "earnings within 14 days" red flag in the risk guardrails
+- [x] Show historical earnings reaction (day-after price change) for last 4 quarters
 
 **Files:** `api.py`, `guardrails.py`, `app.py`
 
@@ -333,10 +333,10 @@ Surface upcoming earnings dates and flag the associated event risk prominently.
 ### 5.4 Insider Trading Signal
 Cluster insider buy transactions are a strong contrarian signal, especially after a drawdown.
 
-- [ ] Fetch insider transactions from Finnhub (`stock_insider_transactions`)
-- [ ] Detect net buy/sell clusters in the past 90 days
-- [ ] Add insider signal as a red flag (heavy insider selling) or positive note (cluster buys)
-- [ ] Show insider activity timeline in the app
+- [x] Fetch insider transactions from Finnhub (`stock_insider_transactions`)
+- [x] Detect net buy/sell clusters in the past 90 days
+- [x] Add insider signal as a red flag (heavy insider selling) or positive note (cluster buys)
+- [x] Show insider activity timeline in the app
 
 **Files:** `api.py`, `factors.py`, `guardrails.py`, `app.py`
 
@@ -345,10 +345,10 @@ Cluster insider buy transactions are a strong contrarian signal, especially afte
 ### 5.5 Short Interest Tracking
 Elevated short interest combined with improving fundamentals sets up a potential squeeze.
 
-- [ ] Fetch short interest data (Finnhub `stock_short_interest` or alternative)
-- [ ] Compute short interest as % of float and days-to-cover
-- [ ] Flag extreme short interest (> 20% of float) in the risk panel
-- [ ] Use short interest as a contrarian factor sub-signal in the analyst consensus dimension
+- [x] Fetch short interest data (Finnhub `stock_short_interest` or alternative)
+- [x] Compute short interest as % of float and days-to-cover
+- [x] Flag extreme short interest (> 20% of float) in the risk panel
+- [x] Use short interest as a contrarian factor sub-signal in the analyst consensus dimension
 
 **Files:** `api.py`, `guardrails.py`, `app.py`
 
@@ -357,10 +357,10 @@ Elevated short interest combined with improving fundamentals sets up a potential
 ### 5.6 Macroeconomic Context Overlay
 Incorporate market-wide risk context so individual stock scores reflect the broader environment.
 
-- [ ] Fetch VIX (CBOE Volatility Index) as market fear proxy
-- [ ] Fetch 2y/10y Treasury yield spread as recession/cycle indicator
-- [ ] Display a macro risk banner when VIX > 30 or curve is inverted
-- [ ] Apply a configurable macro risk multiplier to all individual stock risk scores when macro is elevated
+- [x] Fetch VIX (CBOE Volatility Index) as market fear proxy
+- [x] Fetch 2y/10y Treasury yield spread as recession/cycle indicator
+- [x] Display a macro risk banner when VIX > 30 or curve is inverted
+- [x] Apply a configurable macro risk multiplier to all individual stock risk scores when macro is elevated
 
 **Files:** `api.py` (new macro endpoints), `guardrails.py`, `app.py`
 
@@ -369,10 +369,10 @@ Incorporate market-wide risk context so individual stock scores reflect the broa
 ### 5.7 Dividend Yield Factor
 Add dividend yield as a 9th factor dimension (or sub-factor of valuation) for income-oriented screening.
 
-- [ ] Extract dividend yield from existing `get_financials()` response
-- [ ] Score: yield > 3% = strong positive, > 1.5% = mild positive, 0% = neutral
-- [ ] Apply negative adjustment for payout ratio > 100% (unsustainable dividend)
-- [ ] Add dividend yield filter to screener
+- [x] Extract dividend yield from existing `get_financials()` response
+- [x] Score: yield > 3% = strong positive, > 1.5% = mild positive, 0% = neutral
+- [x] Apply negative adjustment for payout ratio > 100% (unsustainable dividend)
+- [x] Add dividend yield filter to screener
 
 **Files:** `factors.py`, `screener.py`
 
@@ -383,10 +383,10 @@ Add dividend yield as a 9th factor dimension (or sub-factor of valuation) for in
 ### 6.1 Fix Look-Ahead Bias in Backtest
 The current backtest computes signals using the full price history visible at each step — this inflates backtest performance unrealistically.
 
-- [ ] Refactor signal computation to use a rolling/expanding window: at time `t`, only data `[0..t]` is used
-- [ ] Add configurable transaction costs (slippage + commission, default 0.1% per trade)
-- [ ] Add walk-forward validation: split history into in-sample (70%) and out-of-sample (30%) periods
-- [ ] Report in-sample vs. out-of-sample metrics side by side
+- [x] Refactor signal computation to use a rolling/expanding window: at time `t`, only data `[0..t]` is used
+- [x] Add configurable transaction costs (slippage + commission, default 0.1% per trade)
+- [x] Add walk-forward validation: split history into in-sample (70%) and out-of-sample (30%) periods
+- [x] Report in-sample vs. out-of-sample metrics side by side
 
 **Files:** `backtest.py`, `pages/6_Backtest.py`
 
@@ -395,10 +395,10 @@ The current backtest computes signals using the full price history visible at ea
 ### 6.2 Parameter Sensitivity Sweep
 Allow users to see how sensitive backtest results are to the choice of entry/exit thresholds.
 
-- [ ] Add a parameter sweep mode: test all combinations of entry ∈ [55, 60, 65, 70] × exit ∈ [30, 35, 40, 45]
-- [ ] Render a heatmap of Sharpe ratio / total return across the parameter grid
-- [ ] Highlight the optimal and most robust parameter set
-- [ ] Warn when the optimal parameters are at the boundary (overfitting signal)
+- [x] Add a parameter sweep mode: test all combinations of entry ∈ [55, 60, 65, 70] × exit ∈ [30, 35, 40, 45]
+- [x] Render a heatmap of Sharpe ratio / total return across the parameter grid
+- [x] Highlight the optimal and most robust parameter set
+- [x] Warn when the optimal parameters are at the boundary (overfitting signal)
 
 **Files:** `backtest.py`, `pages/6_Backtest.py`
 
@@ -407,10 +407,10 @@ Allow users to see how sensitive backtest results are to the choice of entry/exi
 ### 6.3 Transaction Cost & Dividend Reinvestment
 Make backtest returns realistic.
 
-- [ ] Add configurable commission per trade (flat fee or % of trade value)
-- [ ] Add configurable slippage model (fixed bps or volatility-proportional)
-- [ ] Fetch historical dividend data and reinvest in the equity curve
-- [ ] Show gross return vs. net-of-costs return comparison
+- [x] Add configurable commission per trade (flat fee or % of trade value)
+- [x] Add configurable slippage model (fixed bps or volatility-proportional)
+- [x] Fetch historical dividend data and reinvest in the equity curve
+- [x] Show gross return vs. net-of-costs return comparison
 
 **Files:** `backtest.py`
 
@@ -421,10 +421,10 @@ Make backtest returns realistic.
 ### 7.1 Larger Screener Universe
 The default 10-ticker universe is too small for meaningful screening.
 
-- [ ] Bundle a CSV of S&P 500 tickers (scraped from Wikipedia or static file in repo)
-- [ ] Bundle a CSV of Russell 1000 tickers as an extended universe option
-- [ ] Add universe selector in Screener UI: Custom / S&P 500 / Russell 1000
-- [ ] Add sector filter to pre-filter universe before running screen
+- [x] Bundle a CSV of S&P 500 tickers (scraped from Wikipedia or static file in repo)
+- [x] Bundle a CSV of Russell 1000 tickers as an extended universe option
+- [x] Add universe selector in Screener UI: Custom / S&P 500 / Russell 1000
+- [x] Add sector filter to pre-filter universe before running screen
 
 **Files:** `screener.py`, `pages/3_Screener.py`, new `data/sp500.csv`, `data/russell1000.csv`
 
@@ -433,10 +433,10 @@ The default 10-ticker universe is too small for meaningful screening.
 ### 7.2 OR-Logic Filter Support
 Currently all screener filters are combined with AND. Express compound criteria like "high growth OR deep value".
 
-- [ ] Extend filter schema to support filter groups with AND/OR connectors
-- [ ] Update `apply_filters()` to evaluate grouped logic
-- [ ] Update NL screener parser prompt to emit grouped filter JSON
-- [ ] Add filter group UI in the Screener page
+- [x] Extend filter schema to support filter groups with AND/OR connectors
+- [x] Update `apply_filters()` to evaluate grouped logic
+- [x] Update NL screener parser prompt to emit grouped filter JSON
+- [x] Add filter group UI in the Screener page
 
 **Files:** `screener.py`, `analyzer.py`
 
@@ -445,9 +445,9 @@ Currently all screener filters are combined with AND. Express compound criteria 
 ### 7.3 Screener Sentiment Warning & Export
 Two quick wins for the screener.
 
-- [ ] Show a warning banner when `_quick_analyze()` skips FinBERT — explain that factor scores may be lower than in full analysis
-- [ ] Add "Export Results to CSV" button reusing existing `export.py`
-- [ ] Add "Save Screen Template" / "Load Screen Template" to persist filter configurations
+- [x] Show a warning banner when `_quick_analyze()` skips FinBERT — explain that factor scores may be lower than in full analysis
+- [x] Add "Export Results to CSV" button reusing existing `export.py`
+- [x] Add "Save Screen Template" / "Load Screen Template" to persist filter configurations
 
 **Files:** `screener.py`, `pages/3_Screener.py`, `export.py`
 
@@ -458,10 +458,10 @@ Two quick wins for the screener.
 ### 8.1 Liquidity Risk Flag
 Flag positions where the stock's average daily volume is too thin relative to the intended position size.
 
-- [ ] Compute 20-day average daily volume (ADV) from price data
-- [ ] Add portfolio context input: account size and max position % to the risk panel
-- [ ] Flag when intended position size > 10% of ADV (liquidity risk)
-- [ ] Show ADV and "days to exit" estimate in the risk breakdown
+- [x] Compute 20-day average daily volume (ADV) from price data
+- [x] Add portfolio context input: account size and max position % to the risk panel
+- [x] Flag when intended position size > 10% of ADV (liquidity risk)
+- [x] Show ADV and "days to exit" estimate in the risk breakdown
 
 **Files:** `guardrails.py`, `app.py`
 
@@ -470,10 +470,10 @@ Flag positions where the stock's average daily volume is too thin relative to th
 ### 8.2 Volatility Regime Detection
 Distinguish transient volatility spikes (e.g., earnings) from structural trend reversals.
 
-- [ ] Compute 5-day realized vol vs. 30-day realized vol
-- [ ] If 5d vol > 2× 30d vol: flag as "volatility spike — may be transient"
-- [ ] If both 5d and 30d vol elevated: flag as "sustained elevated volatility"
-- [ ] Adjust overall risk score upward more aggressively for sustained vs. transient volatility
+- [x] Compute 5-day realized vol vs. 30-day realized vol
+- [x] If 5d vol > 2× 30d vol: flag as "volatility spike — may be transient"
+- [x] If both 5d and 30d vol elevated: flag as "sustained elevated volatility"
+- [x] Adjust overall risk score upward more aggressively for sustained vs. transient volatility
 
 **Files:** `guardrails.py`
 
@@ -482,10 +482,10 @@ Distinguish transient volatility spikes (e.g., earnings) from structural trend r
 ### 8.3 Live Risk-Free Rate
 Replace the hardcoded 5% risk-free rate with a fetched 3-month T-bill rate.
 
-- [ ] Fetch 3-month T-bill rate from FRED API (free, no key required for some endpoints) or Finnhub
-- [ ] Cache with 24-hour TTL
-- [ ] Use live rate in Sharpe ratio calculations across `backtest.py`, `portfolio_analysis.py`
-- [ ] Display current rate used in the UI
+- [x] Fetch 3-month T-bill rate from FRED API (free, no key required for some endpoints) or Finnhub
+- [x] Cache with 24-hour TTL
+- [x] Use live rate in Sharpe ratio calculations across `backtest.py`, `portfolio_analysis.py`
+- [x] Display current rate used in the UI
 
 **Files:** `api.py`, `backtest.py`, `portfolio_analysis.py`
 
@@ -496,10 +496,10 @@ Replace the hardcoded 5% risk-free rate with a fetched 3-month T-bill rate.
 ### 9.1 Cache Claude Responses
 Identical symbol + identical data fingerprint should not trigger a duplicate Claude API call.
 
-- [ ] Compute a hash of the input context (metrics, prices, news) passed to Claude
-- [ ] Cache Claude text responses in the disk cache with a 30-minute TTL
-- [ ] Add a "Refresh Analysis" button to bypass cache and force a new Claude call
-- [ ] Log cache hits/misses for token cost visibility
+- [x] Compute a hash of the input context (metrics, prices, news) passed to Claude
+- [x] Cache Claude text responses in the disk cache with a 30-minute TTL
+- [x] Add a "Refresh Analysis" button to bypass cache and force a new Claude call
+- [x] Log cache hits/misses for token cost visibility
 
 **Files:** `analyzer.py`, `cache.py`
 
@@ -508,10 +508,10 @@ Identical symbol + identical data fingerprint should not trigger a duplicate Cla
 ### 9.2 Adaptive System Prompts
 Growth stocks, dividend payers, and cyclicals need different analytical lenses.
 
-- [ ] Classify stock type at runtime: Growth / Value / Dividend / Cyclical / Defensive based on sector, P/E, and dividend yield
-- [ ] Select the appropriate system prompt template per stock type
-- [ ] Expose stock type classification in the UI header
-- [ ] Allow user to override the detected stock type
+- [x] Classify stock type at runtime: Growth / Value / Dividend / Cyclical / Defensive based on sector, P/E, and dividend yield
+- [x] Select the appropriate system prompt template per stock type
+- [x] Expose stock type classification in the UI header
+- [x] Allow user to override the detected stock type
 
 **Files:** `analyzer.py`, `app.py`
 
@@ -520,9 +520,9 @@ Growth stocks, dividend payers, and cyclicals need different analytical lenses.
 ### 9.3 Claude Backtest Narrative
 Stream a Claude commentary on backtest results after the simulation completes (currently in todo as pending).
 
-- [ ] Pass backtest metrics (total return, Sharpe, max drawdown, win rate, trade log) to Claude
-- [ ] Prompt: analyze regime performance, identify periods of outperformance/underperformance, comment on robustness
-- [ ] Stream narrative below the equity curve chart
+- [x] Pass backtest metrics (total return, Sharpe, max drawdown, win rate, trade log) to Claude
+- [x] Prompt: analyze regime performance, identify periods of outperformance/underperformance, comment on robustness
+- [x] Stream narrative below the equity curve chart
 
 **Files:** `analyzer.py`, `backtest.py`, `pages/6_Backtest.py`
 
@@ -531,9 +531,9 @@ Stream a Claude commentary on backtest results after the simulation completes (c
 ### 9.4 Claude Sector Rotation Narrative
 Stream a Claude commentary on sector rotation analysis (currently in todo as pending).
 
-- [ ] Pass sector scores, phases, and momentum rankings to Claude
-- [ ] Prompt: identify rotation thesis, leading sectors' implications for individual stocks, macro interpretation
-- [ ] Stream narrative below the sector heatmap
+- [x] Pass sector scores, phases, and momentum rankings to Claude
+- [x] Prompt: identify rotation thesis, leading sectors' implications for individual stocks, macro interpretation
+- [x] Stream narrative below the sector heatmap
 
 **Files:** `analyzer.py`, `sectors.py`, `pages/5_Sectors.py`
 
@@ -542,9 +542,9 @@ Stream a Claude commentary on sector rotation analysis (currently in todo as pen
 ### 9.5 Chat History Trim
 Prevent long chat sessions from silently hitting the context window limit.
 
-- [ ] Track approximate token count of chat history (count words × 1.3 as proxy)
-- [ ] When history exceeds 80% of context budget, drop oldest turns (keep system prompt + last N exchanges)
-- [ ] Show a "Chat history trimmed to fit context" notice when truncation occurs
+- [x] Track approximate token count of chat history (count words × 1.3 as proxy)
+- [x] When history exceeds 80% of context budget, drop oldest turns (keep system prompt + last N exchanges)
+- [x] Show a "Chat history trimmed to fit context" notice when truncation occurs
 
 **Files:** `analyzer.py`, `app.py`
 
@@ -577,24 +577,24 @@ Prevent long chat sessions from silently hitting the context window limit.
 | 4 | Configuration File Support | ✅ Done |
 | 4 | Test Coverage Expansion | ✅ Done (api/analyzer tests pending) |
 | 4 | Configuration File Support | ✅ Done (settings UI pending) |
-| 5 | Relative / Sector-Adjusted Valuation | [ ] Pending |
-| 5 | Analyst Estimate Revision Momentum | [ ] Pending |
-| 5 | Earnings Calendar Integration | [ ] Pending |
-| 5 | Insider Trading Signal | [ ] Pending |
-| 5 | Short Interest Tracking | [ ] Pending |
-| 5 | Macroeconomic Context Overlay | [ ] Pending |
-| 5 | Dividend Yield Factor | [ ] Pending |
-| 6 | Fix Look-Ahead Bias in Backtest | [ ] Pending |
-| 6 | Parameter Sensitivity Sweep | [ ] Pending |
-| 6 | Transaction Cost & Dividend Reinvestment | [ ] Pending |
-| 7 | Larger Screener Universe | [ ] Pending |
-| 7 | OR-Logic Filter Support | [ ] Pending |
-| 7 | Screener Sentiment Warning & Export | [ ] Pending |
-| 8 | Liquidity Risk Flag | [ ] Pending |
-| 8 | Volatility Regime Detection | [ ] Pending |
-| 8 | Live Risk-Free Rate | [ ] Pending |
-| 9 | Cache Claude Responses | [ ] Pending |
-| 9 | Adaptive System Prompts | [ ] Pending |
-| 9 | Claude Backtest Narrative | [ ] Pending |
-| 9 | Claude Sector Rotation Narrative | [ ] Pending |
-| 9 | Chat History Trim | [ ] Pending |
+| 5 | Relative / Sector-Adjusted Valuation | ✅ Done |
+| 5 | Analyst Estimate Revision Momentum | ✅ Done |
+| 5 | Earnings Calendar Integration | ✅ Done |
+| 5 | Insider Trading Signal | ✅ Done |
+| 5 | Short Interest Tracking | ✅ Done |
+| 5 | Macroeconomic Context Overlay | ✅ Done |
+| 5 | Dividend Yield Factor | ✅ Done |
+| 6 | Fix Look-Ahead Bias in Backtest | ✅ Done |
+| 6 | Parameter Sensitivity Sweep | ✅ Done |
+| 6 | Transaction Cost & Dividend Reinvestment | ✅ Done |
+| 7 | Larger Screener Universe | ✅ Done |
+| 7 | OR-Logic Filter Support | ✅ Done |
+| 7 | Screener Sentiment Warning & Export | ✅ Done |
+| 8 | Liquidity Risk Flag | ✅ Done |
+| 8 | Volatility Regime Detection | ✅ Done |
+| 8 | Live Risk-Free Rate | ✅ Done |
+| 9 | Cache Claude Responses | ✅ Done |
+| 9 | Adaptive System Prompts | ✅ Done |
+| 9 | Claude Backtest Narrative | ✅ Done |
+| 9 | Claude Sector Rotation Narrative | ✅ Done |
+| 9 | Chat History Trim | ✅ Done |

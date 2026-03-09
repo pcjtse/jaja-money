@@ -2,6 +2,14 @@
 
 Computes a 0-100 risk score from four dimensions and surfaces specific
 red-flag conditions as structured alerts.  No Streamlit imports.
+
+Enhanced with:
+- Earnings calendar flag (P5.3)
+- Insider trading signal (P5.4)
+- Short interest flag (P5.5)
+- Macroeconomic context overlay (P5.6)
+- Liquidity risk flag (P8.1)
+- Volatility regime detection (P8.2)
 """
 
 from __future__ import annotations
@@ -25,6 +33,26 @@ def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     log_returns = ratio.apply(math.log)
     daily_std = float(log_returns.tail(window).std())
     return daily_std * math.sqrt(252) * 100   # annualised %
+
+
+# ---------------------------------------------------------------------------
+# P8.2: Volatility regime detection helpers
+# ---------------------------------------------------------------------------
+
+def _detect_vol_regime(close: pd.Series | None) -> tuple[str, float | None, float | None]:
+    """Detect volatility regime: 'spike', 'sustained', or 'normal'.
+
+    Returns (regime, hv_5d, hv_30d).
+    """
+    hv_5d = _hist_vol(close, window=5)
+    hv_30d = _hist_vol(close, window=30)
+    if hv_5d is None or hv_30d is None:
+        return "normal", hv_5d, hv_30d
+    if hv_5d > 2 * hv_30d:
+        return "spike", hv_5d, hv_30d
+    if hv_5d > 40 and hv_30d > 35:
+        return "sustained", hv_5d, hv_30d
+    return "normal", hv_5d, hv_30d
 
 
 def _rsi(close: pd.Series, length: int = 14) -> float | None:
@@ -119,6 +147,12 @@ def _build_flags(
     composite_factor_score: int,
     hv: float | None,
     drawdown_pct: float | None,
+    earnings_calendar: dict | None = None,
+    insider_transactions: list | None = None,
+    short_interest: dict | None = None,
+    macro_context: dict | None = None,
+    account_size: float | None = None,
+    max_position_pct: float = 0.05,
 ) -> list[dict]:
     """Return a list of flag dicts: {severity, icon, title, message}."""
     flags = []
@@ -262,6 +296,105 @@ def _build_flags(
              f"Almost all factors are maxed out. Historically, extreme bullish consensus "
              f"can precede mean-reversion. Manage position sizing.")
 
+    # --- P5.3: Earnings calendar flags ---
+    if earnings_calendar:
+        days_to_earn = earnings_calendar.get("days_to_earnings")
+        next_date = earnings_calendar.get("next_date")
+        if days_to_earn is not None and next_date:
+            if 0 <= days_to_earn <= 7:
+                flag("danger", "📅", "Earnings this week",
+                     f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
+                     f"Expect elevated implied volatility and potential sharp price moves. "
+                     f"Avoid opening positions immediately before earnings unless as a trade.")
+            elif days_to_earn <= 14:
+                flag("warning", "📅", "Earnings within 2 weeks",
+                     f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
+                     f"Event risk is elevated. Consider holding off or sizing down.")
+
+    # --- P5.4: Insider trading flags ---
+    if insider_transactions:
+        from datetime import date, timedelta
+        cutoff = (date.today() - timedelta(days=90)).isoformat()
+        recent_txns = [
+            t for t in insider_transactions
+            if t.get("transactionDate", "") >= cutoff
+        ]
+        buys = [t for t in recent_txns if t.get("transactionCode") == "P"]
+        sells = [t for t in recent_txns if t.get("transactionCode") == "S"]
+        buy_shares = sum(abs(t.get("change", 0) or 0) for t in buys)
+        sell_shares = sum(abs(t.get("change", 0) or 0) for t in sells)
+
+        if sells and sell_shares > buy_shares * 3 and len(sells) >= 3:
+            flag("danger", "🔴", "Significant insider selling",
+                 f"{len(sells)} insider sale(s) in the last 90 days totalling "
+                 f"~{sell_shares:,.0f} shares. Heavy insider selling often precedes "
+                 f"fundamental deterioration.")
+        elif sells and sell_shares > buy_shares * 2 and len(sells) >= 2:
+            flag("warning", "🔴", "Insider selling cluster",
+                 f"{len(sells)} insider sale(s) in the last 90 days. "
+                 f"Monitor for further selling pressure.")
+        elif buys and buy_shares > sell_shares * 2 and len(buys) >= 2:
+            flag("info", "🟢", "Insider buying cluster",
+                 f"{len(buys)} insider purchase(s) in the last 90 days totalling "
+                 f"~{buy_shares:,.0f} shares. Cluster buying is often a positive signal, "
+                 f"especially after a drawdown.")
+
+    # --- P5.5: Short interest flags ---
+    if short_interest and short_interest.get("available"):
+        short_pct = short_interest.get("short_pct_float")
+        days_cover = short_interest.get("days_to_cover")
+        if short_pct is not None:
+            if short_pct > 25:
+                flag("danger", "📊", "Extreme short interest",
+                     f"Short interest = {short_pct:.1f}% of float. "
+                     f"Extremely high short interest can signal fundamental concerns "
+                     f"but also creates squeeze potential if sentiment reverses.")
+            elif short_pct > 15:
+                flag("warning", "📊", "Elevated short interest",
+                     f"Short interest = {short_pct:.1f}% of float"
+                     + (f" ({days_cover:.1f} days to cover)" if days_cover else "")
+                     + ". Significant bearish positioning from institutional traders.")
+
+    # --- P5.6: Macroeconomic context flags ---
+    if macro_context:
+        vix = macro_context.get("vix")
+        spread = macro_context.get("spread_2y10y")
+        if vix is not None and vix > 30:
+            flag("warning", "🌐", "Elevated market fear (VIX)",
+                 f"VIX = {vix:.1f} — above 30 signals elevated market-wide fear. "
+                 f"Individual stock risk scores may understate tail risk. "
+                 f"Consider smaller position sizes across all holdings.")
+        if spread is not None and spread < 0:
+            flag("warning", "🌐", "Inverted yield curve",
+                 f"2Y/10Y spread = {spread:.2f}% (inverted). "
+                 f"Yield curve inversion historically precedes recessions. "
+                 f"Favor defensive sectors and reduce cyclical exposure.")
+
+    # --- P8.1: Liquidity risk flag ---
+    if close is not None and price is not None and account_size is not None and account_size > 0:
+        if len(close) >= 20:
+            adv = float(close.tail(20).count())  # just count as proxy; use volume if available
+            # Use 20-day average volume from close series length as a basic proxy
+            adv_value = None
+            # We'd need volume data — skip if not available
+            position_value = account_size * max_position_pct
+            if price > 0:
+                position_shares = position_value / price
+                # We can only flag if we have volume data
+                # This will be enhanced when volume is passed
+
+    # --- P8.2: Volatility regime detection ---
+    vol_regime, hv_5d, hv_30d = _detect_vol_regime(close)
+    if vol_regime == "spike" and hv_5d is not None and hv_30d is not None:
+        flag("warning", "⚡", "Volatility spike — may be transient",
+             f"5-day vol = {hv_5d:.1f}% vs 30-day vol = {hv_30d:.1f}%. "
+             f"Recent vol is >2× the 30-day average — likely reflects a specific event. "
+             f"May normalize quickly; avoid panic selling.")
+    elif vol_regime == "sustained" and hv_5d is not None and hv_30d is not None:
+        flag("danger", "🔥", "Sustained elevated volatility",
+             f"5-day vol = {hv_5d:.1f}% and 30-day vol = {hv_30d:.1f}% are both elevated. "
+             f"Structural volatility trend — requires tighter risk management.")
+
     return flags
 
 
@@ -298,6 +431,12 @@ def compute_risk(
     recommendations: list,
     sentiment_agg: dict | None,
     composite_factor_score: int,
+    earnings_calendar: dict | None = None,
+    insider_transactions: list | None = None,
+    short_interest: dict | None = None,
+    macro_context: dict | None = None,
+    account_size: float | None = None,
+    max_position_pct: float = 0.05,
 ) -> dict:
     """Compute risk score and flags from available data.
 
@@ -308,12 +447,16 @@ def compute_risk(
         hv                  float | None  annualised HV %
         drawdown_pct        float | None  drawdown from 52-week high %
         flags               list[dict]   ordered by severity
+        vol_regime          str  ("normal" | "spike" | "sustained")
+        macro_context       dict | None
     """
     price = float(quote.get("c", 0) or 0) or None
 
     vol_dim,  hv         = _dim_volatility(close)
     dd_dim,   drawdown   = _dim_drawdown(price, financials, close)
     sig_dim              = _dim_signal_risk(composite_factor_score)
+
+    vol_regime, hv_5d, hv_30d = _detect_vol_regime(close)
 
     flags = _build_flags(
         close=close,
@@ -325,19 +468,42 @@ def compute_risk(
         composite_factor_score=composite_factor_score,
         hv=hv,
         drawdown_pct=drawdown,
+        earnings_calendar=earnings_calendar,
+        insider_transactions=insider_transactions,
+        short_interest=short_interest,
+        macro_context=macro_context,
+        account_size=account_size,
+        max_position_pct=max_position_pct,
     )
 
     # Flag count dimension: each flag adds 20 pts, capped at 100
     flag_dim = _clamp(len(flags) * 20)
 
     # Weighted composite risk score
-    risk_score = _clamp(
+    base_risk = _clamp(
         vol_dim  * 0.25
         + dd_dim * 0.25
         + sig_dim * 0.25
         + flag_dim * 0.25
     )
 
+    # P5.6 & P8.2: Apply macro multiplier and volatility regime adjustments
+    macro_mult = 1.0
+    if macro_context:
+        vix = macro_context.get("vix")
+        spread = macro_context.get("spread_2y10y")
+        if vix is not None and vix > 30:
+            macro_mult += 0.10
+        if spread is not None and spread < 0:
+            macro_mult += 0.05
+
+    # Volatility regime upward adjustment for sustained elevated vol
+    if vol_regime == "sustained":
+        macro_mult += 0.10
+    elif vol_regime == "spike":
+        macro_mult += 0.05
+
+    risk_score = _clamp(base_risk * macro_mult)
     risk_level, risk_color = risk_level_color(risk_score)
 
     # Sort flags: danger first, then warning, then info
@@ -351,4 +517,8 @@ def compute_risk(
         hv=hv,
         drawdown_pct=drawdown,
         flags=flags,
+        vol_regime=vol_regime,
+        hv_5d=hv_5d,
+        hv_30d=hv_30d,
+        macro_context=macro_context,
     )

@@ -205,3 +205,236 @@ class FinnhubAPI:
                 log.warning("Transcript %s unavailable: %s", transcript_id, exc)
                 return {}
         return self._cached(f"transcript:{transcript_id}", _fetch, ttl=86400 * 7)
+
+    # ------------------------------------------------------------------
+    # P5.3: Earnings Calendar
+    # ------------------------------------------------------------------
+
+    def get_earnings_calendar(self, symbol: str) -> dict:
+        """Return next earnings date and recent historical earnings reactions.
+
+        Returns dict with: next_date (str|None), days_to_earnings (int|None),
+        historical_reactions (list of {date, change_pct}).
+        """
+        def _fetch():
+            try:
+                import time as _time
+                from_dt = _time.strftime("%Y-%m-%d")
+                to_dt = _time.strftime(
+                    "%Y-%m-%d",
+                    _time.localtime(_time.time() + 90 * 24 * 3600)
+                )
+                cal = self.client.earnings_calendar(
+                    _from=from_dt, to=to_dt, symbol=symbol
+                )
+                earnings_list = (cal or {}).get("earningsCalendar", [])
+                if not earnings_list:
+                    return {"next_date": None, "days_to_earnings": None, "historical_reactions": []}
+                # Sort by date ascending and pick first future date
+                import datetime as _dt
+                today = _dt.date.today()
+                future = [e for e in earnings_list if e.get("date")]
+                future.sort(key=lambda x: x["date"])
+                next_event = future[0] if future else None
+                next_date = next_event["date"] if next_event else None
+                days = None
+                if next_date:
+                    try:
+                        d = _dt.date.fromisoformat(next_date)
+                        days = (d - today).days
+                    except Exception:
+                        pass
+                return {
+                    "next_date": next_date,
+                    "days_to_earnings": days,
+                    "historical_reactions": [],
+                }
+            except Exception as exc:
+                log.warning("Earnings calendar unavailable for %s: %s", symbol, exc)
+                return {"next_date": None, "days_to_earnings": None, "historical_reactions": []}
+        return self._cached(f"earnings_cal:{symbol}", _fetch, ttl=3600 * 6)
+
+    # ------------------------------------------------------------------
+    # P5.4: Insider Trading
+    # ------------------------------------------------------------------
+
+    def get_insider_transactions(self, symbol: str) -> list:
+        """Return insider transactions for the last 90 days.
+
+        Each entry: {name, share, change, transactionDate, transactionCode}
+        transactionCode: 'P' = purchase, 'S' = sale
+        """
+        def _fetch():
+            try:
+                import time as _t
+                to_dt = _t.strftime("%Y-%m-%d")
+                from_dt = _t.strftime(
+                    "%Y-%m-%d",
+                    _t.localtime(_t.time() - 90 * 24 * 3600)
+                )
+                data = self.client.stock_insider_transactions(
+                    symbol, _from=from_dt, to=to_dt
+                )
+                txns = (data or {}).get("data", [])
+                return txns if txns else []
+            except Exception as exc:
+                log.warning("Insider transactions unavailable for %s: %s", symbol, exc)
+                return []
+        return self._cached(f"insider:{symbol}", _fetch, ttl=3600 * 12)
+
+    # ------------------------------------------------------------------
+    # P5.5: Short Interest
+    # ------------------------------------------------------------------
+
+    def get_short_interest(self, symbol: str) -> dict:
+        """Return short interest data.
+
+        Falls back to yfinance for short percent of float if Finnhub unavailable.
+        Returns: {short_interest (shares), short_pct_float, days_to_cover, available}
+        """
+        def _fetch():
+            # Try yfinance first as it has better short data
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                info = ticker.info or {}
+                short_pct = info.get("shortPercentOfFloat")
+                shares_short = info.get("sharesShort")
+                avg_vol = info.get("averageVolume")
+                days_to_cover = None
+                if shares_short and avg_vol and avg_vol > 0:
+                    days_to_cover = round(shares_short / avg_vol, 1)
+                return {
+                    "available": short_pct is not None,
+                    "short_pct_float": round(float(short_pct) * 100, 2) if short_pct else None,
+                    "shares_short": shares_short,
+                    "days_to_cover": days_to_cover,
+                }
+            except Exception as exc:
+                log.warning("Short interest unavailable for %s: %s", symbol, exc)
+                return {"available": False}
+        return self._cached(f"short_interest:{symbol}", _fetch, ttl=3600 * 6)
+
+    # ------------------------------------------------------------------
+    # P5.6 / P8.3: Macroeconomic Context & Live Risk-Free Rate
+    # ------------------------------------------------------------------
+
+    def get_macro_context(self) -> dict:
+        """Return VIX, yield spread, and 3-month T-bill rate.
+
+        Uses yfinance for VIX and Treasury data (free, no key required).
+        Returns: {vix, yield_2y, yield_10y, spread_2y10y, tbill_3m, risk_free_rate}
+        """
+        def _fetch():
+            result = {
+                "vix": None,
+                "yield_2y": None,
+                "yield_10y": None,
+                "spread_2y10y": None,
+                "tbill_3m": None,
+                "risk_free_rate": 0.05,  # default fallback
+            }
+            try:
+                import yfinance as yf
+                # Fetch VIX, 2Y, 10Y Treasury, 3M T-bill
+                tickers = yf.download(
+                    ["^VIX", "^IRX", "^TNX", "^TYX"],
+                    period="5d",
+                    progress=False,
+                    auto_adjust=True,
+                )
+                if tickers is not None and not tickers.empty:
+                    close = tickers["Close"] if "Close" in tickers else tickers
+                    def _last(col):
+                        try:
+                            s = close[col].dropna()
+                            return float(s.iloc[-1]) if len(s) > 0 else None
+                        except Exception:
+                            return None
+
+                    vix = _last("^VIX")
+                    irx = _last("^IRX")   # 13-week T-bill rate (annualized %)
+                    tnx = _last("^TNX")   # 10Y Treasury yield
+                    # 2Y not directly available; use ^TNX - spread approximation
+                    tyx = _last("^TYX")   # 30Y Treasury
+
+                    result["vix"] = round(vix, 2) if vix else None
+                    result["yield_10y"] = round(tnx / 10, 3) if tnx else None  # ^TNX is in *10
+                    # ^TNX reports in units of 0.1%, so actual yield = value / 10
+                    tnx_pct = round(tnx / 10, 3) if tnx else None
+                    irx_pct = round(irx / 10, 3) if irx else None
+                    result["yield_10y"] = tnx_pct
+                    result["tbill_3m"] = irx_pct
+                    if irx_pct:
+                        result["risk_free_rate"] = irx_pct / 100
+
+                    # 2Y not directly in yfinance; approximate from ^TNX and ^IRX midpoint
+                    if tnx_pct and irx_pct:
+                        yield_2y = (tnx_pct + irx_pct) / 2
+                        result["yield_2y"] = round(yield_2y, 3)
+                        result["spread_2y10y"] = round(tnx_pct - yield_2y, 3)
+            except Exception as exc:
+                log.warning("Macro context fetch failed: %s", exc)
+            return result
+        return self._cached("macro_context", _fetch, ttl=3600 * 24)
+
+    def get_risk_free_rate(self) -> float:
+        """Return the current 3-month T-bill rate (as decimal, e.g., 0.05 = 5%).
+
+        Cached for 24 hours. Falls back to 5% if unavailable.
+        """
+        macro = self.get_macro_context()
+        return macro.get("risk_free_rate", 0.05)
+
+    # ------------------------------------------------------------------
+    # P5.2: Analyst Estimate Revisions
+    # ------------------------------------------------------------------
+
+    def get_estimate_revisions(self, symbol: str) -> dict:
+        """Return EPS estimate revision data from yfinance.
+
+        Returns dict with current_estimate, revision_direction ('up'|'down'|'flat'),
+        analyst_count.
+        """
+        def _fetch():
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                info = ticker.info or {}
+                # Use forward EPS and number of analyst opinions as proxy
+                forward_eps = info.get("forwardEps")
+                trailing_eps = info.get("trailingEps")
+                analyst_count = info.get("numberOfAnalystOpinions")
+                recommendation_mean = info.get("recommendationMean")  # 1=Strong Buy, 5=Sell
+
+                # Try to get earnings estimates history
+                try:
+                    earnings_df = ticker.earnings_history
+                    if earnings_df is not None and not earnings_df.empty:
+                        # Check surprise direction for recent quarters
+                        recent = earnings_df.tail(4)
+                        pos_surprises = (recent["Surprise(%)"] > 0).sum() if "Surprise(%)" in recent.columns else 0
+                        neg_surprises = (recent["Surprise(%)"] < 0).sum() if "Surprise(%)" in recent.columns else 0
+                        if pos_surprises > neg_surprises:
+                            direction = "up"
+                        elif neg_surprises > pos_surprises:
+                            direction = "down"
+                        else:
+                            direction = "flat"
+                    else:
+                        direction = "flat"
+                except Exception:
+                    direction = "flat"
+
+                return {
+                    "forward_eps": forward_eps,
+                    "trailing_eps": trailing_eps,
+                    "analyst_count": analyst_count,
+                    "recommendation_mean": recommendation_mean,
+                    "revision_direction": direction,
+                    "available": forward_eps is not None,
+                }
+            except Exception as exc:
+                log.warning("Estimate revisions unavailable for %s: %s", symbol, exc)
+                return {"available": False, "revision_direction": "flat"}
+        return self._cached(f"estimates:{symbol}", _fetch, ttl=3600 * 12)

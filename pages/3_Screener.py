@@ -1,29 +1,57 @@
-"""Stock Screener page (P2.1 + P3.1)."""
+"""Stock Screener page (P2.1 + P3.1 + P7.1 + P7.2 + P7.3)."""
 
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from screener import run_screen, default_universe
+from screener import (
+    run_screen, default_universe, load_universe,
+    results_to_csv, sentiment_skipped_warning,
+    save_screen_template, load_screen_templates, delete_screen_template,
+)
 
 st.set_page_config(page_title="Stock Screener", page_icon="🔍", layout="wide")
 st.title("Stock Screener")
 st.caption(
     "Filter stocks by factor score, risk score, P/E, RSI, and more. "
-    "Supports both manual rule-based filters and AI natural-language queries."
+    "Supports rule-based filters with AND/OR logic and AI natural-language queries."
 )
 
+# P7.3: Sentiment warning
+st.info(sentiment_skipped_warning())
+
 # -------------------------------------------------------------------------
-# Ticker universe
+# P7.1: Ticker universe selector
 # -------------------------------------------------------------------------
 st.subheader("Ticker Universe")
-universe_mode = st.radio(
-    "Universe", ["Default (S&P 500 sample)", "Custom tickers"], horizontal=True
-)
 
-if universe_mode == "Default (S&P 500 sample)":
+universe_col1, universe_col2 = st.columns([2, 2])
+with universe_col1:
+    universe_mode = st.radio(
+        "Universe",
+        ["Default (config sample)", "S&P 500 (100 largest)", "Russell 1000 (extended)", "Custom tickers"],
+        horizontal=False,
+    )
+
+with universe_col2:
+    # P7.1: Sector filter
+    sector_filter = st.selectbox(
+        "Sector filter (optional)",
+        ["All sectors", "Technology", "Healthcare", "Financials", "Consumer Discretionary",
+         "Consumer Staples", "Industrials", "Energy", "Utilities", "Materials",
+         "Real Estate", "Communication Services"],
+    )
+    sector_filter_val = None if sector_filter == "All sectors" else sector_filter
+
+if universe_mode == "Default (config sample)":
     universe = default_universe()
     st.caption(f"Using {len(universe)} pre-configured tickers: {', '.join(universe[:10])}...")
+elif universe_mode == "S&P 500 (100 largest)":
+    universe = load_universe("sp500")
+    st.caption(f"Loaded {len(universe)} S&P 500 tickers.")
+elif universe_mode == "Russell 1000 (extended)":
+    universe = load_universe("russell1000")
+    st.caption(f"Loaded {len(universe)} Russell 1000 tickers.")
 else:
     raw = st.text_area(
         "Enter tickers (comma or newline separated)",
@@ -37,6 +65,37 @@ else:
     st.caption(f"{len(universe)} tickers entered.")
 
 # -------------------------------------------------------------------------
+# P7.3: Screen template save/load
+# -------------------------------------------------------------------------
+with st.expander("Screen Templates (Save / Load)", expanded=False):
+    templates = load_screen_templates()
+    tpl_col1, tpl_col2 = st.columns(2)
+    with tpl_col1:
+        if templates:
+            selected_tpl = st.selectbox("Load template", ["— select —"] + list(templates.keys()))
+            if selected_tpl != "— select —":
+                if st.button("Load Selected Template"):
+                    st.session_state.screener_filters = templates[selected_tpl]
+                    st.success(f"Loaded template: {selected_tpl}")
+                    st.rerun()
+            if st.button("Delete Selected Template", type="secondary"):
+                delete_screen_template(selected_tpl)
+                st.success(f"Deleted: {selected_tpl}")
+                st.rerun()
+        else:
+            st.caption("No saved templates yet.")
+    with tpl_col2:
+        tpl_name = st.text_input("Save current filters as template", placeholder="Template name")
+        if st.button("Save Template") and tpl_name:
+            current_filters = st.session_state.get("screener_filters", [])
+            if current_filters:
+                save_screen_template(tpl_name, current_filters)
+                st.success(f"Saved template: {tpl_name}")
+                st.rerun()
+            else:
+                st.warning("No active filters to save.")
+
+# -------------------------------------------------------------------------
 # Query mode
 # -------------------------------------------------------------------------
 st.subheader("Filters")
@@ -45,11 +104,15 @@ query_mode = st.radio("Query mode", ["Manual filters", "AI natural language quer
 filters = []
 
 if query_mode == "Manual filters":
-    with st.expander("Add filters", expanded=True):
+    # P7.2: AND/OR group support
+    with st.expander("Add filter group", expanded=True):
+        st.caption("Add filter groups — each group can use AND or OR logic. Groups are combined with AND.")
+
+        # Group 1 (primary AND group)
         fc1, fc2, fc3 = st.columns(3)
         min_factor = fc1.slider("Min factor score", 0, 100, 55)
         max_risk = fc2.slider("Max risk score", 0, 100, 60)
-        min_factor_add = fc3.checkbox("Apply factor filter", value=True)
+        min_factor_add = fc3.checkbox("Apply quality filters", value=True)
 
         rc1, rc2, rc3 = st.columns(3)
         filter_pe = rc1.checkbox("Max P/E")
@@ -57,6 +120,25 @@ if query_mode == "Manual filters":
         filter_rsi_low = rc2.checkbox("RSI > (oversold guard)")
         min_rsi = rc2.number_input("Min RSI", value=30.0, disabled=not filter_rsi_low)
         filter_trend = rc3.checkbox("Only uptrends")
+
+        # P7.2: OR group section
+        st.markdown("**OR-Logic Group** (stock must match at least ONE of these criteria)")
+        or_col1, or_col2 = st.columns(2)
+        use_or_group = or_col1.checkbox("Enable OR criteria group")
+        or_filters = []
+        if use_or_group:
+            filter_high_factor = or_col1.checkbox("High factor score (≥ 75)")
+            filter_low_risk = or_col2.checkbox("Low risk score (≤ 30)")
+            filter_high_div = or_col2.checkbox("High dividend yield (proxy: factor ≥ 65)")
+            if filter_high_factor:
+                or_filters.append({"dimension": "factor_score", "operator": ">=", "value": 75,
+                                    "label": "Factor ≥ 75"})
+            if filter_low_risk:
+                or_filters.append({"dimension": "risk_score", "operator": "<=", "value": 30,
+                                    "label": "Risk ≤ 30"})
+            if filter_high_div:
+                or_filters.append({"dimension": "factor_score", "operator": ">=", "value": 65,
+                                    "label": "Factor ≥ 65"})
 
         if min_factor_add:
             filters.append({"dimension": "factor_score", "operator": ">=", "value": min_factor,
@@ -72,12 +154,23 @@ if query_mode == "Manual filters":
         if filter_trend:
             filters.append({"dimension": "trend", "operator": "==", "value": "uptrend",
                             "label": "Uptrend"})
+        # P7.2: Add OR group if configured
+        if use_or_group and or_filters:
+            filters.append({"connector": "OR", "filters": or_filters,
+                            "label": "OR: " + " / ".join(f["label"] for f in or_filters)})
+
+    # Store in session state for template saving
+    st.session_state.screener_filters = filters
 
     if filters:
-        st.caption("Active filters: " + " · ".join(f["label"] for f in filters))
+        display_filters = [f for f in filters if "connector" not in f]
+        or_groups = [f for f in filters if "connector" in f]
+        labels = [f["label"] for f in display_filters]
+        if or_groups:
+            labels += [f["label"] for f in or_groups]
+        st.caption("Active filters: " + " · ".join(labels))
 
 else:  # AI NL query
-    # Session state for conversation-style refinement
     if "screener_filters" not in st.session_state:
         st.session_state.screener_filters = []
     if "screener_query_history" not in st.session_state:
@@ -101,12 +194,13 @@ else:  # AI NL query
             except Exception as e:
                 st.error(f"Could not parse query: {e}")
 
-    # Show active filters and allow follow-up refinement
     if st.session_state.screener_filters:
         st.caption(
             f"Active filters ({len(st.session_state.screener_filters)}): "
             + " · ".join(
                 f"{f.get('dimension')} {f.get('operator')} {f.get('value')}"
+                if "connector" not in f
+                else f"[OR group: {len(f.get('filters', []))} filters]"
                 for f in st.session_state.screener_filters
             )
         )
@@ -127,11 +221,10 @@ else:  # AI NL query
                     parsed = parse_nl_screen(context)
                     new_filters = parsed.get("filters", [])
                     if new_filters:
-                        # Merge: new filters override any existing same-dimension filters
-                        existing_dims = {f["dimension"] for f in new_filters}
+                        existing_dims = {f["dimension"] for f in new_filters if "connector" not in f}
                         merged = [
                             f for f in st.session_state.screener_filters
-                            if f["dimension"] not in existing_dims
+                            if "connector" in f or f["dimension"] not in existing_dims
                         ] + new_filters
                         st.session_state.screener_filters = merged
                         st.session_state.screener_query_history.append(refine_query)
@@ -150,7 +243,6 @@ else:  # AI NL query
                     st.markdown(f"{i + 1}. {q}")
 
     filters = st.session_state.screener_filters
-    parsed_filters = filters
 
 # -------------------------------------------------------------------------
 # Run screen
@@ -162,7 +254,6 @@ if st.button("Run Screen", type="primary"):
 
     progress_bar = st.progress(0)
     status = st.empty()
-    results_container = st.empty()
 
     status.info(f"Screening {len(universe)} tickers... (this may take a minute)")
 
@@ -180,6 +271,16 @@ if st.button("Run Screen", type="primary"):
         st.stop()
 
     st.success(f"Found **{len(results)}** stocks matching your criteria.")
+
+    # P7.3: Export CSV button
+    csv_data = results_to_csv(results)
+    if csv_data:
+        st.download_button(
+            label="Export Results to CSV",
+            data=csv_data,
+            file_name="screener_results.csv",
+            mime="text/csv",
+        )
 
     # Display results table
     rows = []
@@ -229,10 +330,10 @@ if st.button("Run Screen", type="primary"):
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Top 10 scatter: factor score vs. risk score
+    # Factor score vs. risk score scatter
     st.subheader("Factor Score vs. Risk Score")
     fig_scatter = go.Figure()
-    for r in results[:50]:  # limit for readability
+    for r in results[:50]:
         color = r.get("composite_color", "#888")
         fig_scatter.add_trace(go.Scatter(
             x=[r["risk_score"]],
@@ -244,7 +345,6 @@ if st.button("Run Screen", type="primary"):
             showlegend=False,
             hovertemplate=f"<b>{r['symbol']}</b><br>Factor: {r['factor_score']}<br>Risk: {r['risk_score']}<extra></extra>",
         ))
-    # Add quadrant lines
     fig_scatter.add_hline(y=55, line_dash="dot", line_color="#888", opacity=0.5)
     fig_scatter.add_vline(x=45, line_dash="dot", line_color="#888", opacity=0.5)
     fig_scatter.update_layout(

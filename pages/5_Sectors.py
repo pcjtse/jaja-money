@@ -1,4 +1,4 @@
-"""Sector & Industry Rotation Tracker page (P3.3)."""
+"""Sector & Industry Rotation Tracker page (P3.3 + P9.4)."""
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -6,6 +6,7 @@ import pandas as pd
 
 from api import FinnhubAPI
 from sectors import get_sector_data, classify_rotation_phase
+from analyzer import stream_sector_rotation_narrative
 
 st.set_page_config(page_title="Sector Rotation", page_icon="🔄", layout="wide")
 st.title("Sector & Industry Rotation Tracker")
@@ -176,48 +177,19 @@ if st.button("Load Sector Data", type="primary"):
     st.plotly_chart(fig_quad, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # Claude commentary
+    # Claude commentary (P9.4: uses stream_sector_rotation_narrative with caching)
     # -------------------------------------------------------------------------
-    st.subheader("AI Sector Rotation Commentary")
+    st.subheader("AI Sector Rotation Commentary (P9.4)")
+    use_cache = st.checkbox("Use cached sector analysis if available", value=True, key="sec_cache")
     if st.button("Generate Sector Analysis with Claude"):
-        from analyzer import _get_client
-        client = _get_client()
-
-        sector_summary = "\n".join(
-            f"- {d['ticker']} ({d['name']}): score={d.get('score', 'N/A')}, "
-            f"phase={d.get('phase', 'N/A')}, "
-            f"1M={d['perf_1m']:+.1f}%, 3M={d['perf_3m']:+.1f}%"
-            if d.get('perf_1m') is not None and d.get('perf_3m') is not None
-            else f"- {d['ticker']} ({d['name']}): data unavailable"
-            for d in data
-        )
-
-        prompt = f"""## Sector Rotation Analysis
-
-**Current Sector Momentum (sorted by score):**
-{sector_summary}
-
-Please provide:
-1. **Leading Sectors** — what's driving them and the macro narrative
-2. **Lagging Sectors** — key headwinds and potential turning points
-3. **Rotation Signals** — any notable rotation patterns (e.g., defensive to cyclical, or vice versa)
-4. **Macro Implications** — what this sector picture tells us about the economic cycle
-5. **Tactical Recommendations** — 2-3 actionable ideas for sector positioning
-
-Be specific and data-driven. Reference actual performance numbers."""
-
         placeholder = st.empty()
         text = ""
         with st.spinner("Claude is analyzing sectors..."):
-            with client.messages.stream(
-                model="claude-opus-4-6",
-                max_tokens=1200,
-                messages=[{"role": "user", "content": prompt}],
-            ) as stream:
-                for event in stream:
-                    if (event.type == "content_block_delta" and
-                            event.delta.type == "text_delta"):
-                        text += event.delta.text
-                        placeholder.markdown(text)
+            try:
+                for chunk in stream_sector_rotation_narrative(data, use_cache=use_cache):
+                    text += chunk
+                    placeholder.markdown(text)
+            except Exception as e:
+                st.error(f"Sector analysis failed: {e}")
 else:
     st.info("Click **Load Sector Data** to fetch and analyze all 11 sector ETFs.")

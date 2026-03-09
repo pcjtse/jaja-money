@@ -1,11 +1,13 @@
-"""Backtesting Engine page (P3.2)."""
+"""Backtesting Engine page (P3.2 + P6.1 + P6.2 + P6.3 + P9.3)."""
 
 import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
 
 from api import FinnhubAPI
-from backtest import run_backtest
+from backtest import run_backtest, run_walk_forward, run_parameter_sweep
+from analyzer import stream_backtest_narrative
 
 st.set_page_config(page_title="Backtest", page_icon="📊", layout="wide")
 st.title("Strategy Backtesting")
@@ -30,6 +32,22 @@ lookback = col4.selectbox(
 )
 lookback_years = {"1 year": 1.0, "2 years": 2.0, "3 years": 3.0, "5 years": 5.0}[lookback]
 
+# P6.3: Transaction costs
+with st.expander("Transaction Costs (P6.3)", expanded=False):
+    tc_col1, tc_col2 = st.columns(2)
+    commission_pct = tc_col1.number_input(
+        "Commission per trade (%)", min_value=0.0, max_value=1.0, value=0.1, step=0.05
+    ) / 100
+    slippage_pct = tc_col2.number_input(
+        "Slippage per side (%)", min_value=0.0, max_value=0.5, value=0.05, step=0.01
+    ) / 100
+
+# P6.1: Walk-forward validation toggle
+enable_walkforward = st.checkbox("Enable walk-forward validation (70%/30% in/out-of-sample)", value=False)
+
+# P6.2: Parameter sweep toggle
+enable_sweep = st.checkbox("Enable parameter sensitivity sweep", value=False)
+
 with st.expander("How the signal works"):
     st.markdown("""
     The **Signal Score (0-100)** is a price-based composite:
@@ -40,7 +58,10 @@ with st.expander("How the signal works"):
     **Entry:** Buy when signal ≥ entry threshold.
     **Exit:** Sell when signal ≤ exit threshold.
 
-    Note: This uses only price data (no fundamental data) for historical backtesting.
+    **Note (P6.1 Fix):** Signal computation uses an expanding window — only data
+    available up to each bar is used, eliminating look-ahead bias.
+
+    Transaction costs (commission + slippage) are deducted from each trade (P6.3).
     """)
 
 # -------------------------------------------------------------------------
@@ -68,6 +89,113 @@ if st.button("Run Backtest", type="primary"):
             st.error(f"Could not fetch price data: {e}")
             st.stop()
 
+    # -------------------------------------------------------------------------
+    # Walk-forward validation (P6.1)
+    # -------------------------------------------------------------------------
+    if enable_walkforward:
+        st.subheader("Walk-Forward Validation (P6.1)")
+        with st.spinner("Running walk-forward validation..."):
+            try:
+                in_result, out_result = run_walk_forward(
+                    df=df,
+                    symbol=symbol,
+                    entry_threshold=entry_threshold,
+                    exit_threshold=exit_threshold,
+                    commission_pct=commission_pct,
+                    slippage_pct=slippage_pct,
+                )
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
+
+        wf_col1, wf_col2 = st.columns(2)
+        with wf_col1:
+            st.markdown("**In-Sample (70% of history)**")
+            st.metric("Strategy Return", f"{in_result.total_return_pct:+.1f}%",
+                      f"{in_result.total_return_pct - in_result.benchmark_return_pct:+.1f}% vs B&H")
+            st.metric("Sharpe Ratio", f"{in_result.sharpe_ratio:.2f}" if in_result.sharpe_ratio else "N/A")
+            st.metric("Max Drawdown", f"{in_result.max_drawdown_pct:.1f}%")
+            st.metric("Win Rate", f"{in_result.win_rate_pct:.1f}% ({in_result.total_trades} trades)")
+        with wf_col2:
+            st.markdown("**Out-of-Sample (30% of history)**")
+            st.metric("Strategy Return", f"{out_result.total_return_pct:+.1f}%",
+                      f"{out_result.total_return_pct - out_result.benchmark_return_pct:+.1f}% vs B&H")
+            st.metric("Sharpe Ratio", f"{out_result.sharpe_ratio:.2f}" if out_result.sharpe_ratio else "N/A")
+            st.metric("Max Drawdown", f"{out_result.max_drawdown_pct:.1f}%")
+            st.metric("Win Rate", f"{out_result.win_rate_pct:.1f}% ({out_result.total_trades} trades)")
+
+        if in_result.sharpe_ratio and out_result.sharpe_ratio:
+            degradation = in_result.sharpe_ratio - out_result.sharpe_ratio
+            if degradation > 0.5:
+                st.warning(
+                    f"⚠️ Significant Sharpe degradation out-of-sample ({degradation:+.2f}). "
+                    f"Strategy may be overfitted to historical data."
+                )
+            elif degradation < 0.1:
+                st.success(
+                    f"✅ Minimal Sharpe degradation out-of-sample ({degradation:+.2f}). "
+                    f"Strategy appears robust."
+                )
+
+    # -------------------------------------------------------------------------
+    # Parameter Sensitivity Sweep (P6.2)
+    # -------------------------------------------------------------------------
+    if enable_sweep:
+        st.subheader("Parameter Sensitivity Sweep (P6.2)")
+        with st.spinner("Running parameter sweep (up to 16 combinations)..."):
+            try:
+                sweep = run_parameter_sweep(
+                    df=df,
+                    symbol=symbol,
+                    commission_pct=commission_pct,
+                    slippage_pct=slippage_pct,
+                    lookback_years=lookback_years,
+                )
+            except Exception as e:
+                st.error(f"Parameter sweep failed: {e}")
+                sweep = None
+
+        if sweep:
+            best = sweep["best_params"]
+            sharpe_str = f"{best['sharpe']:.2f}" if best.get("sharpe") else "N/A"
+            ret_str = f"{best['total_return']:.1f}%" if best.get("total_return") is not None else "N/A"
+            st.info(
+                f"**Best parameters:** Entry={best['entry']}, Exit={best['exit']}, "
+                f"Sharpe={sharpe_str}, Return={ret_str}"
+            )
+            if sweep["boundary_warning"]:
+                st.warning(
+                    "⚠️ Optimal parameters are at the boundary of the tested range. "
+                    "This may indicate overfitting — consider expanding the parameter grid."
+                )
+
+            sharpe_grid = sweep["grid_sharpe"]
+            if not sharpe_grid.empty:
+                fig_heat = px.imshow(
+                    sharpe_grid.astype(float).round(2),
+                    labels=dict(x="Exit Threshold", y="Entry Threshold", color="Sharpe"),
+                    title="Sharpe Ratio by Entry/Exit Threshold",
+                    color_continuous_scale="RdYlGn",
+                    text_auto=True,
+                )
+                fig_heat.update_layout(height=300, margin=dict(t=40))
+                st.plotly_chart(fig_heat, use_container_width=True)
+
+            return_grid = sweep["grid_return"]
+            if not return_grid.empty:
+                fig_heat2 = px.imshow(
+                    return_grid.astype(float).round(1),
+                    labels=dict(x="Exit Threshold", y="Entry Threshold", color="Return %"),
+                    title="Total Return % by Entry/Exit Threshold",
+                    color_continuous_scale="RdYlGn",
+                    text_auto=True,
+                )
+                fig_heat2.update_layout(height=300, margin=dict(t=40))
+                st.plotly_chart(fig_heat2, use_container_width=True)
+
+    # -------------------------------------------------------------------------
+    # Main backtest results
+    # -------------------------------------------------------------------------
     with st.spinner("Running backtest..."):
         try:
             result = run_backtest(
@@ -76,6 +204,8 @@ if st.button("Run Backtest", type="primary"):
                 entry_threshold=entry_threshold,
                 exit_threshold=exit_threshold,
                 lookback_years=lookback_years,
+                commission_pct=commission_pct,
+                slippage_pct=slippage_pct,
             )
         except ValueError as e:
             st.error(str(e))
@@ -84,40 +214,42 @@ if st.button("Run Backtest", type="primary"):
             st.error(f"Backtest failed: {e}")
             st.stop()
 
-    # -------------------------------------------------------------------------
     # Performance summary
-    # -------------------------------------------------------------------------
     st.subheader("Performance Summary")
 
     vs_bench = result.total_return_pct - result.benchmark_return_pct
-    kc1, kc2, kc3, kc4, kc5 = st.columns(5)
+    kc1, kc2, kc3, kc4, kc5, kc6 = st.columns(6)
     kc1.metric(
-        "Strategy Return",
+        "Net Strategy Return",
         f"{result.total_return_pct:+.1f}%",
         f"{vs_bench:+.1f}% vs buy-and-hold",
     )
-    kc2.metric("CAGR", f"{result.cagr_pct:+.1f}%")
-    kc3.metric("Sharpe Ratio", f"{result.sharpe_ratio:.2f}" if result.sharpe_ratio else "N/A")
-    kc4.metric("Max Drawdown", f"{result.max_drawdown_pct:.1f}%")
-    kc5.metric("Win Rate", f"{result.win_rate_pct:.1f}%",
+    kc2.metric(
+        "Gross Return",
+        f"{result.gross_return_pct:+.1f}%",
+        f"Costs: -{result.total_cost_pct:.2f}%",
+    )
+    kc3.metric("CAGR", f"{result.cagr_pct:+.1f}%")
+    kc4.metric("Sharpe Ratio", f"{result.sharpe_ratio:.2f}" if result.sharpe_ratio else "N/A")
+    kc5.metric("Max Drawdown", f"{result.max_drawdown_pct:.1f}%")
+    kc6.metric("Win Rate", f"{result.win_rate_pct:.1f}%",
                f"{result.total_trades} trades")
 
     st.caption(
-        f"Backtest period: {result.start_date} → {result.end_date}  |  "
-        f"Buy-and-hold return: {result.benchmark_return_pct:+.1f}%  |  "
-        f"Entry threshold: {result.entry_threshold}  Exit threshold: {result.exit_threshold}"
+        f"Period: {result.start_date} → {result.end_date}  |  "
+        f"Buy-and-hold: {result.benchmark_return_pct:+.1f}%  |  "
+        f"Entry: {result.entry_threshold}  Exit: {result.exit_threshold}  |  "
+        f"Commission: {commission_pct*100:.2f}%  Slippage: {slippage_pct*100:.2f}%/side"
     )
 
-    # -------------------------------------------------------------------------
     # Equity curve
-    # -------------------------------------------------------------------------
     st.subheader("Equity Curve vs. Buy-and-Hold")
 
     fig_equity = go.Figure()
     fig_equity.add_trace(go.Scatter(
         x=result.equity_dates,
         y=[v * 100 for v in result.equity_curve],
-        name="Strategy",
+        name="Strategy (Net of Costs)",
         line=dict(color="#2da44e", width=2),
     ))
     fig_equity.add_trace(go.Scatter(
@@ -136,9 +268,7 @@ if st.button("Run Backtest", type="primary"):
     )
     st.plotly_chart(fig_equity, use_container_width=True)
 
-    # -------------------------------------------------------------------------
     # Trade list
-    # -------------------------------------------------------------------------
     if result.trades:
         st.subheader(f"Trade History ({len(result.trades)} trades)")
         trade_rows = []
@@ -148,14 +278,13 @@ if st.button("Run Backtest", type="primary"):
                 "Exit Date": t.exit_date,
                 "Entry Price": f"${t.entry_price:,.2f}",
                 "Exit Price": f"${t.exit_price:,.2f}",
-                "P&L %": f"{t.pnl_pct:+.1f}%",
+                "P&L % (Net)": f"{t.pnl_pct:+.1f}%",
                 "Result": "✅ Win" if t.is_win else "❌ Loss",
                 "Signal @ Entry": t.signal_at_entry,
             })
         trade_df = pd.DataFrame(trade_rows)
         st.dataframe(trade_df, use_container_width=True, hide_index=True)
 
-        # P&L histogram
         pnls = [t.pnl_pct for t in result.trades]
         fig_pnl = go.Figure(go.Histogram(
             x=pnls,
@@ -166,56 +295,26 @@ if st.button("Run Backtest", type="primary"):
         fig_pnl.add_vline(x=0, line_dash="dash", line_color="#333")
         fig_pnl.update_layout(
             height=250,
-            xaxis_title="Trade P&L %",
+            xaxis_title="Trade P&L % (Net of Costs)",
             yaxis_title="Count",
             margin=dict(t=10),
         )
         st.plotly_chart(fig_pnl, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # Claude commentary
+    # Claude commentary (P9.3)
     # -------------------------------------------------------------------------
-    st.subheader("AI Backtest Commentary")
+    st.subheader("AI Backtest Commentary (P9.3)")
+    use_cache = st.checkbox("Use cached Claude analysis if available", value=True, key="bt_cache")
     if st.button("Analyze with Claude"):
-        from analyzer import _get_client
-        client = _get_client()
-
-        prompt = f"""## Backtest Analysis: {symbol}
-
-**Strategy:** Price-based factor signal (SMA trend 40% + RSI 30% + MACD 30%)
-**Entry threshold:** {result.entry_threshold} | **Exit threshold:** {result.exit_threshold}
-**Period:** {result.start_date} to {result.end_date}
-
-**Results:**
-- Strategy total return: {result.total_return_pct:+.1f}%
-- Buy-and-hold return: {result.benchmark_return_pct:+.1f}%
-- Alpha vs. buy-and-hold: {result.total_return_pct - result.benchmark_return_pct:+.1f}%
-- CAGR: {result.cagr_pct:+.1f}%
-- Sharpe ratio: {result.sharpe_ratio}
-- Max drawdown: {result.max_drawdown_pct:.1f}%
-- Win rate: {result.win_rate_pct:.1f}% ({result.total_trades} trades)
-
-Please provide:
-1. **Performance Assessment** — is this strategy adding value over buy-and-hold?
-2. **Risk Assessment** — drawdown and Sharpe analysis
-3. **Strategy Robustness** — what could be driving the results (genuine alpha vs. luck)
-4. **Weaknesses** — specific risks in using this strategy going forward
-5. **Improvement Ideas** — concrete suggestions to improve the signal
-
-Be analytical and honest about limitations."""
-
         placeholder = st.empty()
         text = ""
         with st.spinner("Claude is analyzing backtest results..."):
-            with client.messages.stream(
-                model="claude-opus-4-6",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            ) as stream:
-                for event in stream:
-                    if (event.type == "content_block_delta" and
-                            event.delta.type == "text_delta"):
-                        text += event.delta.text
-                        placeholder.markdown(text)
+            try:
+                for chunk in stream_backtest_narrative(result, use_cache=use_cache):
+                    text += chunk
+                    placeholder.markdown(text)
+            except Exception as e:
+                st.error(f"Analysis failed: {e}")
 else:
     st.info("Configure parameters above and click **Run Backtest** to start.")
