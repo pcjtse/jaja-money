@@ -550,6 +550,240 @@ Prevent long chat sessions from silently hitting the context window limit.
 
 ---
 
+---
+
+## Priority 10 — Advanced AI & Agentic Features
+
+### 10.1 Automated Daily Watchlist Digest
+Generate and deliver a Claude-written morning briefing for all tickers on the watchlist.
+
+- [ ] Schedule a daily digest job (APScheduler or cron) that runs pre-market
+- [ ] For each watchlist ticker: fetch overnight news, after-hours price moves, and flag changes
+- [ ] Claude writes a concise narrative for each ticker — "what changed since yesterday"
+- [ ] Deliver digest via email (SMTP) or save to `~/.jaja-money/digests/YYYY-MM-DD.html`
+- [ ] Add "View Digest" panel in the sidebar showing the latest report
+
+**Files:** `digest.py`, `alerts.py`, `analyzer.py`
+
+---
+
+### 10.2 SEC EDGAR Filing Analysis
+Fetch and analyze 10-K / 10-Q / 8-K filings directly so users don't have to read them manually.
+
+- [ ] Query SEC EDGAR full-text search API for the most recent filings for a given ticker
+- [ ] Download and chunk the filing text (risk factors, MD&A, financial statements)
+- [ ] Stream Claude analysis: key risks, revenue drivers, guidance language, red flags
+- [ ] Compare current filing language to prior quarter (diffing key sections)
+- [ ] Add "Analyze Latest Filing" button in the Fundamental Analysis section
+
+**Files:** `edgar.py`, `analyzer.py`, `app.py`
+
+---
+
+### 10.3 Autonomous Research Agent Mode
+Let Claude autonomously plan and execute a multi-step research workflow for a stock.
+
+- [ ] Add an "Agent Mode" toggle that gives Claude tool-call authority over the app's data fetchers
+- [ ] Claude decides which data to pull (news, earnings, insider trades, options, peers) based on the question
+- [ ] Claude synthesizes findings into a structured investment memo (bear / base / bull case)
+- [ ] Show a step-by-step reasoning trace in an expandable panel ("Here's what I looked at…")
+- [ ] Cap agent turns at 10 to avoid runaway API costs; show token count
+
+**Files:** `agent.py`, `analyzer.py`, `app.py`
+
+---
+
+### 10.4 Earnings Prediction & Surprise Tracker
+Build a model that estimates the probability of an earnings beat using historical patterns.
+
+- [ ] Fetch last 8 quarters of EPS actuals vs. estimates for any ticker
+- [ ] Compute beat rate, average surprise %, and trend direction
+- [ ] Claude interprets the pattern and assigns a qualitative beat probability
+- [ ] Surface "beat probability" badge next to the earnings calendar widget
+- [ ] Track predicted vs. actual outcomes in history.db for model calibration
+
+**Files:** `factors.py`, `api.py`, `history.py`, `app.py`
+
+---
+
+### 10.5 Multi-Modal: Upload & Analyze Financial PDFs
+Allow users to upload 10-K / earnings slides / research reports for Claude to analyze.
+
+- [ ] Add a file uploader widget (PDF, max 20 MB) in a new "Document Analysis" tab
+- [ ] Extract text from PDF using `pdfplumber` or `PyMuPDF`
+- [ ] Chunk document and pass to Claude with a financial analysis prompt
+- [ ] Claude surfaces key numbers, risks, guidance, and red flags in structured output
+- [ ] Cross-reference extracted data with live market data for context
+
+**Files:** `document_analysis.py`, `analyzer.py`, `app.py`
+
+---
+
+## Priority 11 — Portfolio Intelligence
+
+### 11.1 Monte Carlo Portfolio Simulation
+Simulate thousands of future portfolio outcomes to give users a probabilistic return distribution.
+
+- [ ] Run N=10,000 simulations using bootstrapped daily returns from historical price data
+- [ ] Plot the distribution of 1-year outcomes: median, 10th percentile, 90th percentile
+- [ ] Compute Probability of achieving target return and Probability of ruin (drawdown > X%)
+- [ ] Claude interprets the simulation and gives plain-English odds
+
+**Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
+
+---
+
+### 11.2 Kelly Criterion & Optimal Position Sizing
+Recommend scientifically-grounded position sizes based on edge and variance.
+
+- [ ] Compute full-Kelly and fractional-Kelly (25%, 50%) position sizes using factor score as proxy for edge
+- [ ] Show position size recommendation as % of portfolio and dollar amount (requires account size input)
+- [ ] Warn when Kelly fraction exceeds max-position-% config setting
+- [ ] Add side-by-side comparison: Kelly sizing vs. equal-weight vs. user's current allocation
+
+**Files:** `portfolio_analysis.py`, `app.py`
+
+---
+
+### 11.3 Factor Attribution Analysis
+Decompose the portfolio's returns into contributions from each of the 8 factor dimensions.
+
+- [ ] For each portfolio position: multiply factor weight × factor score × position weight
+- [ ] Aggregate factor contributions across all positions
+- [ ] Render a stacked bar chart showing which factors are driving the portfolio's composite score
+- [ ] Highlight factor concentration risk (e.g., portfolio is 70% momentum-driven)
+
+**Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
+
+---
+
+### 11.4 Peer Group Automatic Comparison
+Automatically fetch sector peers and benchmark a stock's metrics against them.
+
+- [ ] Use Finnhub `company_peers` endpoint to get peer tickers
+- [ ] Fetch key metrics (P/E, ROE, revenue growth, margin) for all peers
+- [ ] Display percentile rank vs. peers for each metric in a table
+- [ ] Claude summarizes: "AAPL trades at a premium to peers on valuation but leads on margin quality"
+
+**Files:** `comparison.py`, `api.py`, `analyzer.py`, `app.py`
+
+---
+
+## Priority 12 — Notifications & Integrations
+
+### 12.1 Slack / Discord / Telegram Alert Webhooks
+Send price and risk alerts to team messaging platforms instead of (or in addition to) email.
+
+- [ ] Add webhook URL config for Slack, Discord, and Telegram Bot API in config.yaml
+- [ ] Format alert messages with stock emoji, color-coded severity, and deep link back to the app
+- [ ] Test webhook on config save ("Send test message" button)
+- [ ] Support multiple destinations per alert (e.g., email + Slack)
+
+**Files:** `alerts.py`, `config.py`, `config.yaml`
+
+---
+
+### 12.2 Google Sheets Export & Sync
+Let users push analysis results to a Google Sheet for further manipulation or sharing.
+
+- [ ] Integrate Google Sheets API via `gspread` + service account credentials
+- [ ] Add "Export to Google Sheets" button on the main dashboard, comparison, and screener pages
+- [ ] Write factor scores, risk metrics, and key financials to a structured sheet
+- [ ] Optional: append rows on each analysis so the sheet becomes a running log
+
+**Files:** `export.py`, `app.py`
+
+---
+
+### 12.3 Brokerage Portfolio Import
+Allow users to import their actual holdings from a brokerage account instead of typing tickers manually.
+
+- [ ] Support CSV import in the standard brokerage export format (Schwab, Fidelity, IBKR)
+- [ ] Parse symbol, quantity, and cost basis from uploaded CSV
+- [ ] Pre-populate the Portfolio page with imported positions and calculated weights
+- [ ] Show unrealized P&L alongside factor scores for each position
+
+**Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
+
+---
+
+## Priority 13 — UX & Personalization
+
+### 13.1 Customizable Dashboard Layout
+Let power users rearrange or hide sections of the main analysis page.
+
+- [ ] Store section visibility preferences in `~/.jaja-money/ui_prefs.json`
+- [ ] Add a "Customize Layout" sidebar panel with toggles per section (Technical, Fundamental, Risk, Chat, etc.)
+- [ ] Remember expanded/collapsed state for each accordion section across sessions
+- [ ] Add a "Reset to Default" button
+
+**Files:** `app.py`, `config.py`
+
+---
+
+### 13.2 Onboarding Tour & Help System
+Reduce friction for new users with an interactive walkthrough.
+
+- [ ] Add a first-run detection flag in `~/.jaja-money/prefs.json`
+- [ ] Implement a step-by-step tour using `streamlit-tour` or custom tooltip overlays
+- [ ] Add a persistent "?" help icon next to each major section with a popover explanation
+- [ ] Include an example analysis (pre-loaded AAPL data) for users who haven't set up API keys yet
+
+**Files:** `app.py`
+
+---
+
+### 13.3 Named Analysis Snapshots
+Allow users to save and name a complete analysis state so they can revisit it later.
+
+- [ ] Add a "Save Snapshot" button that serializes all current metrics, scores, charts, and Claude output to JSON
+- [ ] Store snapshots in `~/.jaja-money/snapshots/` with user-provided name and timestamp
+- [ ] Add a "Load Snapshot" browser panel — list snapshots with ticker, date, and composite score
+- [ ] Enable snapshot diffing: compare two saved snapshots for the same ticker side by side
+
+**Files:** `history.py`, `app.py`
+
+---
+
+## Priority 14 — Performance & Scale
+
+### 14.1 Async / Concurrent API Fetching
+Replace sequential API calls in the analysis pipeline with concurrent fetching to cut latency.
+
+- [ ] Refactor `api.py` data-gathering functions to use `asyncio` + `httpx` (or `concurrent.futures`)
+- [ ] Fetch quote, profile, financials, candles, news, and insider data in parallel
+- [ ] Add a latency breakdown debug panel showing time spent per data source
+- [ ] Measure and document end-to-end analysis latency improvement
+
+**Files:** `api.py`, `app.py`
+
+---
+
+### 14.2 Redis Cache Backend Option
+Support Redis as an optional high-performance, shared cache for multi-user or team deployments.
+
+- [ ] Abstract cache backend behind a `CacheBackend` interface (disk vs. Redis)
+- [ ] Implement `RedisCacheBackend` using `redis-py`
+- [ ] Add `CACHE_BACKEND=redis` env variable and `REDIS_URL` config option
+- [ ] Update `docker-compose.yml` to optionally include a Redis service
+
+**Files:** `cache.py`, `docker-compose.yml`, `config.yaml`
+
+---
+
+### 14.3 API Server Mode (FastAPI)
+Expose the analysis engine as a REST API so the platform can be integrated into other tools.
+
+- [ ] Create a `server.py` FastAPI app wrapping the core analysis functions
+- [ ] Endpoints: `POST /analyze`, `GET /screen`, `GET /portfolio`, `POST /chat`
+- [ ] Add API key authentication middleware
+- [ ] Generate OpenAPI docs automatically (`/docs`)
+- [ ] Update `docker-compose.yml` to offer a `server` profile alongside the Streamlit UI
+
+**Files:** `server.py`, `docker-compose.yml`
+
+---
+
 ## Summary
 
 | Priority | Feature | Status |
@@ -598,3 +832,21 @@ Prevent long chat sessions from silently hitting the context window limit.
 | 9 | Claude Backtest Narrative | ✅ Done |
 | 9 | Claude Sector Rotation Narrative | ✅ Done |
 | 9 | Chat History Trim | ✅ Done |
+| 10 | Automated Daily Watchlist Digest | [ ] Pending |
+| 10 | SEC EDGAR Filing Analysis | [ ] Pending |
+| 10 | Autonomous Research Agent Mode | [ ] Pending |
+| 10 | Earnings Prediction & Surprise Tracker | [ ] Pending |
+| 10 | Multi-Modal: Upload & Analyze Financial PDFs | [ ] Pending |
+| 11 | Monte Carlo Portfolio Simulation | [ ] Pending |
+| 11 | Kelly Criterion & Optimal Position Sizing | [ ] Pending |
+| 11 | Factor Attribution Analysis | [ ] Pending |
+| 11 | Peer Group Automatic Comparison | [ ] Pending |
+| 12 | Slack / Discord / Telegram Alert Webhooks | [ ] Pending |
+| 12 | Google Sheets Export & Sync | [ ] Pending |
+| 12 | Brokerage Portfolio Import | [ ] Pending |
+| 13 | Customizable Dashboard Layout | [ ] Pending |
+| 13 | Onboarding Tour & Help System | [ ] Pending |
+| 13 | Named Analysis Snapshots | [ ] Pending |
+| 14 | Async / Concurrent API Fetching | [ ] Pending |
+| 14 | Redis Cache Backend Option | [ ] Pending |
+| 14 | API Server Mode (FastAPI) | [ ] Pending |
