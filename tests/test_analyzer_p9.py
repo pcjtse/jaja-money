@@ -12,8 +12,6 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 os.environ.setdefault("ANTHROPIC_API_KEY", "test_key_ci")
 
 
@@ -221,7 +219,6 @@ def test_trim_chat_history_result_fits_budget():
                {"role": "assistant", "content": long_turn}] * 6
     trimmed, _ = trim_chat_history("System.", history,
                                    max_budget_tokens=50000, budget_ratio=0.8)
-    total_words = sum(len(m["content"].split()) for m in trimmed)
     # Estimated tokens should be within budget
     assert _estimate_tokens(" ".join(m["content"] for m in trimmed)) <= 50000 * 0.8 + 200
 
@@ -279,8 +276,7 @@ def test_stream_backtest_narrative_from_cache(tmp_path):
     with patch("analyzer._disk_cache", cache), \
          patch("analyzer._get_client"):
         # First store a response in cache
-        from analyzer import _store_cached_response, _compute_context_hash
-        import analyzer as _analyzer_mod
+        from analyzer import _compute_context_hash
         # Build same prompt that stream_backtest_narrative would build
         prompt = (
             f"## Backtest Analysis: {result.symbol}\n\n"
@@ -352,8 +348,7 @@ def test_stream_sector_rotation_narrative_from_cache(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_stream_fundamental_analysis_uses_stock_type_prompt():
-    from analyzer import stream_fundamental_analysis, _STOCK_TYPE_SYSTEM_PROMPTS
-    import analyzer as _mod
+    from analyzer import stream_fundamental_analysis
 
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["text"])
@@ -376,7 +371,6 @@ def test_stream_fundamental_analysis_uses_stock_type_prompt():
 
 def test_stream_fundamental_analysis_default_prompt_when_no_type():
     from analyzer import _DEFAULT_SYSTEM_PROMPT
-    import analyzer as _mod
 
     mock_client = MagicMock()
     captured_system = []

@@ -373,13 +373,11 @@ def _build_flags(
     # --- P8.1: Liquidity risk flag ---
     if close is not None and price is not None and account_size is not None and account_size > 0:
         if len(close) >= 20:
-            adv = float(close.tail(20).count())  # just count as proxy; use volume if available
             # Use 20-day average volume from close series length as a basic proxy
-            adv_value = None
             # We'd need volume data — skip if not available
             position_value = account_size * max_position_pct
             if price > 0:
-                position_shares = position_value / price
+                _ = position_value / price
                 # We can only flag if we have volume data
                 # This will be enhanced when volume is passed
 

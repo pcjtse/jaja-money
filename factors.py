@@ -601,7 +601,7 @@ def _factor_estimate_revisions(revisions: dict | None) -> dict:
     direction = revisions.get("revision_direction", "flat")
     analyst_count = revisions.get("analyst_count")
     fwd_eps = revisions.get("forward_eps")
-    trail_eps = revisions.get("trailing_eps")
+    revisions.get("trailing_eps")
 
     if direction == "up":
         s, lbl = 78, "Upward revisions"

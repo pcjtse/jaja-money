@@ -356,7 +356,7 @@ class FinnhubAPI:
                     irx = _last("^IRX")   # 13-week T-bill rate (annualized %)
                     tnx = _last("^TNX")   # 10Y Treasury yield
                     # 2Y not directly available; use ^TNX - spread approximation
-                    tyx = _last("^TYX")   # 30Y Treasury
+                    _last("^TYX")   # 30Y Treasury
 
                     result["vix"] = round(vix, 2) if vix else None
                     result["yield_10y"] = round(tnx / 10, 3) if tnx else None  # ^TNX is in *10

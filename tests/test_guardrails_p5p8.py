@@ -9,7 +9,6 @@ Covers:
 - P8.2 Vol regime flags from _build_flags / compute_risk
 - compute_risk() returns new fields (vol_regime, hv_5d, hv_30d, macro_context)
 """
-import pytest
 import pandas as pd
 import numpy as np
 
@@ -138,7 +137,7 @@ def test_earnings_calendar_none_no_flag():
 
 def _make_insider_txns(buys=0, sells=0, buy_shares=1000, sell_shares=1000):
     """Create a minimal list of recent insider transactions."""
-    from datetime import date, timedelta
+    from datetime import date
     today = date.today().isoformat()
     txns = []
     for _ in range(buys):
