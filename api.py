@@ -438,3 +438,34 @@ class FinnhubAPI:
                 log.warning("Estimate revisions unavailable for %s: %s", symbol, exc)
                 return {"available": False, "revision_direction": "flat"}
         return self._cached(f"estimates:{symbol}", _fetch, ttl=3600 * 12)
+
+    # ------------------------------------------------------------------
+    # P6.3: Historical dividends for backtest reinvestment
+    # ------------------------------------------------------------------
+
+    def get_dividends(self, symbol: str, years: int = 5) -> dict:
+        """Return historical dividend data for dividend-reinvestment backtest.
+
+        Returns dict with:
+            dates  : list of ISO date strings (YYYY-MM-DD)
+            amounts: list of dividend amounts (per share) matching dates
+        """
+        def _fetch():
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                divs = ticker.dividends  # pandas Series, DatetimeIndex → float
+                if divs is None or divs.empty:
+                    return {"dates": [], "amounts": []}
+                # Filter to requested window
+                import pandas as pd
+                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(years * 365))
+                divs = divs[divs.index >= cutoff]
+                # Normalize index to tz-naive date strings
+                dates = [d.strftime("%Y-%m-%d") for d in divs.index.tz_localize(None) if hasattr(d, "strftime")]
+                amounts = [round(float(a), 6) for a in divs.values]
+                return {"dates": dates, "amounts": amounts}
+            except Exception as exc:
+                log.warning("Dividend data unavailable for %s: %s", symbol, exc)
+                return {"dates": [], "amounts": []}
+        return self._cached(f"dividends:{symbol}:{years}", _fetch, ttl=3600 * 24)
