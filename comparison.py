@@ -159,3 +159,105 @@ def comparison_dataframe(results: list[dict]) -> pd.DataFrame:
             "Drawdown": f"{r['drawdown_pct']:.1f}%" if r.get("drawdown_pct") is not None else "N/A",
         })
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# P11.4: Peer Group Automatic Comparison
+# ---------------------------------------------------------------------------
+
+
+def fetch_peer_metrics(symbol: str, api) -> dict:
+    """Fetch sector peers and compare key metrics vs. the target stock.
+
+    Parameters
+    ----------
+    symbol : target ticker
+    api : FinnhubAPI instance
+
+    Returns
+    -------
+    dict with: target_metrics, peers (list), percentile_ranks, peer_tickers
+    """
+    from log_setup import get_logger
+    log = get_logger(__name__)
+
+    peer_tickers = []
+    try:
+        peer_tickers = api.get_peers(symbol)
+        # Limit to 8 peers for performance
+        peer_tickers = [p for p in peer_tickers if p != symbol][:8]
+    except Exception as exc:
+        log.warning("Peer fetch failed for %s: %s", symbol, exc)
+
+    all_tickers = [symbol] + peer_tickers
+
+    # Fetch financials for each
+    metrics_by_ticker: dict[str, dict] = {}
+    for ticker in all_tickers:
+        try:
+            fin = api.get_financials(ticker)
+            quote = api.get_quote(ticker)
+            profile = api.get_profile(ticker)
+            metrics_by_ticker[ticker] = {
+                "pe": fin.get("peBasicExclExtraTTM") or fin.get("peNormalizedAnnual"),
+                "roe": fin.get("roeTTM"),
+                "revenue_growth": fin.get("revenueGrowthTTMYoy"),
+                "gross_margin": fin.get("grossMarginTTM"),
+                "price": quote.get("c"),
+                "market_cap": fin.get("marketCapitalization"),
+                "name": profile.get("name", ticker)[:25],
+                "sector": profile.get("finnhubIndustry", ""),
+            }
+        except Exception as exc:
+            log.debug("Could not fetch metrics for peer %s: %s", ticker, exc)
+
+    if symbol not in metrics_by_ticker:
+        return {"error": "No data for target symbol", "peer_tickers": peer_tickers}
+
+    # Compute percentile ranks for the target vs peers
+    metric_keys = ["pe", "roe", "revenue_growth", "gross_margin"]
+    percentile_ranks: dict[str, float | None] = {}
+
+    for key in metric_keys:
+        values = []
+        for t, m in metrics_by_ticker.items():
+            val = m.get(key)
+            if val is not None:
+                values.append((t, float(val)))
+
+        if len(values) < 2:
+            percentile_ranks[key] = None
+            continue
+
+        values_sorted = sorted(values, key=lambda x: x[1])
+        target_val = metrics_by_ticker[symbol].get(key)
+        if target_val is None:
+            percentile_ranks[key] = None
+            continue
+
+        below = sum(1 for _, v in values_sorted if v < float(target_val))
+        percentile_ranks[key] = round(below / len(values_sorted) * 100, 0)
+
+    # Build comparison table
+    peer_table = []
+    for ticker in all_tickers:
+        m = metrics_by_ticker.get(ticker, {})
+        peer_table.append({
+            "ticker": ticker,
+            "name": m.get("name", ticker),
+            "pe": m.get("pe"),
+            "roe": m.get("roe"),
+            "revenue_growth": m.get("revenue_growth"),
+            "gross_margin": m.get("gross_margin"),
+            "market_cap": m.get("market_cap"),
+            "is_target": ticker == symbol,
+        })
+
+    return {
+        "target": symbol,
+        "target_metrics": metrics_by_ticker.get(symbol, {}),
+        "peer_tickers": peer_tickers,
+        "peer_table": peer_table,
+        "percentile_ranks": percentile_ranks,
+        "metrics_by_ticker": metrics_by_ticker,
+    }

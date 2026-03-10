@@ -469,3 +469,70 @@ class FinnhubAPI:
                 log.warning("Dividend data unavailable for %s: %s", symbol, exc)
                 return {"dates": [], "amounts": []}
         return self._cached(f"dividends:{symbol}:{years}", _fetch, ttl=3600 * 24)
+
+    # ------------------------------------------------------------------
+    # P14.1: Concurrent / Parallel Data Fetching
+    # ------------------------------------------------------------------
+
+    def fetch_all_parallel(self, symbol: str) -> dict:
+        """Fetch all analysis data for a symbol in parallel using ThreadPoolExecutor.
+
+        Runs quote, profile, financials, candles, news, insider, recommendations,
+        and earnings concurrently to reduce total latency.
+
+        Returns
+        -------
+        dict mapping data type → result (or Exception on failure)
+        with 'latency_breakdown' dict showing per-source timing.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import time as _time
+
+        tasks = {
+            "quote": lambda: self.get_quote(symbol),
+            "profile": lambda: self.get_profile(symbol),
+            "financials": lambda: self.get_financials(symbol),
+            "daily": lambda: self.get_daily(symbol, years=2),
+            "news": lambda: self.get_news(symbol, days=7),
+            "insider": lambda: self.get_insider_transactions(symbol),
+            "recommendations": lambda: self.get_recommendations(symbol),
+            "earnings": lambda: self.get_earnings(symbol, limit=8),
+        }
+
+        results = {}
+        latency = {}
+        t_total_start = _time.monotonic()
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_name = {
+                executor.submit(_timed_call, fn): name
+                for name, fn in tasks.items()
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    result, elapsed = future.result()
+                    results[name] = result
+                    latency[name] = round(elapsed, 3)
+                except Exception as exc:
+                    results[name] = exc
+                    latency[name] = -1
+                    log.warning("Parallel fetch '%s' failed: %s", name, exc)
+
+        total_elapsed = _time.monotonic() - t_total_start
+        latency["_total"] = round(total_elapsed, 3)
+        results["latency_breakdown"] = latency
+
+        log.info(
+            "fetch_all_parallel(%s): %d sources in %.2fs",
+            symbol, len(tasks), total_elapsed,
+        )
+        return results
+
+
+def _timed_call(fn):
+    """Call fn() and return (result, elapsed_seconds)."""
+    import time as _time
+    t0 = _time.monotonic()
+    result = fn()
+    return result, _time.monotonic() - t0
