@@ -89,6 +89,13 @@ if st.button("Run Backtest", type="primary"):
             st.error(f"Could not fetch price data: {e}")
             st.stop()
 
+    # P6.3: Fetch historical dividends for reinvestment simulation
+    dividends = None
+    try:
+        dividends = api.get_dividends(symbol, years=max(3, int(lookback_years) + 1))
+    except Exception:
+        pass  # non-paying stocks simply have no dividends
+
     # -------------------------------------------------------------------------
     # Walk-forward validation (P6.1)
     # -------------------------------------------------------------------------
@@ -206,6 +213,7 @@ if st.button("Run Backtest", type="primary"):
                 lookback_years=lookback_years,
                 commission_pct=commission_pct,
                 slippage_pct=slippage_pct,
+                dividends=dividends,
             )
         except ValueError as e:
             st.error(str(e))
@@ -235,6 +243,19 @@ if st.button("Run Backtest", type="primary"):
     kc6.metric("Win Rate", f"{result.win_rate_pct:.1f}%",
                f"{result.total_trades} trades")
 
+    # P6.3: Dividend reinvestment comparison
+    if result.dividend_return_pct > 0:
+        div_col1, div_col2 = st.columns(2)
+        div_col1.metric(
+            "Return (with Dividends Reinvested)",
+            f"{result.total_return_with_dividends_pct:+.1f}%",
+            f"+{result.dividend_return_pct:.2f}% from dividends",
+        )
+        div_col2.info(
+            f"Dividends received while in position added "
+            f"**{result.dividend_return_pct:.2f}%** to strategy return."
+        )
+
     st.caption(
         f"Period: {result.start_date} → {result.end_date}  |  "
         f"Buy-and-hold: {result.benchmark_return_pct:+.1f}%  |  "
@@ -252,6 +273,14 @@ if st.button("Run Backtest", type="primary"):
         name="Strategy (Net of Costs)",
         line=dict(color="#2da44e", width=2),
     ))
+    # P6.3: Dividend-reinvested equity curve
+    if result.dividend_return_pct > 0 and result.equity_curve_with_dividends:
+        fig_equity.add_trace(go.Scatter(
+            x=result.equity_dates,
+            y=[v * 100 for v in result.equity_curve_with_dividends],
+            name="Strategy + Dividends Reinvested",
+            line=dict(color="#1f77b4", width=2, dash="dash"),
+        ))
     fig_equity.add_trace(go.Scatter(
         x=result.equity_dates[:len(result.benchmark_curve)],
         y=[v * 100 for v in result.benchmark_curve],

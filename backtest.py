@@ -128,9 +128,12 @@ class BacktestResult:
     equity_curve: list[float] = field(default_factory=list)
     equity_dates: list[str] = field(default_factory=list)
     benchmark_curve: list[float] = field(default_factory=list)
-    # P6.3: Transaction cost breakdown
+    # P6.3: Transaction cost breakdown + dividend reinvestment
     gross_return_pct: float = 0.0
     total_cost_pct: float = 0.0
+    dividend_return_pct: float = 0.0
+    total_return_with_dividends_pct: float = 0.0
+    equity_curve_with_dividends: list[float] = field(default_factory=list)
     # P6.1: Walk-forward metadata
     is_insample: bool = True
 
@@ -148,6 +151,7 @@ def run_backtest(
     commission_pct: float = 0.001,
     slippage_pct: float = 0.0005,
     is_insample: bool = True,
+    dividends: dict | None = None,
 ) -> BacktestResult:
     """Run a signal-based backtest.
 
@@ -161,10 +165,15 @@ def run_backtest(
     commission_pct   : Round-trip commission per trade (default 0.1%)
     slippage_pct     : One-way slippage per trade (default 0.05%)
     is_insample      : Label this as in-sample or out-of-sample period
+    dividends        : Optional dict with keys 'dates' (list[str]) and
+                       'amounts' (list[float]) for dividend reinvestment.
+                       When provided, dividends received while in a position
+                       are reinvested immediately into the equity curve.
 
     Returns
     -------
-    BacktestResult with performance metrics and equity curve.
+    BacktestResult with performance metrics, equity curve, and dividend-
+    reinvested equity curve.
 
     Note: Signal computation uses only data available up to each bar
     (expanding window), so there is no look-ahead bias.
@@ -199,6 +208,12 @@ def run_backtest(
     # Transaction cost per trade (round-trip = entry + exit slippage + commission)
     round_trip_cost_pct = (commission_pct + 2 * slippage_pct) * 100
 
+    # Build a date→dividend_amount lookup for O(1) access during simulation
+    div_lookup: dict[str, float] = {}
+    if dividends and dividends.get("dates"):
+        for d_date, d_amt in zip(dividends["dates"], dividends["amounts"]):
+            div_lookup[d_date] = d_amt
+
     # Simulate trades
     in_position = False
     entry_price = 0.0
@@ -207,10 +222,13 @@ def run_backtest(
     trades: list[Trade] = []
     equity = [1.0]
     equity_gross = [1.0]  # before transaction costs
+    equity_with_divs = [1.0]  # with dividend reinvestment
     equity_dates = [dates[0]] if dates else []
     position_mult = 1.0
     position_mult_gross = 1.0
+    position_mult_divs = 1.0  # tracks equity with dividends reinvested
     total_cost_pct = 0.0
+    total_dividend_pct = 0.0  # cumulative dividend yield received while in position
 
     for i in range(1, n):
         s = signals[i]
@@ -225,6 +243,12 @@ def run_backtest(
                 entry_date = d
                 entry_signal = s
         else:
+            # P6.3: Dividend reinvestment — apply dividend yield on ex-dividend days
+            if d in div_lookup and p > 0:
+                div_yield = div_lookup[d] / p  # dividend as fraction of price
+                position_mult_divs *= (1 + div_yield)
+                total_dividend_pct += div_yield * 100
+
             if s <= exit_threshold:
                 # Apply exit slippage (effective exit price is slightly lower)
                 exit_price = p * (1 - slippage_pct)
@@ -242,11 +266,13 @@ def run_backtest(
                 trades.append(trade)
                 position_mult_gross *= (1 + pnl_gross / 100)
                 position_mult *= (1 + pnl_pct / 100)
+                position_mult_divs *= (1 + pnl_pct / 100)
                 total_cost_pct += round_trip_cost_pct
                 in_position = False
 
         equity.append(position_mult)
         equity_gross.append(position_mult_gross)
+        equity_with_divs.append(position_mult_divs)
         equity_dates.append(d)
 
     # Close open position at last price
@@ -265,9 +291,11 @@ def run_backtest(
         ))
         position_mult_gross *= (1 + pnl_gross / 100)
         position_mult *= (1 + pnl_pct / 100)
+        position_mult_divs *= (1 + pnl_pct / 100)
         total_cost_pct += round_trip_cost_pct
         equity[-1] = position_mult
         equity_gross[-1] = position_mult_gross
+        equity_with_divs[-1] = position_mult_divs
 
     # Metrics
     total_return_pct = (position_mult - 1) * 100
@@ -300,6 +328,7 @@ def run_backtest(
     win_rate = (win_count / len(trades) * 100) if trades else 0
 
     gross_return_pct = (position_mult_gross - 1) * 100
+    total_return_with_dividends_pct = (position_mult_divs - 1) * 100
 
     return BacktestResult(
         symbol=symbol,
@@ -320,6 +349,9 @@ def run_backtest(
         benchmark_curve=benchmark_curve,
         gross_return_pct=round(gross_return_pct, 2),
         total_cost_pct=round(total_cost_pct, 2),
+        dividend_return_pct=round(total_dividend_pct, 2),
+        total_return_with_dividends_pct=round(total_return_with_dividends_pct, 2),
+        equity_curve_with_dividends=equity_with_divs,
         is_insample=is_insample,
     )
 
