@@ -5,10 +5,6 @@ Covers:
 - P7.2 OR-logic filter groups (apply_filters, _evaluate_group, _evaluate_filter)
 - P7.3 Screen templates (save/load/delete), CSV export, sentiment warning
 """
-import pytest
-import json
-from pathlib import Path
-
 from screener import (
     apply_filters,
     load_sp500,
