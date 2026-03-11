@@ -1,12 +1,11 @@
 """Tests for P14.x: Performance & Scale — Async API, Redis Cache, FastAPI Server."""
 from __future__ import annotations
 
-import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cache import DiskCache, RedisCacheBackend, get_cache
+from cache import DiskCache, RedisCacheBackend
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +105,6 @@ class TestRedisCacheBackend:
 
     def test_redis_get_and_set_when_enabled(self):
         """Test Redis get/set using a mock client."""
-        import pickle
 
         mock_redis_module = MagicMock()
         mock_client = MagicMock()
@@ -152,7 +150,6 @@ class TestRedisCacheBackend:
         """get_cache() should return DiskCache when CACHE_BACKEND=disk."""
         monkeypatch.setenv("CACHE_BACKEND", "disk")
         # Reimport to trigger factory
-        import importlib
         import cache as cache_module
         new_cache = cache_module._create_cache()
         assert isinstance(new_cache, DiskCache)

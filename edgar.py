@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import re
-import time
 from typing import Generator
 
 import anthropic
@@ -35,7 +34,6 @@ _MAX_CHUNKS = 6  # limit chunks to control token costs
 def get_cik(ticker: str) -> str | None:
     """Look up the CIK (Central Index Key) for a ticker symbol."""
     try:
-        url = f"{_EDGAR_BASE}/submissions/CIK.json"
         # Use EDGAR company tickers JSON
         resp = requests.get(
             "https://www.sec.gov/files/company_tickers.json",

@@ -22,17 +22,16 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 try:
-    from fastapi import FastAPI, HTTPException, Depends, Security, Request
+    from fastapi import FastAPI, HTTPException, Depends, Security
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
-    from fastapi.responses import StreamingResponse, JSONResponse
+    from fastapi.responses import StreamingResponse
     from pydantic import BaseModel, Field
 
     _HAS_FASTAPI = True
@@ -42,7 +41,7 @@ except ImportError:
         "FastAPI not installed. Run: pip install fastapi uvicorn"
     )
 
-from log_setup import get_logger
+from log_setup import get_logger  # noqa: E402
 
 log = get_logger(__name__)
 

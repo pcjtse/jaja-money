@@ -1,8 +1,6 @@
 """Tests for P12.x: Notifications & Integrations."""
 from __future__ import annotations
 
-import io
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -108,12 +106,12 @@ class TestWebhooks:
             mock_send.assert_called_once()
 
     def test_test_webhook_discord(self):
-        with patch("alerts._send_discord", return_value=True) as mock_send:
+        with patch("alerts._send_discord", return_value=True):
             result = send_test_webhook("discord", "https://discord.webhook")
             assert result is True
 
     def test_test_webhook_telegram(self):
-        with patch("alerts._send_telegram", return_value=True) as mock_send:
+        with patch("alerts._send_telegram", return_value=True):
             result = send_test_webhook("telegram", "bot_token", chat_id="chat123")
             assert result is True
 

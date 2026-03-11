@@ -4,10 +4,9 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from portfolio_analysis import (
-    build_returns_matrix,
     factor_attribution,
     kelly_sizing,
     monte_carlo_simulation,

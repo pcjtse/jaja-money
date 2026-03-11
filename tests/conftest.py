@@ -71,7 +71,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test_key")
 # ---------------------------------------------------------------------------
 if "requests" not in sys.modules:
     try:
-        import requests
+        import requests  # noqa: F401
     except ImportError:
         req_mod = types.ModuleType("requests")
         req_mod.get = lambda *a, **kw: None
@@ -89,7 +89,7 @@ if "requests" not in sys.modules:
 # ---------------------------------------------------------------------------
 if "redis" not in sys.modules:
     try:
-        import redis
+        import redis  # noqa: F401
     except ImportError:
         redis_mod = types.ModuleType("redis")
         class _FakeRedis:
@@ -108,7 +108,7 @@ if "redis" not in sys.modules:
 # Stub out `fastapi` and related if not installed (P14.3)
 # ---------------------------------------------------------------------------
 try:
-    import fastapi
+    import fastapi  # noqa: F401
 except ImportError:
     fa_mod = types.ModuleType("fastapi")
     fa_mod.HTTPException = Exception
@@ -132,23 +132,24 @@ except ImportError:
     sys.modules["fastapi.responses"].JSONResponse = object
 
 try:
-    import uvicorn
+    import uvicorn  # noqa: F401
 except ImportError:
     uv_mod = types.ModuleType("uvicorn")
     uv_mod.run = lambda *a, **kw: None
     sys.modules["uvicorn"] = uv_mod
 
 try:
-    import pydantic
+    import pydantic  # noqa: F401
 except ImportError:
     pyd_mod = types.ModuleType("pydantic")
-    class _BaseModel: pass
+    class _BaseModel:
+        pass
     pyd_mod.BaseModel = _BaseModel
     pyd_mod.Field = lambda *a, **kw: None
     sys.modules["pydantic"] = pyd_mod
 
 try:
-    import gspread
+    import gspread  # noqa: F401
 except ImportError:
     gs_mod = types.ModuleType("gspread")
     gs_mod.WorksheetNotFound = Exception
@@ -159,7 +160,7 @@ for _mod_name in ["google", "google.oauth2", "google.oauth2.service_account"]:
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = types.ModuleType(_mod_name)
 try:
-    from google.oauth2 import service_account as _sa
+    from google.oauth2 import service_account as _sa  # noqa: F401
 except ImportError:
     _sa_mod = types.ModuleType("google.oauth2.service_account")
     class _FakeCreds:
@@ -170,13 +171,13 @@ except ImportError:
 
 # Stub pdfplumber if not installed (P10.5)
 try:
-    import pdfplumber
+    import pdfplumber  # noqa: F401
 except ImportError:
     sys.modules["pdfplumber"] = types.ModuleType("pdfplumber")
 
 # Stub python-dotenv if not available
 try:
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # noqa: F401
 except ImportError:
     dotenv_mod = types.ModuleType("dotenv")
     dotenv_mod.load_dotenv = lambda *a, **kw: None

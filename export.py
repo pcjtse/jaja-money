@@ -435,7 +435,6 @@ def export_to_google_sheets(
             ws.append_row(headers)
 
         # Build data row
-        import time as _time
         from datetime import datetime as _datetime
         composite = sum(f.get("score", 0) * f.get("weight", 0) for f in factors)
         signal_labels = {(0, 40): "Bearish", (40, 60): "Neutral", (60, 80): "Bullish", (80, 101): "Strong Buy"}
@@ -491,8 +490,6 @@ def parse_brokerage_csv(csv_bytes: bytes, broker: str = "auto") -> list[dict]:
     -------
     list of dicts with: symbol, quantity, cost_basis, current_value, unrealized_pnl
     """
-    import io
-    import csv
 
     text = csv_bytes.decode("utf-8", errors="replace")
     lines = text.splitlines()

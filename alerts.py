@@ -258,11 +258,10 @@ def is_scheduler_running() -> bool:
 # P12.1: Slack / Discord / Telegram Alert Webhooks
 # ---------------------------------------------------------------------------
 
-import json as _json
+import json as _json  # noqa: E402
 
 try:
-    import urllib.request as _urllib_request
-    import urllib.error as _urllib_error
+    import urllib.request as _urllib_request  # noqa: F401
     _HAS_URLLIB = True
 except ImportError:
     _HAS_URLLIB = False

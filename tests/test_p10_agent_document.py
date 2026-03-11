@@ -1,7 +1,7 @@
 """Tests for P10.3: Agent Mode and P10.5: Document Analysis."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -124,7 +124,7 @@ class TestAgentMode:
         with patch("agent.anthropic") as mock_anthropic_module:
             mock_anthropic_module.Anthropic.return_value = mock_client
 
-            chunks = list(run_research_agent("AAPL", mock_api))
+            list(run_research_agent("AAPL", mock_api))
 
         # Should cap at _MAX_TURNS (10)
         assert turn_count[0] <= 10
@@ -218,7 +218,7 @@ class TestDocumentAnalysis:
             mock_stream.text_stream = iter(["Complete analysis."])
             mock_client.messages.stream.return_value = mock_stream
 
-            chunks = list(stream_document_analysis(
+            list(stream_document_analysis(
                 text,
                 symbol="AAPL",
                 market_data=market_data,

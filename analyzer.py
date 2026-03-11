@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from typing import Generator
 import anthropic
 from dotenv import load_dotenv
 
@@ -1020,7 +1021,6 @@ def stream_peer_comparison_narrative(
     peer_data : dict from comparison.fetch_peer_metrics
     use_cache : whether to use/store cached response
     """
-    from typing import Generator
 
     percentiles = peer_data.get("percentile_ranks", {})
     target_metrics = peer_data.get("target_metrics", {})
@@ -1137,7 +1137,6 @@ def stream_earnings_prediction(
     symbol: str, beat_stats: dict, next_earnings_date: str | None = None
 ) -> "Generator[str, None, None]":
     """Stream Claude qualitative earnings beat probability analysis."""
-    from typing import Generator
 
     if not beat_stats:
         yield "Insufficient earnings history for prediction."
