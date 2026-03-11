@@ -22,3 +22,14 @@ yfinance
 pytest-cov
 # Dev tooling
 ruff
+# P10.5 PDF text extraction (optional — install one or both)
+pdfplumber
+# PyMuPDF (fitz) alternative: pip install pymupdf
+# P12.2 Google Sheets export (optional)
+gspread
+google-auth
+# P14.2 Redis cache backend (optional)
+redis
+# P14.3 FastAPI server mode (optional)
+fastapi
+uvicorn[standard]

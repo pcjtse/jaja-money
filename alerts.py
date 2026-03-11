@@ -252,3 +252,183 @@ def stop_alert_scheduler() -> None:
 def is_scheduler_running() -> bool:
     """Return True if the background scheduler is active."""
     return _scheduler is not None and _scheduler.running
+
+
+# ---------------------------------------------------------------------------
+# P12.1: Slack / Discord / Telegram Alert Webhooks
+# ---------------------------------------------------------------------------
+
+import json as _json  # noqa: E402
+
+try:
+    import urllib.request as _urllib_request  # noqa: F401
+    _HAS_URLLIB = True
+except ImportError:
+    _HAS_URLLIB = False
+
+_SEVERITY_COLORS = {
+    "info": "#2196F3",
+    "warning": "#FF9800",
+    "critical": "#F44336",
+}
+
+_SEVERITY_EMOJIS = {
+    "info": "ℹ️",
+    "warning": "⚠️",
+    "critical": "🚨",
+}
+
+
+def _get_severity(condition: str, threshold: float, current_value: float | None) -> str:
+    """Determine alert severity based on condition."""
+    if "Risk" in condition:
+        return "critical" if (current_value or 0) > 75 else "warning"
+    return "warning"
+
+
+def send_webhook_notification(
+    alert: dict,
+    current_value: float | None = None,
+    slack_url: str = "",
+    discord_url: str = "",
+    telegram_token: str = "",
+    telegram_chat_id: str = "",
+    app_url: str = "",
+) -> dict:
+    """Send alert notification to configured webhook destinations.
+
+    Parameters
+    ----------
+    alert : triggered alert dict
+    current_value : current metric value that triggered the alert
+    slack_url : Slack incoming webhook URL
+    discord_url : Discord webhook URL
+    telegram_token : Telegram Bot API token
+    telegram_chat_id : Telegram chat/channel ID
+    app_url : deep link back to the app
+
+    Returns dict with success/failure per destination.
+    """
+    symbol = alert.get("symbol", "?")
+    condition = alert.get("condition", "")
+    threshold = alert.get("threshold", 0)
+    note = alert.get("note", "")
+
+    severity = _get_severity(condition, threshold, current_value)
+    emoji = _SEVERITY_EMOJIS.get(severity, "📊")
+    color = _SEVERITY_COLORS.get(severity, "#607D8B")
+
+    current_str = f"{current_value:.2f}" if current_value is not None else "N/A"
+    title = f"{emoji} Alert Triggered: {symbol}"
+    body = (
+        f"**{condition}** threshold {threshold} reached\n"
+        f"Current value: {current_str}"
+    )
+    if note:
+        body += f"\nNote: {note}"
+    if app_url:
+        body += f"\n[Open in jaja-money]({app_url}?ticker={symbol})"
+
+    results = {}
+
+    # Slack
+    if slack_url:
+        results["slack"] = _send_slack(slack_url, title, body, color)
+
+    # Discord
+    if discord_url:
+        results["discord"] = _send_discord(discord_url, title, body, color)
+
+    # Telegram
+    if telegram_token and telegram_chat_id:
+        results["telegram"] = _send_telegram(
+            telegram_token, telegram_chat_id, f"{title}\n{body}"
+        )
+
+    log.info("Webhook notifications sent for %s: %s", symbol, results)
+    return results
+
+
+def _send_slack(webhook_url: str, title: str, body: str, color: str) -> bool:
+    payload = {
+        "attachments": [
+            {
+                "color": color,
+                "title": title,
+                "text": body,
+                "footer": "jaja-money alerts",
+            }
+        ]
+    }
+    return _post_json(webhook_url, payload)
+
+
+def _send_discord(webhook_url: str, title: str, body: str, color: str) -> bool:
+    # Discord color is an integer
+    color_int = int(color.lstrip("#"), 16)
+    payload = {
+        "embeds": [
+            {
+                "title": title,
+                "description": body,
+                "color": color_int,
+                "footer": {"text": "jaja-money alerts"},
+            }
+        ]
+    }
+    return _post_json(webhook_url, payload)
+
+
+def _send_telegram(token: str, chat_id: str, message: str) -> bool:
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "Markdown",
+    }
+    return _post_json(url, payload)
+
+
+def _post_json(url: str, payload: dict) -> bool:
+    """POST JSON payload to a URL. Returns True on success."""
+    if not url:
+        return False
+    try:
+        data = _json.dumps(payload).encode("utf-8")
+        req = _urllib_request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urllib_request.urlopen(req, timeout=10) as resp:
+            return resp.status < 400
+    except Exception as exc:
+        log.warning("Webhook POST failed to %s: %s", url[:50], exc)
+        return False
+
+
+def send_test_webhook(
+    webhook_type: str,
+    url_or_config: str,
+    chat_id: str = "",
+) -> bool:
+    """Send a test message to verify webhook configuration.
+
+    Parameters
+    ----------
+    webhook_type : "slack", "discord", or "telegram"
+    url_or_config : webhook URL (slack/discord) or bot token (telegram)
+    chat_id : required for telegram
+    """
+    test_msg = "✅ jaja-money webhook test — your alerts are configured correctly!"
+
+    if webhook_type == "slack":
+        return _send_slack(url_or_config, "Webhook Test", test_msg, "#2196F3")
+    elif webhook_type == "discord":
+        return _send_discord(url_or_config, "Webhook Test", test_msg, "#2196F3")
+    elif webhook_type == "telegram":
+        return _send_telegram(url_or_config, chat_id, test_msg)
+
+    log.warning("Unknown webhook type: %s", webhook_type)
+    return False

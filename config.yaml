@@ -71,3 +71,34 @@ logging:
   level: INFO
   max_bytes: 10485760
   backup_count: 3
+
+# P12.1: Webhook notification settings
+webhooks:
+  slack_url: ""
+  discord_url: ""
+  telegram_token: ""
+  telegram_chat_id: ""
+  app_url: ""  # Deep link base URL for alert messages
+
+# P12.2: Google Sheets settings
+google_sheets:
+  spreadsheet_id: ""
+  sheet_name: "jaja-money"
+  credentials_path: ""  # Path to service account JSON
+  append_log: true
+
+# P10.1: Digest settings
+digest:
+  schedule_hour: 8   # UTC hour for daily digest
+  schedule_minute: 0
+  email: ""           # Delivery email address
+
+# P14.2: Cache backend (disk or redis)
+cache_backend:
+  type: "disk"  # "disk" or "redis"
+  redis_url: "redis://localhost:6379/0"
+
+# P14.3: API server settings
+api_server:
+  port: 8080
+  api_key: ""  # Set JAJA_API_KEY env var instead for security

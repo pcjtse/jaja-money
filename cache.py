@@ -113,9 +113,123 @@ class DiskCache:
         }
 
 
+# ---------------------------------------------------------------------------
+# P14.2: Redis Cache Backend Option
+# ---------------------------------------------------------------------------
+
+
+class RedisCacheBackend:
+    """Redis-backed cache implementing the same interface as DiskCache.
+
+    Requires redis-py: pip install redis
+
+    Configure via environment variables:
+        CACHE_BACKEND=redis
+        REDIS_URL=redis://localhost:6379/0   (default)
+    """
+
+    def __init__(self, redis_url: str = "redis://localhost:6379/0") -> None:
+        self._url = redis_url
+        self._client = None
+        self._enabled = False
+        self._connect()
+
+    def _connect(self) -> None:
+        try:
+            import redis
+
+            self._client = redis.Redis.from_url(self._url, decode_responses=False)
+            self._client.ping()
+            self._enabled = True
+            log.info("Redis cache connected: %s", self._url)
+        except ImportError:
+            log.warning("redis-py not installed; RedisCacheBackend disabled")
+        except Exception as exc:
+            log.warning("Redis connection failed (%s): %s", self._url, exc)
+
+    def get(self, key: str) -> Any:
+        """Return cached value or None."""
+        if not self._enabled:
+            return None
+        try:
+            data = self._client.get(key)
+            if data is None:
+                return None
+            log.debug("Redis cache hit: %s", key)
+            return pickle.loads(data)
+        except Exception as exc:
+            log.debug("Redis get error for %s: %s", key, exc)
+            return None
+
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+        """Store value with TTL."""
+        if not self._enabled:
+            return
+        try:
+            ttl = ttl if ttl is not None else cfg.cache_ttl
+            data = pickle.dumps(value, protocol=4)
+            self._client.setex(key, ttl, data)
+            log.debug("Redis cache set: %s (ttl=%ds)", key, ttl)
+        except Exception as exc:
+            log.debug("Redis set error for %s: %s", key, exc)
+
+    def delete(self, key: str) -> None:
+        if not self._enabled:
+            return
+        try:
+            self._client.delete(key)
+        except Exception:
+            pass
+
+    def clear(self) -> int:
+        """Delete all keys. Returns count."""
+        if not self._enabled:
+            return 0
+        try:
+            keys = self._client.keys("*")
+            if keys:
+                return self._client.delete(*keys)
+            return 0
+        except Exception:
+            return 0
+
+    def stats(self) -> dict:
+        if not self._enabled:
+            return {"enabled": False, "backend": "redis", "entries": 0}
+        try:
+            info = self._client.info("keyspace")
+            db_info = list(info.values())[0] if info else {}
+            return {
+                "enabled": True,
+                "backend": "redis",
+                "url": self._url,
+                "entries": db_info.get("keys", 0),
+            }
+        except Exception:
+            return {"enabled": self._enabled, "backend": "redis"}
+
+
+# ---------------------------------------------------------------------------
+# Cache factory — selects backend based on CACHE_BACKEND env variable
+# ---------------------------------------------------------------------------
+
+
+def _create_cache():
+    """Create the appropriate cache backend based on CACHE_BACKEND env var."""
+    import os
+
+    backend = os.getenv("CACHE_BACKEND", "disk").lower()
+    if backend == "redis":
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        log.info("Using Redis cache backend: %s", redis_url)
+        return RedisCacheBackend(redis_url=redis_url)
+    return DiskCache()
+
+
 # Module-level singleton
-_cache = DiskCache()
+_cache = _create_cache()
 
 
-def get_cache() -> DiskCache:
+def get_cache():
+    """Return the active cache backend (DiskCache or RedisCacheBackend)."""
     return _cache

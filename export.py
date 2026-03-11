@@ -361,3 +361,320 @@ def analysis_to_pdf(
 
     doc.build(story)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# P12.2: Google Sheets Export & Sync
+# ---------------------------------------------------------------------------
+
+
+def export_to_google_sheets(
+    symbol: str,
+    factors: list[dict],
+    risk: dict,
+    financials: dict | None = None,
+    spreadsheet_id: str = "",
+    sheet_name: str = "jaja-money",
+    credentials_path: str = "",
+    append_log: bool = True,
+) -> dict:
+    """Export analysis results to a Google Sheet.
+
+    Requires `gspread` and a Google service account credentials JSON file.
+
+    Parameters
+    ----------
+    symbol : stock ticker
+    factors : list of factor dicts (name, score, label, etc.)
+    risk : risk analysis dict (risk_score, risk_level, flags)
+    financials : optional dict of financial metrics
+    spreadsheet_id : Google Sheet ID (from URL)
+    sheet_name : worksheet name to write to
+    credentials_path : path to service account JSON credentials file
+    append_log : if True, append a new row instead of overwriting
+
+    Returns dict with success, url, and error message if any.
+    """
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+    except ImportError:
+        return {
+            "success": False,
+            "error": "gspread not installed. Run: pip install gspread google-auth",
+        }
+
+    if not credentials_path or not spreadsheet_id:
+        return {
+            "success": False,
+            "error": "Google Sheets requires credentials_path and spreadsheet_id in config.",
+        }
+
+    try:
+        scopes = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(spreadsheet_id)
+
+        try:
+            ws = sh.worksheet(sheet_name)
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(title=sheet_name, rows=1000, cols=20)
+
+        # Build header row if sheet is empty
+        existing = ws.get_all_values()
+        if not existing:
+            headers = [
+                "Date", "Symbol", "Composite Score", "Signal",
+                "Risk Score", "Risk Level", "Flags",
+                "P/E", "EPS", "Revenue Growth", "Gross Margin",
+            ] + [f["name"] for f in factors]
+            ws.append_row(headers)
+
+        # Build data row
+        from datetime import datetime as _datetime
+        composite = sum(f.get("score", 0) * f.get("weight", 0) for f in factors)
+        signal_labels = {(0, 40): "Bearish", (40, 60): "Neutral", (60, 80): "Bullish", (80, 101): "Strong Buy"}
+        signal = next((v for (lo, hi), v in signal_labels.items() if lo <= composite < hi), "N/A")
+
+        fin = financials or {}
+        row = [
+            _datetime.now().strftime("%Y-%m-%d %H:%M"),
+            symbol,
+            round(composite, 1),
+            signal,
+            risk.get("risk_score", ""),
+            risk.get("risk_level", ""),
+            len(risk.get("flags", [])),
+            fin.get("pe", ""),
+            fin.get("eps", ""),
+            fin.get("revenue_growth", ""),
+            fin.get("gross_margin", ""),
+        ] + [f.get("score", "") for f in factors]
+
+        if append_log:
+            ws.append_row(row)
+        else:
+            # Overwrite row for this symbol
+            cell = ws.find(symbol)
+            if cell:
+                ws.delete_rows(cell.row)
+            ws.append_row(row)
+
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        return {"success": True, "url": sheet_url}
+
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# P12.3: Brokerage Portfolio Import
+# ---------------------------------------------------------------------------
+
+
+def parse_brokerage_csv(csv_bytes: bytes, broker: str = "auto") -> list[dict]:
+    """Parse a brokerage account export CSV into portfolio positions.
+
+    Supports Schwab, Fidelity, IBKR formats with auto-detection.
+
+    Parameters
+    ----------
+    csv_bytes : raw CSV bytes from file upload
+    broker : "schwab", "fidelity", "ibkr", or "auto" for auto-detection
+
+    Returns
+    -------
+    list of dicts with: symbol, quantity, cost_basis, current_value, unrealized_pnl
+    """
+
+    text = csv_bytes.decode("utf-8", errors="replace")
+    lines = text.splitlines()
+
+    # Auto-detect broker from header
+    if broker == "auto":
+        header_text = " ".join(lines[:5]).lower()
+        if "schwab" in header_text or "charles schwab" in header_text:
+            broker = "schwab"
+        elif "fidelity" in header_text:
+            broker = "fidelity"
+        elif "interactive brokers" in header_text or "ibkr" in header_text:
+            broker = "ibkr"
+        else:
+            broker = "generic"
+
+    if broker == "schwab":
+        return _parse_schwab(lines)
+    elif broker == "fidelity":
+        return _parse_fidelity(lines)
+    elif broker == "ibkr":
+        return _parse_ibkr(lines)
+    else:
+        return _parse_generic(lines)
+
+
+def _parse_schwab(lines: list[str]) -> list[dict]:
+    """Parse Schwab CSV export format."""
+    positions = []
+    in_positions = False
+    reader = _csv_reader(lines)
+
+    for row in reader:
+        if not row:
+            continue
+        # Schwab positions start after a header row with "Symbol"
+        if "Symbol" in row and "Quantity" in row:
+            in_positions = True
+            header = [h.strip() for h in row]
+            continue
+        if not in_positions:
+            continue
+        if len(row) < 4 or not row[0].strip() or row[0].strip().startswith("Account"):
+            continue
+
+        try:
+            sym = row[0].strip().upper()
+            if not sym or sym in ("TOTAL", "CASH"):
+                continue
+            qty = _parse_float(row[header.index("Quantity")] if "Quantity" in header else row[1])
+            cost = _parse_float(row[header.index("Cost Basis")] if "Cost Basis" in header else row[5])
+            value = _parse_float(row[header.index("Market Value")] if "Market Value" in header else row[4])
+            positions.append({
+                "symbol": sym,
+                "quantity": qty,
+                "cost_basis": cost,
+                "current_value": value,
+                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+            })
+        except (ValueError, IndexError):
+            continue
+
+    return positions
+
+
+def _parse_fidelity(lines: list[str]) -> list[dict]:
+    """Parse Fidelity CSV export format."""
+    positions = []
+    header = None
+
+    for line in lines:
+        if not line.strip():
+            continue
+        row = [c.strip() for c in line.split(",")]
+        if header is None:
+            if "Symbol" in row or "Ticker" in row:
+                header = row
+            continue
+
+        try:
+            sym_col = next((i for i, h in enumerate(header) if h in ("Symbol", "Ticker")), 0)
+            sym = row[sym_col].upper().strip("\"'")
+            if not sym or sym in ("TOTAL", "CASH", "SPAXX**"):
+                continue
+
+            qty = _parse_float(_get_col(row, header, ("Quantity", "Shares")))
+            cost = _parse_float(_get_col(row, header, ("Cost Basis Total", "Total Cost Basis")))
+            value = _parse_float(_get_col(row, header, ("Current Value", "Market Value")))
+            positions.append({
+                "symbol": sym,
+                "quantity": qty,
+                "cost_basis": cost,
+                "current_value": value,
+                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+            })
+        except (ValueError, IndexError):
+            continue
+
+    return positions
+
+
+def _parse_ibkr(lines: list[str]) -> list[dict]:
+    """Parse Interactive Brokers CSV export format."""
+    positions = []
+
+    for line in lines:
+        if not line.startswith("Positions,Data,"):
+            continue
+        row = [c.strip() for c in line.split(",")]
+        try:
+            # IBKR format: Positions,Data,AssetClass,Currency,Symbol,Quantity,...
+            sym = row[4].upper()
+            qty = _parse_float(row[5])
+            cost = _parse_float(row[7]) if len(row) > 7 else None
+            value = _parse_float(row[10]) if len(row) > 10 else None
+            positions.append({
+                "symbol": sym,
+                "quantity": qty,
+                "cost_basis": cost,
+                "current_value": value,
+                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+            })
+        except (ValueError, IndexError):
+            continue
+
+    return positions
+
+
+def _parse_generic(lines: list[str]) -> list[dict]:
+    """Parse generic CSV: expects columns Symbol/Ticker, Quantity/Shares, Cost/CostBasis, Value."""
+    positions = []
+    header = None
+
+    for line in lines:
+        if not line.strip():
+            continue
+        row = [c.strip().strip("\"'") for c in line.split(",")]
+        if header is None:
+            row_lower = [c.lower() for c in row]
+            if any(k in row_lower for k in ("symbol", "ticker")):
+                header = row_lower
+            continue
+
+        try:
+            sym_col = next((i for i, h in enumerate(header) if h in ("symbol", "ticker")), 0)
+            sym = row[sym_col].upper()
+            if not sym or sym in ("CASH", "TOTAL", "SPAXX**", "FDRXX**"):
+                continue
+            qty = _parse_float(_get_col(row, header, ("quantity", "shares", "qty")))
+            cost = _parse_float(_get_col(row, header, ("cost", "cost basis", "costbasis", "total cost")))
+            value = _parse_float(_get_col(row, header, ("value", "market value", "current value")))
+            positions.append({
+                "symbol": sym,
+                "quantity": qty,
+                "cost_basis": cost,
+                "current_value": value,
+                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+            })
+        except (ValueError, IndexError):
+            continue
+
+    return positions
+
+
+def _parse_float(s: str | None) -> float | None:
+    if s is None:
+        return None
+    try:
+        return float(str(s).replace(",", "").replace("$", "").replace("%", "").strip())
+    except ValueError:
+        return None
+
+
+def _get_col(row: list[str], header: list[str], names: tuple) -> str | None:
+    for name in names:
+        try:
+            idx = header.index(name)
+            return row[idx] if idx < len(row) else None
+        except ValueError:
+            continue
+    return None
+
+
+def _csv_reader(lines: list[str]):
+    import csv
+    import io
+    reader = csv.reader(io.StringIO("\n".join(lines)))
+    return list(reader)

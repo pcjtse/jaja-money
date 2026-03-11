@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from typing import Generator
 import anthropic
 from dotenv import load_dotenv
 
@@ -1002,3 +1003,168 @@ def trim_chat_history(
         total_tokens, _estimate_tokens(" ".join(m.get("content", "") for m in trimmed)),
     )
     return trimmed, True
+
+
+# ---------------------------------------------------------------------------
+# P11.4: Peer Group Narrative
+# ---------------------------------------------------------------------------
+
+
+def stream_peer_comparison_narrative(
+    symbol: str, peer_data: dict, use_cache: bool = True
+) -> "Generator[str, None, None]":
+    """Stream Claude commentary on peer group comparison.
+
+    Parameters
+    ----------
+    symbol : target ticker
+    peer_data : dict from comparison.fetch_peer_metrics
+    use_cache : whether to use/store cached response
+    """
+
+    percentiles = peer_data.get("percentile_ranks", {})
+    target_metrics = peer_data.get("target_metrics", {})
+    peer_tickers = peer_data.get("peer_tickers", [])
+
+    context = f"""Stock: {symbol}
+Peer group: {', '.join(peer_tickers) if peer_tickers else 'N/A'}
+
+Target metrics:
+- P/E Ratio: {target_metrics.get('pe', 'N/A')}
+- ROE: {target_metrics.get('roe', 'N/A')}%
+- Revenue Growth (YoY): {target_metrics.get('revenue_growth', 'N/A')}%
+- Gross Margin: {target_metrics.get('gross_margin', 'N/A')}%
+
+Percentile ranks vs. peers (0 = lowest, 100 = highest):
+- P/E: {percentiles.get('pe', 'N/A')}th percentile
+- ROE: {percentiles.get('roe', 'N/A')}th percentile
+- Revenue Growth: {percentiles.get('revenue_growth', 'N/A')}th percentile
+- Gross Margin: {percentiles.get('gross_margin', 'N/A')}th percentile"""
+
+    cache_key = _compute_context_hash(context)
+    if use_cache:
+        cached = _get_cached_response(f"peer_narrative:{cache_key}")
+        if cached:
+            yield cached
+            return
+
+    prompt = f"""You are an equity analyst providing a peer group benchmarking commentary.
+
+{context}
+
+Write a concise 3-4 sentence commentary comparing {symbol} to its sector peers. Highlight:
+1. Where the stock trades at a premium or discount vs peers (valuation)
+2. Where it leads or lags on quality metrics (ROE, margins)
+3. The overall investment implication of its peer positioning
+
+Example: "{symbol} trades at a premium to peers on valuation but leads on margin quality..."
+Be specific and data-driven."""
+
+    collected = []
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        with client.messages.stream(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                collected.append(text)
+                yield text
+    except Exception as exc:
+        error_msg = f"\n*Peer narrative error: {exc}*"
+        yield error_msg
+        return
+
+    if use_cache and collected:
+        _store_cached_response(f"peer_narrative:{cache_key}", "".join(collected))
+
+
+# ---------------------------------------------------------------------------
+# P10.4: Earnings Prediction & Beat Probability
+# ---------------------------------------------------------------------------
+
+
+def compute_earnings_beat_stats(earnings_history: list[dict]) -> dict:
+    """Compute earnings beat statistics from historical EPS surprises.
+
+    Parameters
+    ----------
+    earnings_history : list of dicts from api.get_earnings()
+                       Each dict has: actual, estimate, period, surprise, surprisePercent
+
+    Returns
+    -------
+    dict with beat_rate, avg_surprise_pct, trend, last_8_quarters
+    """
+    if not earnings_history:
+        return {}
+
+    valid = [
+        e for e in earnings_history
+        if e.get("actual") is not None and e.get("estimate") is not None
+    ]
+    if not valid:
+        return {}
+
+    beats = sum(1 for e in valid if (e.get("actual") or 0) > (e.get("estimate") or 0))
+    beat_rate = beats / len(valid) * 100
+
+    surprise_pcts = [e.get("surprisePercent") or 0 for e in valid]
+    avg_surprise = sum(surprise_pcts) / len(surprise_pcts) if surprise_pcts else 0
+
+    # Trend: compare last 4 vs prior 4 beat rates
+    trend = "flat"
+    if len(valid) >= 8:
+        recent_beats = sum(1 for e in valid[:4] if (e.get("actual") or 0) > (e.get("estimate") or 0))
+        prior_beats = sum(1 for e in valid[4:8] if (e.get("actual") or 0) > (e.get("estimate") or 0))
+        if recent_beats > prior_beats:
+            trend = "improving"
+        elif recent_beats < prior_beats:
+            trend = "deteriorating"
+
+    return {
+        "beat_rate": round(beat_rate, 1),
+        "avg_surprise_pct": round(avg_surprise, 2),
+        "beats": beats,
+        "total": len(valid),
+        "trend": trend,
+        "history": valid[:8],
+    }
+
+
+def stream_earnings_prediction(
+    symbol: str, beat_stats: dict, next_earnings_date: str | None = None
+) -> "Generator[str, None, None]":
+    """Stream Claude qualitative earnings beat probability analysis."""
+
+    if not beat_stats:
+        yield "Insufficient earnings history for prediction."
+        return
+
+    context = f"""Stock: {symbol}
+Historical earnings beat rate: {beat_stats.get('beat_rate', 'N/A')}% ({beat_stats.get('beats', 0)}/{beat_stats.get('total', 0)} quarters)
+Average EPS surprise: {beat_stats.get('avg_surprise_pct', 'N/A')}%
+Beat trend (last 4 vs prior 4): {beat_stats.get('trend', 'N/A')}
+Next earnings date: {next_earnings_date or 'Unknown'}"""
+
+    prompt = f"""{context}
+
+Based on this earnings history, provide:
+1. A qualitative beat probability assessment (Low / Moderate / High) with rationale
+2. Key factors that could drive a beat or miss
+3. What to watch for in the upcoming earnings report
+
+Keep it concise (3-4 sentences). Be calibrated — don't guarantee outcomes."""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        with client.messages.stream(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+    except Exception as exc:
+        yield f"\n*Earnings prediction error: {exc}*"

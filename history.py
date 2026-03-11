@@ -161,3 +161,202 @@ def get_tracked_symbols() -> list[str]:
         return [r["symbol"] for r in rows]
     except Exception:
         return []
+
+
+# ---------------------------------------------------------------------------
+# P13.3: Named Analysis Snapshots
+# ---------------------------------------------------------------------------
+
+_SNAPSHOTS_DIR = _DATA_DIR / "snapshots"
+
+
+def save_named_snapshot(
+    symbol: str,
+    name: str,
+    metrics: dict,
+    factor_scores: dict,
+    risk: dict,
+    claude_output: str = "",
+    factors_list: list | None = None,
+) -> str:
+    """Save a named analysis snapshot to disk.
+
+    Parameters
+    ----------
+    symbol : stock ticker
+    name : user-provided snapshot name
+    metrics : dict of financial/price metrics
+    factor_scores : dict of individual factor scores
+    risk : risk analysis result dict
+    claude_output : Claude AI analysis text
+    factors_list : list of factor dicts (name, score, label, etc.)
+
+    Returns
+    -------
+    snapshot filename (without path)
+    """
+    _SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    ts = int(time.time())
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in name)[:50]
+    filename = f"{symbol}_{ts}_{safe_name}.json"
+    path = _SNAPSHOTS_DIR / filename
+
+    snapshot = {
+        "symbol": symbol.upper(),
+        "name": name,
+        "timestamp": ts,
+        "date": datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M"),
+        "metrics": metrics,
+        "factor_scores": factor_scores,
+        "risk": risk,
+        "claude_output": claude_output,
+        "factors_list": factors_list or [],
+        "composite_score": risk.get("composite_score") or sum(
+            v for v in factor_scores.values() if isinstance(v, (int, float))
+        ) / max(len(factor_scores), 1),
+    }
+
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, indent=2, default=str)
+        log.info("Snapshot saved: %s", path)
+        return filename
+    except OSError as exc:
+        log.error("Failed to save snapshot %s: %s", filename, exc)
+        return ""
+
+
+def list_snapshots(symbol: str | None = None) -> list[dict]:
+    """Return list of saved snapshots, newest first.
+
+    Parameters
+    ----------
+    symbol : optional filter by ticker symbol
+    """
+    _SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(_SNAPSHOTS_DIR.glob("*.json"), reverse=True)
+    snapshots = []
+
+    for path in files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if symbol and data.get("symbol", "").upper() != symbol.upper():
+                continue
+            snapshots.append({
+                "filename": path.name,
+                "path": str(path),
+                "symbol": data.get("symbol", ""),
+                "name": data.get("name", ""),
+                "date": data.get("date", ""),
+                "timestamp": data.get("timestamp", 0),
+                "composite_score": data.get("composite_score", 0),
+                "risk_level": data.get("risk", {}).get("risk_level", ""),
+            })
+        except Exception as exc:
+            log.debug("Could not read snapshot %s: %s", path.name, exc)
+
+    return snapshots
+
+
+def load_snapshot(filename: str) -> dict | None:
+    """Load a snapshot by filename.
+
+    Returns the full snapshot dict, or None if not found.
+    """
+    path = _SNAPSHOTS_DIR / filename
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        log.warning("Failed to load snapshot %s: %s", filename, exc)
+        return None
+
+
+def delete_snapshot(filename: str) -> bool:
+    """Delete a snapshot file. Returns True on success."""
+    path = _SNAPSHOTS_DIR / filename
+    try:
+        path.unlink(missing_ok=True)
+        log.info("Deleted snapshot: %s", filename)
+        return True
+    except OSError as exc:
+        log.warning("Failed to delete snapshot %s: %s", filename, exc)
+        return False
+
+
+def diff_snapshots(snap_a: dict, snap_b: dict) -> dict:
+    """Compare two snapshots and return a diff summary.
+
+    Parameters
+    ----------
+    snap_a : older snapshot dict
+    snap_b : newer snapshot dict
+
+    Returns
+    -------
+    dict with changed_factors, changed_metrics, risk_change, summary
+    """
+    changes = {
+        "symbol": snap_b.get("symbol", ""),
+        "name_a": snap_a.get("name", ""),
+        "name_b": snap_b.get("name", ""),
+        "date_a": snap_a.get("date", ""),
+        "date_b": snap_b.get("date", ""),
+        "changed_factors": [],
+        "changed_metrics": [],
+        "risk_change": None,
+        "score_change": None,
+    }
+
+    # Factor score changes
+    scores_a = snap_a.get("factor_scores", {})
+    scores_b = snap_b.get("factor_scores", {})
+    for factor in set(list(scores_a.keys()) + list(scores_b.keys())):
+        a_val = scores_a.get(factor)
+        b_val = scores_b.get(factor)
+        if a_val is not None and b_val is not None:
+            diff = b_val - a_val
+            if abs(diff) >= 5:
+                changes["changed_factors"].append({
+                    "factor": factor,
+                    "before": a_val,
+                    "after": b_val,
+                    "change": round(diff, 1),
+                    "direction": "up" if diff > 0 else "down",
+                })
+
+    # Composite score change
+    score_a = snap_a.get("composite_score", 0)
+    score_b = snap_b.get("composite_score", 0)
+    if score_a and score_b:
+        changes["score_change"] = round(score_b - score_a, 1)
+
+    # Risk change
+    risk_a = snap_a.get("risk", {}).get("risk_level", "")
+    risk_b = snap_b.get("risk", {}).get("risk_level", "")
+    if risk_a != risk_b:
+        changes["risk_change"] = {"before": risk_a, "after": risk_b}
+
+    # Metric changes
+    metrics_a = snap_a.get("metrics", {})
+    metrics_b = snap_b.get("metrics", {})
+    key_metrics = ["price", "pe", "eps", "revenue_growth", "gross_margin"]
+    for key in key_metrics:
+        a_val = metrics_a.get(key)
+        b_val = metrics_b.get(key)
+        if a_val is not None and b_val is not None:
+            try:
+                pct_change = (float(b_val) - float(a_val)) / abs(float(a_val)) * 100
+                if abs(pct_change) >= 5:
+                    changes["changed_metrics"].append({
+                        "metric": key,
+                        "before": a_val,
+                        "after": b_val,
+                        "pct_change": round(pct_change, 1),
+                    })
+            except (TypeError, ZeroDivisionError):
+                pass
+
+    return changes
