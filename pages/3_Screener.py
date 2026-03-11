@@ -8,6 +8,7 @@ from screener import (
     run_screen, default_universe, load_universe,
     results_to_csv, sentiment_skipped_warning,
     save_screen_template, load_screen_templates, delete_screen_template,
+    SHORT_SQUEEZE_PRESET, apply_esg_filter,
 )
 
 st.set_page_config(page_title="Stock Screener", page_icon="🔍", layout="wide")
@@ -94,6 +95,35 @@ with st.expander("Screen Templates (Save / Load)", expanded=False):
                 st.rerun()
             else:
                 st.warning("No active filters to save.")
+
+# -------------------------------------------------------------------------
+# P16.4: Short Squeeze Preset
+# -------------------------------------------------------------------------
+with st.expander("Quick Presets (P16.4)", expanded=False):
+    st.caption("Apply pre-built filter sets for common strategies.")
+    if st.button("Short Squeeze Candidates", key="short_squeeze_preset"):
+        st.session_state.screener_filters = [
+            {"dimension": "momentum_min", "operator": ">=",
+             "value": SHORT_SQUEEZE_PRESET["momentum_min"],
+             "label": f"Momentum ≥ {SHORT_SQUEEZE_PRESET['momentum_min']}"},
+        ]
+        st.success(
+            f"Short squeeze preset applied: "
+            f"short %float ≥ {SHORT_SQUEEZE_PRESET['short_pct_float_min']}%, "
+            f"days-to-cover ≥ {SHORT_SQUEEZE_PRESET['days_to_cover_min']}"
+        )
+        st.rerun()
+
+# -------------------------------------------------------------------------
+# P19.3: ESG Filter
+# -------------------------------------------------------------------------
+_esg_filter_enabled = False
+_min_esg_score = 0
+with st.expander("ESG Filter (P19.3)", expanded=False):
+    _esg_filter_enabled = st.checkbox("Filter by minimum ESG score", value=False)
+    if _esg_filter_enabled:
+        _min_esg_score = st.slider("Minimum ESG score (0–100)", 0, 100, 50)
+        st.caption("Filters out companies with ESG scores below the threshold.")
 
 # -------------------------------------------------------------------------
 # Query mode
@@ -269,6 +299,15 @@ if st.button("Run Screen", type="primary"):
     if not results:
         st.warning("No stocks passed the filters. Try relaxing your criteria.")
         st.stop()
+
+    # P19.3: Apply ESG filter if enabled
+    if _esg_filter_enabled and _min_esg_score > 0:
+        pre_esg_count = len(results)
+        results = apply_esg_filter(results, _min_esg_score)
+        st.caption(f"ESG filter removed {pre_esg_count - len(results)} stocks below ESG score {_min_esg_score}.")
+        if not results:
+            st.warning("No stocks passed the ESG filter. Try lowering the minimum ESG score.")
+            st.stop()
 
     st.success(f"Found **{len(results)}** stocks matching your criteria.")
 

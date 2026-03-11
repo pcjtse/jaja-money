@@ -850,33 +850,33 @@ Expose the analysis engine as a REST API so the platform can be integrated into 
 | 14 | Async / Concurrent API Fetching | ✅ Done |
 | 14 | Redis Cache Backend Option | ✅ Done |
 | 14 | API Server Mode (FastAPI) | ✅ Done |
-| 15 | Options Chain Analysis & IV Surface | [ ] Pending |
-| 15 | AI-Generated Price Target (Bull/Base/Bear) | [ ] Pending |
-| 15 | Multi-Timeframe Factor Scoring | [ ] Pending |
-| 15 | Custom Factor Weights via UI | [ ] Pending |
-| 15 | Earnings Call Q&A (Transcript Chat) | [ ] Pending |
-| 16 | Reddit/StockTwits Social Sentiment | [ ] Pending |
-| 16 | Institutional 13F Ownership Tracker | [ ] Pending |
-| 16 | Unusual Options Flow Detection | [ ] Pending |
-| 16 | Short Squeeze Screener | [ ] Pending |
-| 16 | Earnings Calendar with Predicted Move | [ ] Pending |
-| 17 | Risk-Parity Portfolio Builder | [ ] Pending |
-| 17 | Historical Crash Stress Testing | [ ] Pending |
-| 17 | Tax-Loss Harvesting Suggestions | [ ] Pending |
-| 17 | Options Hedging Suggestions (Puts/Collars) | [ ] Pending |
-| 17 | Portfolio Drift Rebalancing Alerts | [ ] Pending |
-| 18 | Dark Mode Toggle | [ ] Pending |
-| 18 | Batch Overnight Analysis | [ ] Pending |
-| 18 | Shareable Analysis Links | [ ] Pending |
-| 18 | Keyboard Shortcuts | [ ] Pending |
-| 19 | Analyst Price Target Distribution | [ ] Pending |
-| 19 | Supply Chain Risk Analysis via EDGAR | [ ] Pending |
-| 19 | ESG Scoring & Screening | [ ] Pending |
-| 19 | Earnings Surprise 8-Quarter History Chart | [ ] Pending |
-| 20 | Market Regime Detection (Bull/Bear/Sideways) | [ ] Pending |
-| 20 | News Impact Scoring (Claude per-article) | [ ] Pending |
-| 20 | Signal Change Notifications | [ ] Pending |
-| 20 | Weekly Portfolio Performance Email Report | [ ] Pending |
+| 15 | Options Chain Analysis & IV Surface | [x] Done |
+| 15 | AI-Generated Price Target (Bull/Base/Bear) | [x] Done |
+| 15 | Multi-Timeframe Factor Scoring | [x] Done |
+| 15 | Custom Factor Weights via UI | [x] Done |
+| 15 | Earnings Call Q&A (Transcript Chat) | [x] Done |
+| 16 | Reddit/StockTwits Social Sentiment | [x] Done |
+| 16 | Institutional 13F Ownership Tracker | [x] Done |
+| 16 | Unusual Options Flow Detection | [x] Done |
+| 16 | Short Squeeze Screener | [x] Done |
+| 16 | Earnings Calendar with Predicted Move | [x] Done |
+| 17 | Risk-Parity Portfolio Builder | [x] Done |
+| 17 | Historical Crash Stress Testing | [x] Done |
+| 17 | Tax-Loss Harvesting Suggestions | [x] Done |
+| 17 | Options Hedging Suggestions (Puts/Collars) | [x] Done |
+| 17 | Portfolio Drift Rebalancing Alerts | [x] Done |
+| 18 | Dark Mode Toggle | [x] Done |
+| 18 | Batch Overnight Analysis | [x] Done |
+| 18 | Shareable Analysis Links | [x] Done |
+| 18 | Keyboard Shortcuts | [x] Done |
+| 19 | Analyst Price Target Distribution | [x] Done |
+| 19 | Supply Chain Risk Analysis via EDGAR | [x] Done |
+| 19 | ESG Scoring & Screening | [x] Done |
+| 19 | Earnings Surprise 8-Quarter History Chart | [x] Done |
+| 20 | Market Regime Detection (Bull/Bear/Sideways) | [x] Done |
+| 20 | News Impact Scoring (Claude per-article) | [x] Done |
+| 20 | Signal Change Notifications | [x] Done |
+| 20 | Weekly Portfolio Performance Email Report | [x] Done |
 
 ---
 
@@ -885,11 +885,11 @@ Expose the analysis engine as a REST API so the platform can be integrated into 
 ### 15.1 Options Chain Analysis & IV Surface
 Display the full options chain alongside an implied volatility surface and key options-derived signals.
 
-- [ ] Fetch options chain data from Finnhub (calls + puts for nearest 3 expiries)
-- [ ] Compute put/call ratio, max pain price, and open-interest distribution
-- [ ] Render an IV surface (strike × expiry heatmap) using Plotly
-- [ ] Flag unusual options activity (volume > 3× open interest)
-- [ ] Add `options_analysis.py` and surface it in a new "Options" tab in `app.py`
+- [x] Fetch options chain data from Finnhub (calls + puts for nearest 3 expiries)
+- [x] Compute put/call ratio, max pain price, and open-interest distribution
+- [x] Render an IV surface (strike × expiry heatmap) using Plotly
+- [x] Flag unusual options activity (volume > 3× open interest)
+- [x] Add `options_analysis.py` and surface it in a new "Options" tab in `app.py`
 
 **Files:** `options_analysis.py`, `app.py`
 
@@ -898,10 +898,10 @@ Display the full options chain alongside an implied volatility surface and key o
 ### 15.2 AI-Generated Price Target (Bull / Base / Bear)
 Have Claude produce a structured 12-month price target with three scenarios.
 
-- [ ] Add a dedicated Claude prompt that requests a numeric price target for each scenario
-- [ ] Parse the structured JSON output (target price, key assumptions, catalysts, risks)
-- [ ] Display a fan-chart (Plotly) showing the three scenarios against current price
-- [ ] Cache the result for 24 hours alongside the fundamental analysis cache
+- [x] Add a dedicated Claude prompt that requests a numeric price target for each scenario
+- [x] Parse the structured JSON output (target price, key assumptions, catalysts, risks)
+- [x] Display a fan-chart (Plotly) showing the three scenarios against current price
+- [x] Cache the result for 24 hours alongside the fundamental analysis cache
 
 **Files:** `analyzer.py`, `app.py`
 
@@ -910,10 +910,10 @@ Have Claude produce a structured 12-month price target with three scenarios.
 ### 15.3 Multi-Timeframe Factor Scoring
 Run the 8-factor model on weekly and monthly candles in addition to daily, so users can see trend confirmation across timeframes.
 
-- [ ] Extend `api.py` to fetch weekly and monthly OHLCV candles from Finnhub
-- [ ] Add a `timeframe` parameter to `compute_factors()` in `factors.py`
-- [ ] Display a 3-row table (Daily / Weekly / Monthly) in the factor section of `app.py`
-- [ ] Highlight agreement (all three align) vs divergence (mixed signals) with color coding
+- [x] Extend `api.py` to fetch weekly and monthly OHLCV candles from Finnhub
+- [x] Add a `timeframe` parameter to `compute_factors()` in `factors.py`
+- [x] Display a 3-row table (Daily / Weekly / Monthly) in the factor section of `app.py`
+- [x] Highlight agreement (all three align) vs divergence (mixed signals) with color coding
 
 **Files:** `factors.py`, `api.py`, `app.py`
 
@@ -922,10 +922,10 @@ Run the 8-factor model on weekly and monthly candles in addition to daily, so us
 ### 15.4 Custom Factor Weights via UI
 Let users override the 8-factor weights directly in the dashboard without editing `config.yaml`.
 
-- [ ] Add an expandable "Factor Weights" panel in the sidebar with 8 sliders (0–2×)
-- [ ] Normalise weights so they sum to 1.0 and recompute the composite score live
-- [ ] Save per-user weight presets (e.g. "Value", "Momentum", "Quality") to local JSON
-- [ ] Add a "Reset to defaults" button that loads values from `config.yaml`
+- [x] Add an expandable "Factor Weights" panel in the sidebar with 8 sliders (0–2×)
+- [x] Normalise weights so they sum to 1.0 and recompute the composite score live
+- [x] Save per-user weight presets (e.g. "Value", "Momentum", "Quality") to local JSON
+- [x] Add a "Reset to defaults" button that loads values from `config.yaml`
 
 **Files:** `factors.py`, `ui_prefs.py`, `app.py`
 
@@ -934,10 +934,10 @@ Let users override the 8-factor weights directly in the dashboard without editin
 ### 15.5 Earnings Call Q&A (Transcript Chat)
 Fetch the most recent earnings call transcript and let users ask natural-language questions against it.
 
-- [ ] Integrate a transcript data source (e.g. The Motley Fool transcript scraper or Finnhub transcripts endpoint)
-- [ ] Chunk and store transcript text; prepend relevant chunks to each user query
-- [ ] Add a "Transcript Q&A" tab with a dedicated chat widget
-- [ ] Show management tone metrics (positive/negative/cautious word counts) via FinBERT
+- [x] Integrate a transcript data source (e.g. The Motley Fool transcript scraper or Finnhub transcripts endpoint)
+- [x] Chunk and store transcript text; prepend relevant chunks to each user query
+- [x] Add a "Transcript Q&A" tab with a dedicated chat widget
+- [x] Show management tone metrics (positive/negative/cautious word counts) via FinBERT
 
 **Files:** `analyzer.py`, `app.py`
 
@@ -948,10 +948,10 @@ Fetch the most recent earnings call transcript and let users ask natural-languag
 ### 16.1 Reddit / StockTwits Social Sentiment
 Aggregate social media chatter into a quantifiable signal alongside FinBERT news sentiment.
 
-- [ ] Call Reddit's JSON API (`/r/wallstreetbets/search.json`) for ticker mentions (no API key needed)
-- [ ] Call StockTwits `/api/2/streams/symbol/{ticker}.json` for recent messages
-- [ ] Run FinBERT over post titles/bodies; aggregate to a social-sentiment score
-- [ ] Add a "Social Buzz" gauge to the sentiment section; include mention count trend
+- [x] Call Reddit's JSON API (`/r/wallstreetbets/search.json`) for ticker mentions (no API key needed)
+- [x] Call StockTwits `/api/2/streams/symbol/{ticker}.json` for recent messages
+- [x] Run FinBERT over post titles/bodies; aggregate to a social-sentiment score
+- [x] Add a "Social Buzz" gauge to the sentiment section; include mention count trend
 
 **Files:** `sentiment.py`, `app.py`
 
@@ -960,10 +960,10 @@ Aggregate social media chatter into a quantifiable signal alongside FinBERT news
 ### 16.2 Institutional 13F Ownership Tracker
 Show which major institutions hold the stock and how their positions changed last quarter.
 
-- [ ] Fetch 13F data from SEC EDGAR XBRL API or a free data provider
-- [ ] Display top-10 institutional holders sorted by position size
-- [ ] Compute QoQ change (added / reduced / new / exited) with directional arrows
-- [ ] Flag concentrated ownership (top 5 holders > 50%) as a liquidity risk signal
+- [x] Fetch 13F data from SEC EDGAR XBRL API or a free data provider
+- [x] Display top-10 institutional holders sorted by position size
+- [x] Compute QoQ change (added / reduced / new / exited) with directional arrows
+- [x] Flag concentrated ownership (top 5 holders > 50%) as a liquidity risk signal
 
 **Files:** `edgar.py` (extend) or new `ownership.py`, `app.py`
 
@@ -972,10 +972,10 @@ Show which major institutions hold the stock and how their positions changed las
 ### 16.3 Unusual Options Flow Detection
 Surface large, potentially informed options trades as a supplementary signal.
 
-- [ ] Reuse options chain data from 15.1; compute volume-to-OI ratio per contract
-- [ ] Flag contracts where volume > 5× average daily volume or single-trade sweeps detected
-- [ ] Assign a directional bias (bullish call sweep / bearish put sweep)
-- [ ] Add a collapsible "Options Flow" panel in the risk section
+- [x] Reuse options chain data from 15.1; compute volume-to-OI ratio per contract
+- [x] Flag contracts where volume > 5× average daily volume or single-trade sweeps detected
+- [x] Assign a directional bias (bullish call sweep / bearish put sweep)
+- [x] Add a collapsible "Options Flow" panel in the risk section
 
 **Files:** `options_analysis.py`, `guardrails.py`, `app.py`
 
@@ -984,10 +984,10 @@ Surface large, potentially informed options trades as a supplementary signal.
 ### 16.4 Short Squeeze Screener
 Identify stocks with the conditions for a potential short squeeze.
 
-- [ ] Add squeeze score to `screener.py`: short float % > 15%, days-to-cover > 5, upward price momentum
-- [ ] Add "Short Squeeze" as a preset filter in the Screener page
-- [ ] Rank results by squeeze probability score; show key metrics table
-- [ ] Include a brief Claude narrative explaining the squeeze setup for top candidates
+- [x] Add squeeze score to `screener.py`: short float % > 15%, days-to-cover > 5, upward price momentum
+- [x] Add "Short Squeeze" as a preset filter in the Screener page
+- [x] Rank results by squeeze probability score; show key metrics table
+- [x] Include a brief Claude narrative explaining the squeeze setup for top candidates
 
 **Files:** `screener.py`, `pages/3_Screener.py`
 
@@ -996,10 +996,10 @@ Identify stocks with the conditions for a potential short squeeze.
 ### 16.5 Earnings Calendar with Predicted Move
 Show upcoming earnings dates alongside the options-implied expected move.
 
-- [ ] Fetch upcoming earnings dates from Finnhub `/calendar/earnings`
-- [ ] Compute the at-the-money straddle cost as the implied move percentage
-- [ ] Display a timeline chart of watchlist stocks' upcoming earnings
-- [ ] Show historical actual moves vs implied moves for the last 4 quarters
+- [x] Fetch upcoming earnings dates from Finnhub `/calendar/earnings`
+- [x] Compute the at-the-money straddle cost as the implied move percentage
+- [x] Display a timeline chart of watchlist stocks' upcoming earnings
+- [x] Show historical actual moves vs implied moves for the last 4 quarters
 
 **Files:** `api.py`, `app.py` (new "Earnings Calendar" section)
 
@@ -1010,10 +1010,10 @@ Show upcoming earnings dates alongside the options-implied expected move.
 ### 17.1 Risk-Parity Portfolio Builder
 Automatically size positions so each contributes equal risk to the overall portfolio.
 
-- [ ] Add a "Risk-Parity" toggle in `pages/4_Portfolio.py`
-- [ ] Compute inverse-volatility weights from 60-day rolling realised vol
-- [ ] Visualise the risk contribution breakdown (pie chart) vs equal-weight
-- [ ] Export the suggested weights as a downloadable CSV
+- [x] Add a "Risk-Parity" toggle in `pages/4_Portfolio.py`
+- [x] Compute inverse-volatility weights from 60-day rolling realised vol
+- [x] Visualise the risk contribution breakdown (pie chart) vs equal-weight
+- [x] Export the suggested weights as a downloadable CSV
 
 **Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
 
@@ -1022,10 +1022,10 @@ Automatically size positions so each contributes equal risk to the overall portf
 ### 17.2 Historical Crash Stress Testing
 Run the current portfolio through major historical drawdown periods and show projected loss.
 
-- [ ] Define 5 stress scenarios: 2000 dot-com, 2008 financial crisis, 2020 COVID crash, 2022 rate shock, 2024 AI correction
-- [ ] Apply the average sector/factor loss for each period to portfolio holdings
-- [ ] Display a waterfall chart showing contribution by position to each scenario loss
-- [ ] Have Claude generate a one-paragraph narrative for the worst scenario
+- [x] Define 5 stress scenarios: 2000 dot-com, 2008 financial crisis, 2020 COVID crash, 2022 rate shock, 2024 AI correction
+- [x] Apply the average sector/factor loss for each period to portfolio holdings
+- [x] Display a waterfall chart showing contribution by position to each scenario loss
+- [x] Have Claude generate a one-paragraph narrative for the worst scenario
 
 **Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
 
@@ -1034,10 +1034,10 @@ Run the current portfolio through major historical drawdown periods and show pro
 ### 17.3 Tax-Loss Harvesting Suggestions
 Identify losing positions and suggest substantially-similar replacements to harvest losses without disrupting exposure.
 
-- [ ] Flag positions with an unrealised loss > 5% from purchase price (user-input cost basis)
-- [ ] Map each holding to a peer/ETF with high correlation (> 0.85) as a wash-sale-safe swap
-- [ ] Display a side-by-side table of original vs replacement with tracking-error estimate
-- [ ] Include a disclaimer that this is not tax advice
+- [x] Flag positions with an unrealised loss > 5% from purchase price (user-input cost basis)
+- [x] Map each holding to a peer/ETF with high correlation (> 0.85) as a wash-sale-safe swap
+- [x] Display a side-by-side table of original vs replacement with tracking-error estimate
+- [x] Include a disclaimer that this is not tax advice
 
 **Files:** `portfolio_analysis.py`, `pages/4_Portfolio.py`
 
@@ -1046,10 +1046,10 @@ Identify losing positions and suggest substantially-similar replacements to harv
 ### 17.4 Options Hedging Suggestions (Puts / Collars)
 Let Claude recommend simple protective options strategies for existing positions.
 
-- [ ] Pull at-the-money IV and nearest put prices from options chain (15.1)
-- [ ] Compute breakeven, max loss, and cost as % of position for a 30-day protective put
-- [ ] Also price a zero-cost collar (sell call to fund put)
-- [ ] Display in a summary card; have Claude explain the trade-off in plain language
+- [x] Pull at-the-money IV and nearest put prices from options chain (15.1)
+- [x] Compute breakeven, max loss, and cost as % of position for a 30-day protective put
+- [x] Also price a zero-cost collar (sell call to fund put)
+- [x] Display in a summary card; have Claude explain the trade-off in plain language
 
 **Files:** `options_analysis.py`, `analyzer.py`, `pages/4_Portfolio.py`
 
@@ -1058,10 +1058,10 @@ Let Claude recommend simple protective options strategies for existing positions
 ### 17.5 Portfolio Drift Rebalancing Alerts
 Notify users when any position's actual allocation drifts beyond a configurable threshold from its target.
 
-- [ ] Let users set target weights alongside current positions in Portfolio page
-- [ ] Poll (via APScheduler) and compute current vs target weight using latest prices
-- [ ] Trigger alert (webhook + in-app badge) when drift exceeds threshold (default 5%)
-- [ ] Show a rebalancing trade list (buy/sell X shares) to restore target weights
+- [x] Let users set target weights alongside current positions in Portfolio page
+- [x] Poll (via APScheduler) and compute current vs target weight using latest prices
+- [x] Trigger alert (webhook + in-app badge) when drift exceeds threshold (default 5%)
+- [x] Show a rebalancing trade list (buy/sell X shares) to restore target weights
 
 **Files:** `alerts.py`, `portfolio_analysis.py`, `pages/4_Portfolio.py`
 
@@ -1072,10 +1072,10 @@ Notify users when any position's actual allocation drifts beyond a configurable 
 ### 18.1 Dark Mode Toggle
 Add a light/dark theme switch that persists across sessions.
 
-- [ ] Inject a custom Streamlit theme via `st.markdown` CSS when dark mode is active
-- [ ] Toggle stored in `ui_prefs.py`; default follows OS preference via `prefers-color-scheme`
-- [ ] Update all Plotly chart templates to use `plotly_dark` when dark mode is on
-- [ ] Ensure all custom HTML report exports also support dark mode styles
+- [x] Inject a custom Streamlit theme via `st.markdown` CSS when dark mode is active
+- [x] Toggle stored in `ui_prefs.py`; default follows OS preference via `prefers-color-scheme`
+- [x] Update all Plotly chart templates to use `plotly_dark` when dark mode is on
+- [x] Ensure all custom HTML report exports also support dark mode styles
 
 **Files:** `ui_prefs.py`, `app.py`, `export.py`
 
@@ -1084,10 +1084,10 @@ Add a light/dark theme switch that persists across sessions.
 ### 18.2 Batch Overnight Analysis
 Queue a list of tickers to be fully analyzed overnight and present results as a morning briefing.
 
-- [ ] Add a "Batch Queue" panel where users add up to 50 tickers
-- [ ] Schedule the run via APScheduler at a user-configured time (default 06:00 local)
-- [ ] Store per-ticker factor score, risk level, and Claude summary in the history DB
-- [ ] Display results as a sortable dashboard table; email the digest (reuse `digest.py`)
+- [x] Add a "Batch Queue" panel where users add up to 50 tickers
+- [x] Schedule the run via APScheduler at a user-configured time (default 06:00 local)
+- [x] Store per-ticker factor score, risk level, and Claude summary in the history DB
+- [x] Display results as a sortable dashboard table; email the digest (reuse `digest.py`)
 
 **Files:** `digest.py`, `history.py`, `app.py`
 
@@ -1096,10 +1096,10 @@ Queue a list of tickers to be fully analyzed overnight and present results as a 
 ### 18.3 Shareable Analysis Links
 Generate a short URL or encoded link that restores a specific analysis state.
 
-- [ ] Serialize the current ticker + key display settings to a base64-encoded URL parameter
-- [ ] Add a "Share" button that copies the link to clipboard
-- [ ] On page load, detect the `?share=` parameter and auto-populate the analysis
-- [ ] Optionally generate a static HTML snapshot (reuse `export.py`) as a permalink
+- [x] Serialize the current ticker + key display settings to a base64-encoded URL parameter
+- [x] Add a "Share" button that copies the link to clipboard
+- [x] On page load, detect the `?share=` parameter and auto-populate the analysis
+- [x] Optionally generate a static HTML snapshot (reuse `export.py`) as a permalink
 
 **Files:** `app.py`, `export.py`
 
@@ -1108,10 +1108,10 @@ Generate a short URL or encoded link that restores a specific analysis state.
 ### 18.4 Keyboard Shortcuts
 Improve power-user productivity with hotkeys for common actions.
 
-- [ ] Inject JavaScript via `st.components.v1.html` to capture key presses
-- [ ] `A` — analyze current ticker, `W` — add/remove watchlist, `E` — export PDF
-- [ ] `1`–`6` — jump to page (Dashboard, Compare, Screener, Portfolio, Sectors, Backtest)
-- [ ] Show a keyboard shortcut cheatsheet overlay triggered by `?`
+- [x] Inject JavaScript via `st.components.v1.html` to capture key presses
+- [x] `A` — analyze current ticker, `W` — add/remove watchlist, `E` — export PDF
+- [x] `1`–`6` — jump to page (Dashboard, Compare, Screener, Portfolio, Sectors, Backtest)
+- [x] Show a keyboard shortcut cheatsheet overlay triggered by `?`
 
 **Files:** `app.py`, new `shortcuts.js` embedded component
 
@@ -1122,10 +1122,10 @@ Improve power-user productivity with hotkeys for common actions.
 ### 19.1 Analyst Price Target Distribution
 Visualise the full range of analyst price targets rather than a single consensus number.
 
-- [ ] Fetch analyst target data from Finnhub `/stock/price-target`
-- [ ] Display a histogram of individual analyst targets with min/mean/median/max annotations
-- [ ] Overlay current price as a vertical line; show upside/downside to each quartile
-- [ ] Flag when the spread (max − min) / mean > 30% as high analyst disagreement
+- [x] Fetch analyst target data from Finnhub `/stock/price-target`
+- [x] Display a histogram of individual analyst targets with min/mean/median/max annotations
+- [x] Overlay current price as a vertical line; show upside/downside to each quartile
+- [x] Flag when the spread (max − min) / mean > 30% as high analyst disagreement
 
 **Files:** `api.py`, `app.py`
 
@@ -1134,10 +1134,10 @@ Visualise the full range of analyst price targets rather than a single consensus
 ### 19.2 Supply Chain Risk Analysis via EDGAR
 Use Claude to identify key suppliers, customers, and geographic dependencies from 10-K filings.
 
-- [ ] Extract the "Risk Factors" and "Business" sections of the 10-K via `edgar.py`
-- [ ] Prompt Claude to list top 5 suppliers, top 5 customers, and geographic revenue breakdown
-- [ ] Flag single-customer concentration risk (> 10% revenue from one customer)
-- [ ] Display as a supply chain card; cache results for 30 days
+- [x] Extract the "Risk Factors" and "Business" sections of the 10-K via `edgar.py`
+- [x] Prompt Claude to list top 5 suppliers, top 5 customers, and geographic revenue breakdown
+- [x] Flag single-customer concentration risk (> 10% revenue from one customer)
+- [x] Display as a supply chain card; cache results for 30 days
 
 **Files:** `edgar.py`, `analyzer.py`, `app.py`
 
@@ -1146,10 +1146,10 @@ Use Claude to identify key suppliers, customers, and geographic dependencies fro
 ### 19.3 ESG Scoring & Screening
 Surface Environmental, Social, and Governance scores and allow ESG-based filtering in the Screener.
 
-- [ ] Integrate a free ESG data source (e.g. Yahoo Finance via yfinance `sustainability` or Open ESG)
-- [ ] Display E/S/G sub-scores with industry percentile ranks
-- [ ] Add ESG min-score filter to `screener.py`
-- [ ] Flag ESG controversy events (lawsuits, fines) from news sentiment scan
+- [x] Integrate a free ESG data source (e.g. Yahoo Finance via yfinance `sustainability` or Open ESG)
+- [x] Display E/S/G sub-scores with industry percentile ranks
+- [x] Add ESG min-score filter to `screener.py`
+- [x] Flag ESG controversy events (lawsuits, fines) from news sentiment scan
 
 **Files:** `screener.py`, `api.py`, `app.py`, `pages/3_Screener.py`
 
@@ -1158,10 +1158,10 @@ Surface Environmental, Social, and Governance scores and allow ESG-based filteri
 ### 19.4 Earnings Surprise 8-Quarter History Chart
 Show a rolling 8-quarter view of EPS estimates vs actuals to surface consistent beat/miss patterns.
 
-- [ ] Fetch up to 8 quarters of earnings from Finnhub `/stock/earnings`
-- [ ] Render a bar chart: estimate (grey) vs actual (green/red), annotated with surprise %
-- [ ] Compute a "Beat Consistency Score" (streak of beats / 8 quarters)
-- [ ] Incorporate into the factor score as a tie-breaker for the Earnings Quality factor
+- [x] Fetch up to 8 quarters of earnings from Finnhub `/stock/earnings`
+- [x] Render a bar chart: estimate (grey) vs actual (green/red), annotated with surprise %
+- [x] Compute a "Beat Consistency Score" (streak of beats / 8 quarters)
+- [x] Incorporate into the factor score as a tie-breaker for the Earnings Quality factor
 
 **Files:** `api.py`, `factors.py`, `app.py`
 
@@ -1172,10 +1172,10 @@ Show a rolling 8-quarter view of EPS estimates vs actuals to surface consistent 
 ### 20.1 Market Regime Detection (Bull / Bear / Sideways)
 Classify the current macro market regime and adjust individual stock signals accordingly.
 
-- [ ] Use SPY 200-day SMA position, VIX level, and yield-curve slope as regime inputs
-- [ ] Output one of: Strong Bull, Bull, Neutral, Bear, Strong Bear
-- [ ] Apply a regime multiplier to the composite factor score (e.g. −10 pts in Strong Bear)
-- [ ] Display regime badge prominently in the dashboard header
+- [x] Use SPY 200-day SMA position, VIX level, and yield-curve slope as regime inputs
+- [x] Output one of: Strong Bull, Bull, Neutral, Bear, Strong Bear
+- [x] Apply a regime multiplier to the composite factor score (e.g. −10 pts in Strong Bear)
+- [x] Display regime badge prominently in the dashboard header
 
 **Files:** `guardrails.py`, `factors.py`, `app.py`
 
@@ -1184,10 +1184,10 @@ Classify the current macro market regime and adjust individual stock signals acc
 ### 20.2 News Impact Scoring (Claude per-article)
 Rate each recent news headline by its potential price impact before running full sentiment.
 
-- [ ] For each of the 10 fetched headlines, ask Claude to rate impact: High / Medium / Low / Negligible
-- [ ] Weight FinBERT sentiment scores by Claude's impact rating when computing aggregate sentiment
-- [ ] Highlight "High Impact" articles in the news list with a badge
-- [ ] Cache per-headline impact scores keyed by article URL for 24 hours
+- [x] For each of the 10 fetched headlines, ask Claude to rate impact: High / Medium / Low / Negligible
+- [x] Weight FinBERT sentiment scores by Claude's impact rating when computing aggregate sentiment
+- [x] Highlight "High Impact" articles in the news list with a badge
+- [x] Cache per-headline impact scores keyed by article URL for 24 hours
 
 **Files:** `sentiment.py`, `analyzer.py`, `app.py`
 
@@ -1196,10 +1196,10 @@ Rate each recent news headline by its potential price impact before running full
 ### 20.3 Signal Change Notifications
 Alert users when a stock's composite factor score or risk level changes materially since last analysis.
 
-- [ ] Compare new factor score and risk level against the most recent history DB snapshot
-- [ ] Trigger an alert when score changes by > 10 pts or risk level changes by ≥ 1 tier
-- [ ] Display a "Signal Changed" banner in-app and fire existing webhook dispatch
-- [ ] Summarise what drove the change (which sub-factors moved most)
+- [x] Compare new factor score and risk level against the most recent history DB snapshot
+- [x] Trigger an alert when score changes by > 10 pts or risk level changes by ≥ 1 tier
+- [x] Display a "Signal Changed" banner in-app and fire existing webhook dispatch
+- [x] Summarise what drove the change (which sub-factors moved most)
 
 **Files:** `alerts.py`, `history.py`, `analyzer.py`, `app.py`
 
@@ -1208,9 +1208,9 @@ Alert users when a stock's composite factor score or risk level changes material
 ### 20.4 Weekly Portfolio Performance Email Report
 Automatically email a formatted performance summary every Monday morning.
 
-- [ ] Compute week-over-week return for each watchlist ticker from history DB snapshots
-- [ ] Rank best/worst performers; include factor score and risk level changes
-- [ ] Generate an HTML email using existing digest infrastructure in `digest.py`
-- [ ] Schedule via APScheduler (Monday 07:00 local); reuse SMTP config from `config.yaml`
+- [x] Compute week-over-week return for each watchlist ticker from history DB snapshots
+- [x] Rank best/worst performers; include factor score and risk level changes
+- [x] Generate an HTML email using existing digest infrastructure in `digest.py`
+- [x] Schedule via APScheduler (Monday 07:00 local); reuse SMTP config from `config.yaml`
 
 **Files:** `digest.py`, `history.py`, `config.yaml`
