@@ -659,6 +659,261 @@ def compute_factors(
     return factors
 
 
+# ---------------------------------------------------------------------------
+# P15.3: Multi-timeframe factor support
+# ---------------------------------------------------------------------------
+
+def compute_factors_timeframe(
+    quote: dict,
+    financials: dict | None,
+    close_daily: "pd.Series | None",
+    close_weekly: "pd.Series | None",
+    close_monthly: "pd.Series | None",
+    earnings: list,
+    recommendations: list,
+    sentiment_agg: dict | None,
+    sector: str | None = None,
+    revisions: dict | None = None,
+) -> dict:
+    """Compute factors across daily, weekly, and monthly timeframes.
+
+    Calls compute_factors() for each timeframe using the appropriate close
+    series, then derives a composite score per timeframe and an alignment
+    signal across all three.
+
+    Parameters
+    ----------
+    quote : current quote dict (price data)
+    financials : fundamental metrics dict or None
+    close_daily : daily close price Series or None
+    close_weekly : weekly close price Series or None
+    close_monthly : monthly close price Series or None
+    earnings : list of earnings surprise dicts
+    recommendations : list of analyst recommendation dicts
+    sentiment_agg : aggregated sentiment dict or None
+    sector : sector name for relative valuation, or None
+    revisions : estimate revision dict or None
+
+    Returns
+    -------
+    dict with keys:
+        daily, weekly, monthly  – factor lists from compute_factors()
+        daily_composite, weekly_composite, monthly_composite  – int 0-100
+        alignment – "Aligned Bull" | "Aligned Bear" | "Mixed"
+    """
+    daily_factors = compute_factors(
+        quote=quote,
+        financials=financials,
+        close=close_daily,
+        earnings=earnings,
+        recommendations=recommendations,
+        sentiment_agg=sentiment_agg,
+        sector=sector,
+        revisions=revisions,
+    )
+    weekly_factors = compute_factors(
+        quote=quote,
+        financials=financials,
+        close=close_weekly,
+        earnings=earnings,
+        recommendations=recommendations,
+        sentiment_agg=sentiment_agg,
+        sector=sector,
+        revisions=revisions,
+    )
+    monthly_factors = compute_factors(
+        quote=quote,
+        financials=financials,
+        close=close_monthly,
+        earnings=earnings,
+        recommendations=recommendations,
+        sentiment_agg=sentiment_agg,
+        sector=sector,
+        revisions=revisions,
+    )
+
+    daily_composite = composite_score(daily_factors)
+    weekly_composite = composite_score(weekly_factors)
+    monthly_composite = composite_score(monthly_factors)
+
+    if all(c >= 55 for c in (daily_composite, weekly_composite, monthly_composite)):
+        alignment = "Aligned Bull"
+    elif all(c <= 45 for c in (daily_composite, weekly_composite, monthly_composite)):
+        alignment = "Aligned Bear"
+    else:
+        alignment = "Mixed"
+
+    log.debug(
+        "Timeframe composites — daily=%d weekly=%d monthly=%d alignment=%s",
+        daily_composite, weekly_composite, monthly_composite, alignment,
+    )
+
+    return {
+        "daily": daily_factors,
+        "weekly": weekly_factors,
+        "monthly": monthly_factors,
+        "daily_composite": daily_composite,
+        "weekly_composite": weekly_composite,
+        "monthly_composite": monthly_composite,
+        "alignment": alignment,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P19.4: Earnings 8-quarter beat consistency
+# ---------------------------------------------------------------------------
+
+def compute_beat_consistency(earnings_history: list) -> dict:
+    """Compute earnings beat consistency over up to 8 quarters.
+
+    Parameters
+    ----------
+    earnings_history : list of dicts, each with keys:
+        actual (float), estimate (float), surprisePercent (float).
+        Most recent quarter first (or any order — all are evaluated).
+
+    Returns
+    -------
+    dict with:
+        beat_count          – int, number of quarters where actual > estimate
+        total_quarters      – int, number of quarters with valid data
+        beat_rate_pct       – float, beat_count / total_quarters * 100
+        avg_surprise_pct    – float, average surprisePercent across quarters
+        streak              – int, consecutive beats from the most-recent quarter
+        consistency_score   – int 0-100
+    """
+    if not earnings_history:
+        return {
+            "beat_count": 0,
+            "total_quarters": 0,
+            "beat_rate_pct": 0.0,
+            "avg_surprise_pct": 0.0,
+            "streak": 0,
+            "consistency_score": 0,
+        }
+
+    # Use up to 8 quarters; assume list order is most-recent first
+    quarters = earnings_history[:8]
+    valid = [
+        q for q in quarters
+        if q.get("surprisePercent") is not None
+    ]
+    total = len(valid)
+
+    if total == 0:
+        return {
+            "beat_count": 0,
+            "total_quarters": 0,
+            "beat_rate_pct": 0.0,
+            "avg_surprise_pct": 0.0,
+            "streak": 0,
+            "consistency_score": 0,
+        }
+
+    surprises = [float(q["surprisePercent"]) for q in valid]
+    beat_count = sum(1 for s in surprises if s > 0)
+    avg_surprise = sum(surprises) / total
+
+    # Streak: consecutive beats from most recent (index 0)
+    streak = 0
+    for s in surprises:
+        if s > 0:
+            streak += 1
+        else:
+            break
+
+    beat_rate = beat_count / total
+    # Consistency score formula
+    raw = (beat_rate * 70) + (min(streak, 4) / 4 * 30)
+    consistency_score = _clamp(raw)
+
+    log.debug(
+        "Beat consistency: %d/%d beats, streak=%d, score=%d",
+        beat_count, total, streak, consistency_score,
+    )
+
+    return {
+        "beat_count": beat_count,
+        "total_quarters": total,
+        "beat_rate_pct": round(beat_rate * 100, 1),
+        "avg_surprise_pct": round(avg_surprise, 2),
+        "streak": streak,
+        "consistency_score": consistency_score,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P20.1: Market regime factor
+# ---------------------------------------------------------------------------
+
+def compute_market_regime(
+    spy_close: "pd.Series | None",
+    vix: "float | None",
+    yield_spread: "float | None",
+) -> dict:
+    """Classify the current macro regime using SPY trend, VIX, and yield spread.
+
+    Parameters
+    ----------
+    spy_close : pd.Series of SPY daily closes (most recent last), or None
+    vix       : current VIX level as a float, or None
+    yield_spread : 10Y-2Y Treasury spread in percentage points, or None
+                   (positive = normal, negative = inverted)
+
+    Returns
+    -------
+    dict with:
+        regime          – "Strong Bull" | "Bull" | "Neutral" | "Bear" | "Strong Bear"
+        score_adjustment – int applied to composite scores (+5, +2, 0, -5, -10)
+        detail          – human-readable explanation string
+    """
+    # Determine SPY vs 200-day SMA
+    spy_above_200 = None
+    if spy_close is not None and len(spy_close) >= 200:
+        sma200 = float(spy_close.rolling(window=200).mean().iloc[-1])
+        current = float(spy_close.iloc[-1])
+        spy_above_200 = current > sma200
+
+    details = []
+    if spy_above_200 is not None:
+        details.append(f"SPY {'above' if spy_above_200 else 'below'} 200-day SMA")
+    if vix is not None:
+        details.append(f"VIX={vix:.1f}")
+    if yield_spread is not None:
+        details.append(f"yield spread={yield_spread:+.2f}%")
+
+    # Classification logic
+    if vix is not None and vix > 30 and spy_above_200 is False:
+        regime = "Strong Bear"
+        adj = -10
+    elif vix is not None and vix > 25:
+        regime = "Bear"
+        adj = -5
+    elif spy_above_200 is True and vix is not None and vix < 18:
+        if yield_spread is not None and yield_spread > 0:
+            regime = "Strong Bull"
+            adj = +5
+        else:
+            regime = "Bull"
+            adj = +2
+    elif spy_above_200 is True and vix is None:
+        # SPY above 200 SMA but no VIX data
+        regime = "Bull"
+        adj = +2
+    else:
+        regime = "Neutral"
+        adj = 0
+
+    detail = " | ".join(details) if details else "Insufficient data for regime classification"
+    log.debug("Market regime: %s (adj=%+d) — %s", regime, adj, detail)
+
+    return {
+        "regime": regime,
+        "score_adjustment": adj,
+        "detail": detail,
+    }
+
+
 def composite_score(factors: list[dict]) -> int:
     """Weighted average of factor scores, rounded to the nearest integer."""
     total_weight = sum(f["weight"] for f in factors)
