@@ -501,3 +501,286 @@ def factor_attribution(
         "top_factor_share": top_share,
         "concentration_warning": concentration_warning,
     }
+
+
+# ---------------------------------------------------------------------------
+# P17.1: Risk-parity portfolio builder
+# ---------------------------------------------------------------------------
+
+def compute_risk_parity_weights(returns: pd.DataFrame) -> dict[str, float]:
+    """Compute inverse-volatility (risk-parity) weights for each ticker.
+
+    Each ticker receives a weight proportional to 1 / annualised_volatility.
+    If any ticker has zero or near-zero volatility, equal weights are assigned
+    to all tickers to avoid division by zero.
+
+    Parameters
+    ----------
+    returns : DataFrame of daily returns (tickers as columns)
+
+    Returns
+    -------
+    dict mapping ticker -> weight (rounded to 4 decimal places, sums to 1.0)
+    """
+    if returns is None or returns.empty:
+        return {}
+
+    tickers = list(returns.columns)
+    vols = {}
+    for ticker in tickers:
+        series = returns[ticker].dropna()
+        if len(series) < 2:
+            vols[ticker] = None
+        else:
+            v = float(series.std()) * math.sqrt(252)
+            vols[ticker] = v if v > 0 else None
+
+    # If any vol is None or zero → fall back to equal weight
+    if any(v is None for v in vols.values()):
+        log.debug("compute_risk_parity_weights: zero-vol ticker detected, using equal weights")
+        eq = round(1.0 / len(tickers), 4)
+        return {t: eq for t in tickers}
+
+    inv_vols = {t: 1.0 / vols[t] for t in tickers}
+    total_inv = sum(inv_vols.values())
+    weights = {t: round(inv_vols[t] / total_inv, 4) for t in tickers}
+
+    log.debug("Risk-parity weights computed for %d tickers", len(weights))
+    return weights
+
+
+# ---------------------------------------------------------------------------
+# P17.2: Historical crash stress testing
+# ---------------------------------------------------------------------------
+
+STRESS_SCENARIOS: dict[str, dict[str, float]] = {
+    "2000 Dot-com Crash": {
+        "Technology": -0.78,
+        "Financials": -0.20,
+        "Healthcare": -0.15,
+        "default": -0.25,
+    },
+    "2008 Financial Crisis": {
+        "Financials": -0.55,
+        "Technology": -0.45,
+        "Energy": -0.50,
+        "default": -0.40,
+    },
+    "2020 COVID Crash": {
+        "Energy": -0.55,
+        "Consumer Discretionary": -0.35,
+        "Technology": -0.25,
+        "default": -0.32,
+    },
+    "2022 Rate Shock": {
+        "Technology": -0.35,
+        "Consumer Discretionary": -0.30,
+        "Utilities": -0.05,
+        "default": -0.20,
+    },
+    "2024 AI Correction": {
+        "Technology": -0.20,
+        "Communication": -0.18,
+        "default": -0.12,
+    },
+}
+
+
+def run_stress_tests(
+    positions: dict[str, dict],
+    total_value: float,
+) -> list[dict]:
+    """Run historical crash stress tests against a portfolio.
+
+    Parameters
+    ----------
+    positions   : dict mapping ticker -> {weight: float, sector: str}.
+                  weight should be a fraction (0-1).
+    total_value : total portfolio value in dollars.
+
+    Returns
+    -------
+    list of dicts, one per scenario, each with:
+        scenario             – str scenario name
+        portfolio_loss_pct   – float, estimated portfolio loss as a fraction
+                               (e.g. -0.35 = -35 %)
+        portfolio_loss_dollar – float, estimated dollar loss
+        by_position          – list of {ticker, sector, loss_rate, loss_dollar}
+    """
+    if not positions or total_value <= 0:
+        return []
+
+    results = []
+    for scenario_name, sector_losses in STRESS_SCENARIOS.items():
+        portfolio_loss = 0.0
+        by_position = []
+
+        for ticker, pos_data in positions.items():
+            weight = float(pos_data.get("weight", 0))
+            sector = str(pos_data.get("sector", ""))
+
+            # Match sector to scenario rates (case-insensitive partial match)
+            loss_rate = sector_losses.get("default", -0.20)
+            for sc_sector, rate in sector_losses.items():
+                if sc_sector == "default":
+                    continue
+                if sc_sector.lower() in sector.lower() or sector.lower() in sc_sector.lower():
+                    loss_rate = rate
+                    break
+
+            position_value = total_value * weight
+            loss_dollar = position_value * loss_rate  # negative value
+
+            portfolio_loss += weight * loss_rate
+            by_position.append({
+                "ticker": ticker,
+                "sector": sector,
+                "loss_rate": round(loss_rate, 4),
+                "loss_dollar": round(loss_dollar, 2),
+            })
+
+        results.append({
+            "scenario": scenario_name,
+            "portfolio_loss_pct": round(portfolio_loss, 4),
+            "portfolio_loss_dollar": round(total_value * portfolio_loss, 2),
+            "by_position": by_position,
+        })
+
+    log.debug("Stress tests complete: %d scenarios", len(results))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# P17.3: Tax-loss harvesting suggestions
+# ---------------------------------------------------------------------------
+
+def find_tax_loss_opportunities(
+    positions: dict[str, dict],
+    returns_df: pd.DataFrame,
+) -> list[dict]:
+    """Identify tax-loss harvesting candidates and suggest correlated replacements.
+
+    For each position with a cost-basis loss deeper than -5 %, find the
+    highest-correlated peer from returns_df (correlation > 0.70) that is a
+    different ticker, to facilitate a wash-sale-compliant replacement.
+
+    Parameters
+    ----------
+    positions   : dict mapping ticker -> {weight: float,
+                  cost_basis_pct_gain: float}.
+                  cost_basis_pct_gain is positive for a gain, negative for a
+                  loss (e.g. -12.0 means the position is down 12 %).
+    returns_df  : DataFrame of daily returns (tickers as columns).  Should
+                  include both portfolio tickers and peer tickers.
+
+    Returns
+    -------
+    list of dicts for positions with cost_basis_pct_gain < -5.0:
+        ticker          – str
+        loss_pct        – float (negative)
+        corr_replacement – str or None (ticker of best correlated peer)
+        correlation     – float or None
+        message         – human-readable suggestion
+    """
+    if not positions or returns_df is None or returns_df.empty:
+        return []
+
+    loss_threshold = -5.0
+    corr_threshold = 0.70
+    opportunities = []
+
+    # Pre-compute full correlation matrix once
+    try:
+        corr_matrix = returns_df.corr(method="pearson")
+    except Exception as exc:
+        log.warning("find_tax_loss_opportunities: correlation failed — %s", exc)
+        return []
+
+    for ticker, pos_data in positions.items():
+        gain = pos_data.get("cost_basis_pct_gain")
+        if gain is None or float(gain) >= loss_threshold:
+            continue
+
+        loss_pct = float(gain)
+        corr_replacement = None
+        best_corr = None
+        message = (
+            f"{ticker} is down {abs(loss_pct):.1f}% from cost basis. "
+            "No suitable correlated replacement found (threshold: r > 0.70)."
+        )
+
+        if ticker in corr_matrix.columns:
+            row = corr_matrix[ticker].drop(labels=[ticker], errors="ignore")
+            candidates = row[row > corr_threshold]
+            if not candidates.empty:
+                corr_replacement = str(candidates.idxmax())
+                best_corr = round(float(candidates.max()), 3)
+                message = (
+                    f"{ticker} is down {abs(loss_pct):.1f}% — consider harvesting the "
+                    f"loss and replacing with {corr_replacement} "
+                    f"(correlation: {best_corr:.2f})."
+                )
+
+        opportunities.append({
+            "ticker": ticker,
+            "loss_pct": round(loss_pct, 2),
+            "corr_replacement": corr_replacement,
+            "correlation": best_corr,
+            "message": message,
+        })
+
+    log.debug(
+        "Tax-loss harvesting: %d opportunities found out of %d positions",
+        len(opportunities), len(positions),
+    )
+    return opportunities
+
+
+# ---------------------------------------------------------------------------
+# P17.5: Portfolio drift alerts
+# ---------------------------------------------------------------------------
+
+def compute_portfolio_drift(
+    positions: dict[str, dict],
+    target_weights: dict[str, float],
+) -> list[dict]:
+    """Compute drift between current and target portfolio weights.
+
+    Parameters
+    ----------
+    positions      : dict mapping ticker -> {current_weight: float}
+    target_weights : dict mapping ticker -> target weight (fraction, 0-1)
+
+    Returns
+    -------
+    list of dicts sorted by abs(drift) descending, each with:
+        ticker         – str
+        current_weight – float
+        target_weight  – float
+        drift          – float (current - target; positive = overweight)
+        drifted        – bool (True if abs(drift) > 0.05)
+    """
+    if not positions or not target_weights:
+        return []
+
+    all_tickers = set(positions.keys()) | set(target_weights.keys())
+    drift_list = []
+
+    for ticker in all_tickers:
+        current = float((positions.get(ticker) or {}).get("current_weight", 0))
+        target = float(target_weights.get(ticker, 0))
+        drift = current - target
+        drift_list.append({
+            "ticker": ticker,
+            "current_weight": round(current, 4),
+            "target_weight": round(target, 4),
+            "drift": round(drift, 4),
+            "drifted": abs(drift) > 0.05,
+        })
+
+    drift_list.sort(key=lambda x: abs(x["drift"]), reverse=True)
+    log.debug(
+        "Portfolio drift: %d tickers checked, %d drifted",
+        len(drift_list), sum(1 for d in drift_list if d["drifted"]),
+    )
+    return drift_list

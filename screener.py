@@ -26,6 +26,16 @@ log = get_logger(__name__)
 # Path to bundled ticker universe CSV files
 _DATA_DIR = Path(__file__).parent / "data"
 
+# ---------------------------------------------------------------------------
+# P16.4: Short squeeze preset
+# ---------------------------------------------------------------------------
+
+SHORT_SQUEEZE_PRESET: dict = {
+    "short_pct_float_min": 15.0,
+    "days_to_cover_min": 5.0,
+    "momentum_min": 55,
+}
+
 
 # ---------------------------------------------------------------------------
 # P7.1: Universe loaders
@@ -356,6 +366,78 @@ def run_screen(
 def default_universe() -> list[str]:
     """Return the configured default ticker universe for screening."""
     return cfg.screener_universe
+
+
+def is_short_squeeze_candidate(short_data: dict, factor_score: int) -> bool:
+    """Return True if a ticker meets the short-squeeze setup criteria (P16.4).
+
+    A candidate must have high short interest (>= 15% of float), sufficient
+    days-to-cover (>= 5), and a factor score indicating positive momentum
+    (>= 50).  All three conditions must be met.
+
+    Parameters
+    ----------
+    short_data   : dict with keys short_pct_float (float) and
+                   days_to_cover (float).  Missing values are treated as
+                   failing the threshold.
+    factor_score : composite factor score (0-100).
+
+    Returns
+    -------
+    bool
+    """
+    short_pct = short_data.get("short_pct_float")
+    days_to_cover = short_data.get("days_to_cover")
+
+    if short_pct is None or days_to_cover is None:
+        return False
+
+    meets_short = float(short_pct) >= SHORT_SQUEEZE_PRESET["short_pct_float_min"]
+    meets_cover = float(days_to_cover) >= SHORT_SQUEEZE_PRESET["days_to_cover_min"]
+    meets_momentum = int(factor_score) >= SHORT_SQUEEZE_PRESET["momentum_min"]
+
+    return meets_short and meets_cover and meets_momentum
+
+
+def apply_esg_filter(results: list[dict], min_esg_score: float | None = None) -> list[dict]:
+    """Filter screener results by minimum ESG score (P19.3).
+
+    Tickers without ESG data (esg_score key absent or None) are kept, since
+    absence of data should not penalise a ticker.  Only tickers with an
+    explicit ESG score below min_esg_score are excluded.
+
+    Parameters
+    ----------
+    results       : list of screener result dicts
+    min_esg_score : minimum acceptable ESG score (0-100), or None to skip
+                    filtering entirely
+
+    Returns
+    -------
+    Filtered list of result dicts
+    """
+    if min_esg_score is None:
+        return results
+
+    filtered = []
+    for r in results:
+        esg = r.get("esg_score")
+        if esg is None:
+            # No ESG data — pass through
+            filtered.append(r)
+        elif float(esg) >= min_esg_score:
+            filtered.append(r)
+        else:
+            log.debug(
+                "ESG filter: excluded %s (esg_score=%.1f < min=%.1f)",
+                r.get("symbol", "?"), esg, min_esg_score,
+            )
+
+    log.info(
+        "ESG filter (min=%.1f): %d/%d results passed",
+        min_esg_score, len(filtered), len(results),
+    )
+    return filtered
 
 
 def results_to_csv(results: list[dict]) -> str:

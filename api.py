@@ -211,10 +211,11 @@ class FinnhubAPI:
     # ------------------------------------------------------------------
 
     def get_earnings_calendar(self, symbol: str) -> dict:
-        """Return next earnings date and recent historical earnings reactions.
+        """Return next earnings date and implied move from ATM straddle.
 
         Returns dict with: next_date (str|None), days_to_earnings (int|None),
-        historical_reactions (list of {date, change_pct}).
+        historical_reactions (list of {date, change_pct}),
+        implied_move_pct (float|None) computed from ATM straddle / current price.
         """
         def _fetch():
             try:
@@ -229,7 +230,12 @@ class FinnhubAPI:
                 )
                 earnings_list = (cal or {}).get("earningsCalendar", [])
                 if not earnings_list:
-                    return {"next_date": None, "days_to_earnings": None, "historical_reactions": []}
+                    return {
+                        "next_date": None,
+                        "days_to_earnings": None,
+                        "historical_reactions": [],
+                        "implied_move_pct": None,
+                    }
                 # Sort by date ascending and pick first future date
                 import datetime as _dt
                 today = _dt.date.today()
@@ -244,14 +250,56 @@ class FinnhubAPI:
                         days = (d - today).days
                     except Exception:
                         pass
+
+                # Compute implied move from ATM straddle if options available
+                implied_move_pct = None
+                try:
+                    chain = self.get_option_chain(symbol)
+                    if chain and chain.get("data"):
+                        quote = self.get_quote(symbol)
+                        current_price = float(quote.get("c", 0) or 0)
+                        if current_price > 0:
+                            nearest = chain["data"][0]
+                            options_map = nearest.get("options", {})
+                            calls = options_map.get("CALL", [])
+                            puts = options_map.get("PUT", [])
+                            valid_calls = [c for c in calls if c.get("strike") is not None]
+                            valid_puts = [p for p in puts if p.get("strike") is not None]
+                            if valid_calls and valid_puts:
+                                atm_call = min(
+                                    valid_calls,
+                                    key=lambda c: abs(float(c["strike"]) - current_price),
+                                )
+                                atm_put = min(
+                                    valid_puts,
+                                    key=lambda p: abs(float(p["strike"]) - current_price),
+                                )
+                                call_ask = float(
+                                    atm_call.get("ask") or atm_call.get("lastPrice") or 0
+                                )
+                                put_ask = float(
+                                    atm_put.get("ask") or atm_put.get("lastPrice") or 0
+                                )
+                                if call_ask > 0 and put_ask > 0:
+                                    straddle = call_ask + put_ask
+                                    implied_move_pct = round(straddle / current_price * 100, 2)
+                except Exception as exc:
+                    log.debug("Implied move calc failed for %s: %s", symbol, exc)
+
                 return {
                     "next_date": next_date,
                     "days_to_earnings": days,
                     "historical_reactions": [],
+                    "implied_move_pct": implied_move_pct,
                 }
             except Exception as exc:
                 log.warning("Earnings calendar unavailable for %s: %s", symbol, exc)
-                return {"next_date": None, "days_to_earnings": None, "historical_reactions": []}
+                return {
+                    "next_date": None,
+                    "days_to_earnings": None,
+                    "historical_reactions": [],
+                    "implied_move_pct": None,
+                }
         return self._cached(f"earnings_cal:{symbol}", _fetch, ttl=3600 * 6)
 
     # ------------------------------------------------------------------
@@ -442,6 +490,110 @@ class FinnhubAPI:
     # ------------------------------------------------------------------
     # P6.3: Historical dividends for backtest reinvestment
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # P15.3: Weekly and Monthly Candles (multi-timeframe)
+    # ------------------------------------------------------------------
+
+    def get_weekly(self, symbol: str, years: int = 3) -> dict:
+        """Return weekly candles for the last `years` years.
+
+        Useful for multi-timeframe trend analysis. Cached for 1 hour.
+        """
+        def _fetch():
+            to_ts = int(time.time())
+            from_ts = to_ts - (years * 365 * 24 * 60 * 60)
+            data = self.client.stock_candles(symbol, "W", from_ts, to_ts)
+            if not data or data.get("s") != "ok":
+                raise ValueError(f"No weekly price data found for symbol '{symbol}'.")
+            return data
+        return self._cached(f"weekly:{symbol}:{years}y", _fetch, ttl=3600)
+
+    def get_monthly(self, symbol: str, years: int = 5) -> dict:
+        """Return monthly candles for the last `years` years.
+
+        Useful for long-term trend analysis. Cached for 24 hours.
+        """
+        def _fetch():
+            to_ts = int(time.time())
+            from_ts = to_ts - (years * 365 * 24 * 60 * 60)
+            data = self.client.stock_candles(symbol, "M", from_ts, to_ts)
+            if not data or data.get("s") != "ok":
+                raise ValueError(f"No monthly price data found for symbol '{symbol}'.")
+            return data
+        return self._cached(f"monthly:{symbol}:{years}y", _fetch, ttl=86400)
+
+    # ------------------------------------------------------------------
+    # P19.1: Analyst Price Targets
+    # ------------------------------------------------------------------
+
+    def get_analyst_price_targets(self, symbol: str) -> dict:
+        """Return analyst consensus price targets from Finnhub.
+
+        Returns dict with keys: available, current_price_target, low_target,
+        high_target, mean_target, median_target, analyst_count.
+        Cached for 24 hours.
+        """
+        def _fetch():
+            try:
+                data = self.client.stock_price_target(symbol)
+                if not data:
+                    return {"available": False}
+                mean_target = data.get("targetMean") or data.get("targetConsensus")
+                return {
+                    "available": mean_target is not None,
+                    "current_price_target": data.get("targetConsensus"),
+                    "low_target": data.get("targetLow"),
+                    "high_target": data.get("targetHigh"),
+                    "mean_target": data.get("targetMean"),
+                    "median_target": data.get("targetMedian"),
+                    "analyst_count": data.get("lastUpdated"),  # Finnhub returns lastUpdated
+                }
+            except Exception as exc:
+                log.warning("Analyst price targets unavailable for %s: %s", symbol, exc)
+                return {"available": False}
+        return self._cached(f"price_targets:{symbol}", _fetch, ttl=86400)
+
+    # ------------------------------------------------------------------
+    # P19.4: Extended Earnings History (8+ quarters)
+    # ------------------------------------------------------------------
+
+    def get_earnings_history(self, symbol: str) -> list:
+        """Return up to 10 quarters of earnings history.
+
+        Each entry includes: date, actual, estimate, surprise, surprisePercent.
+        Cached for 24 hours.
+        """
+        def _fetch():
+            try:
+                data = self.client.company_earnings(symbol, limit=10)
+                if not data:
+                    return []
+                results = []
+                for entry in data:
+                    surprise = None
+                    surprise_pct = None
+                    actual = entry.get("actual")
+                    estimate = entry.get("estimate")
+                    if actual is not None and estimate is not None:
+                        try:
+                            surprise = round(float(actual) - float(estimate), 4)
+                            if estimate != 0:
+                                surprise_pct = round(surprise / abs(float(estimate)) * 100, 2)
+                        except (TypeError, ValueError):
+                            pass
+                    results.append({
+                        "date": entry.get("period", entry.get("date", "")),
+                        "actual": actual,
+                        "estimate": estimate,
+                        "surprise": surprise,
+                        "surprisePercent": surprise_pct,
+                    })
+                return results
+            except Exception as exc:
+                log.warning("Earnings history unavailable for %s: %s", symbol, exc)
+                return []
+        return self._cached(f"earnings_history:{symbol}", _fetch, ttl=86400)
 
     def get_dividends(self, symbol: str, years: int = 5) -> dict:
         """Return historical dividend data for dividend-reinvestment backtest.

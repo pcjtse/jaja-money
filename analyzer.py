@@ -1168,3 +1168,444 @@ Keep it concise (3-4 sentences). Be calibrated — don't guarantee outcomes."""
                 yield text
     except Exception as exc:
         yield f"\n*Earnings prediction error: {exc}*"
+
+
+# ---------------------------------------------------------------------------
+# P15.2: AI Price Target — Bull / Base / Bear
+# ---------------------------------------------------------------------------
+
+_PRICE_TARGET_TTL = 86_400  # 24 hours
+
+
+def stream_price_target(
+    symbol: str,
+    data_prompt: str,
+    stock_type: str = "growth",
+) -> "Generator[str, None, None]":
+    """Stream a 12-month price target with Bull, Base, and Bear scenarios.
+
+    Parameters
+    ----------
+    symbol : stock ticker symbol
+    data_prompt : assembled financial data context (from build_data_prompt)
+    stock_type : stock classification for context (e.g. "growth", "value")
+
+    Yields text chunks from Claude in the structured price-target format.
+    The output format is::
+
+        BULL_TARGET: $XXX.XX | Key assumption: [one sentence]
+        BASE_TARGET: $XXX.XX | Key assumption: [one sentence]
+        BEAR_TARGET: $XXX.XX | Key assumption: [one sentence]
+        RATIONALE: [2-3 sentences explaining the range]
+    """
+    cache_key = _compute_context_hash(data_prompt)
+    cached = _disk_cache.get(f"price_target:{cache_key}")
+    if cached is not None:
+        log.info("Price target cache hit for %s", symbol)
+        yield cached
+        return
+
+    prompt = f"""You are an equity research analyst providing a 12-month price target for {symbol}.
+
+Stock type: {stock_type}
+
+{data_prompt}
+
+Based on the data above, provide a 12-month price target with three scenarios.
+You MUST output EXACTLY this format (no other text before or after):
+
+BULL_TARGET: $XXX.XX | Key assumption: [one sentence describing the key bull case driver]
+BASE_TARGET: $XXX.XX | Key assumption: [one sentence describing the base case assumption]
+BEAR_TARGET: $XXX.XX | Key assumption: [one sentence describing the key downside risk]
+RATIONALE: [2-3 sentences explaining the spread between scenarios and the key factors driving the range]
+
+Use the current price and financial metrics provided. Be specific with dollar values."""
+
+    collected: list[str] = []
+    try:
+        client = _get_client()
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                collected.append(text)
+                yield text
+    except Exception as exc:
+        log.warning("Price target stream error for %s: %s", symbol, exc)
+        yield f"\n*Price target error: {exc}*"
+        return
+
+    if collected:
+        full_text = "".join(collected)
+        _disk_cache.set(f"price_target:{cache_key}", full_text, ttl=_PRICE_TARGET_TTL)
+        log.info("Price target cached for %s (key=%s)", symbol, cache_key[:12])
+
+
+def parse_price_targets(text: str, current_price: float) -> dict:
+    """Parse the structured price target text from stream_price_target.
+
+    Parameters
+    ----------
+    text : the full text output from stream_price_target
+    current_price : current stock price for computing upside/downside %
+
+    Returns
+    -------
+    dict with keys: bull, base, bear, rationale,
+    bull_upside_pct, base_upside_pct, bear_downside_pct
+    """
+    import re
+
+    result: dict = {
+        "bull": None,
+        "base": None,
+        "bear": None,
+        "rationale": "",
+        "bull_upside_pct": None,
+        "base_upside_pct": None,
+        "bear_downside_pct": None,
+    }
+
+    def _parse_price(line: str) -> float | None:
+        match = re.search(r"\$([0-9,]+(?:\.[0-9]{1,2})?)", line)
+        if match:
+            try:
+                return float(match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        return None
+
+    for line in text.splitlines():
+        line = line.strip()
+        if line.upper().startswith("BULL_TARGET:"):
+            result["bull"] = _parse_price(line)
+        elif line.upper().startswith("BASE_TARGET:"):
+            result["base"] = _parse_price(line)
+        elif line.upper().startswith("BEAR_TARGET:"):
+            result["bear"] = _parse_price(line)
+        elif line.upper().startswith("RATIONALE:"):
+            result["rationale"] = line[len("RATIONALE:"):].strip()
+
+    # Compute percentage changes vs. current price
+    if current_price and current_price > 0:
+        if result["bull"] is not None:
+            result["bull_upside_pct"] = round(
+                (result["bull"] - current_price) / current_price * 100, 1
+            )
+        if result["base"] is not None:
+            result["base_upside_pct"] = round(
+                (result["base"] - current_price) / current_price * 100, 1
+            )
+        if result["bear"] is not None:
+            result["bear_downside_pct"] = round(
+                (result["bear"] - current_price) / current_price * 100, 1
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# P15.5: Transcript Q&A
+# ---------------------------------------------------------------------------
+
+_TRANSCRIPT_QA_TTL = 21_600  # 6 hours
+
+
+def stream_transcript_qa(
+    question: str,
+    transcript_text: str,
+    symbol: str,
+) -> "Generator[str, None, None]":
+    """Stream a Claude answer to a question about an earnings call transcript.
+
+    Parameters
+    ----------
+    question : user's natural-language question about the transcript
+    transcript_text : full or partial transcript text (truncated to 8000 chars)
+    symbol : stock ticker for context
+
+    Yields text chunks from Claude.
+    """
+    cache_key = _compute_context_hash(f"{symbol}:{question}:{transcript_text[:500]}")
+    cached = _disk_cache.get(f"transcript_qa:{cache_key}")
+    if cached is not None:
+        log.info("Transcript Q&A cache hit for %s", symbol)
+        yield cached
+        return
+
+    truncated = transcript_text[:8000]
+    system_prompt = (
+        f"You are a financial analyst assistant. You have been given an earnings call "
+        f"transcript for {symbol}. Answer the user's question based only on the content "
+        f"of the transcript. If the transcript does not contain sufficient information to "
+        f"answer the question, say so clearly. Be concise and cite specific quotes or "
+        f"sections where helpful."
+    )
+
+    user_message = f"""## Earnings Call Transcript — {symbol}
+
+{truncated}
+
+---
+
+**Question:** {question}"""
+
+    collected: list[str] = []
+    try:
+        client = _get_client()
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        ) as stream:
+            for text in stream.text_stream:
+                collected.append(text)
+                yield text
+    except Exception as exc:
+        log.warning("Transcript Q&A stream error for %s: %s", symbol, exc)
+        yield f"\n*Transcript Q&A error: {exc}*"
+        return
+
+    if collected:
+        full_text = "".join(collected)
+        _disk_cache.set(f"transcript_qa:{cache_key}", full_text, ttl=_TRANSCRIPT_QA_TTL)
+        log.info("Transcript Q&A cached for %s (key=%s)", symbol, cache_key[:12])
+
+
+# ---------------------------------------------------------------------------
+# P19.2: Supply Chain Analysis via EDGAR
+# ---------------------------------------------------------------------------
+
+_SUPPLY_CHAIN_TTL = 604_800  # 7 days
+
+
+def stream_supply_chain_analysis(
+    symbol: str,
+    filing_text: str,
+) -> "Generator[str, None, None]":
+    """Stream Claude supply chain analysis extracted from a 10-K filing.
+
+    Parameters
+    ----------
+    symbol : stock ticker
+    filing_text : text content of the 10-K filing (business/risk sections preferred)
+
+    Yields structured bullet-point text from Claude covering suppliers, customers,
+    geographic breakdown, and concentration risks.
+    """
+    cache_key = _compute_context_hash(f"supply_chain:{symbol}:{filing_text[:1000]}")
+    cached = _disk_cache.get(f"supply_chain:{cache_key}")
+    if cached is not None:
+        log.info("Supply chain cache hit for %s", symbol)
+        yield cached
+        return
+
+    prompt = f"""You are a supply chain analyst reviewing the 10-K filing for {symbol}.
+
+**Filing Text (excerpts):**
+{filing_text[:8000]}
+
+Extract and organize the following supply chain information from this filing.
+Output as structured bullet points under each heading:
+
+## Key Suppliers
+- [List the top 3-5 key suppliers or supplier categories mentioned. Include any named suppliers and their significance.]
+
+## Key Customers
+- [List the top 3-5 key customers or customer categories mentioned. Include any named customers and their revenue contribution if disclosed.]
+
+## Geographic Revenue Breakdown
+- [List geographic regions and their revenue contribution percentages if disclosed.]
+
+## Concentration Risks
+- [Identify any concentration risks: single-source suppliers, customer concentration, geographic exposure, etc.]
+
+If a category is not mentioned in the filing, note "Not disclosed in filing."
+Be specific and quote actual names, percentages, or descriptions from the text where available."""
+
+    collected: list[str] = []
+    try:
+        client = _get_client()
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                collected.append(text)
+                yield text
+    except Exception as exc:
+        log.warning("Supply chain stream error for %s: %s", symbol, exc)
+        yield f"\n*Supply chain analysis error: {exc}*"
+        return
+
+    if collected:
+        full_text = "".join(collected)
+        _disk_cache.set(f"supply_chain:{cache_key}", full_text, ttl=_SUPPLY_CHAIN_TTL)
+        log.info("Supply chain analysis cached for %s (key=%s)", symbol, cache_key[:12])
+
+
+def extract_supply_chain_structured(supply_chain_text: str) -> dict:
+    """Parse Claude's supply chain output into structured lists.
+
+    Parameters
+    ----------
+    supply_chain_text : the full text output from stream_supply_chain_analysis
+
+    Returns
+    -------
+    dict with keys: suppliers (list[str]), customers (list[str]),
+    geographic_breakdown (list[str]), concentration_risks (list[str]),
+    available (bool)
+    """
+    result: dict = {
+        "suppliers": [],
+        "customers": [],
+        "geographic_breakdown": [],
+        "concentration_risks": [],
+        "available": False,
+    }
+
+    if not supply_chain_text or not supply_chain_text.strip():
+        return result
+
+    current_section: str | None = None
+    section_map = {
+        "supplier": "suppliers",
+        "customer": "customers",
+        "geographic": "geographic_breakdown",
+        "concentration": "concentration_risks",
+    }
+
+    for line in supply_chain_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        lower = stripped.lower()
+        # Detect section headers
+        if lower.startswith("## ") or lower.startswith("# "):
+            header = lower.lstrip("#").strip()
+            current_section = None
+            for keyword, key in section_map.items():
+                if keyword in header:
+                    current_section = key
+                    break
+            continue
+
+        # Collect bullet points
+        if current_section and (stripped.startswith("-") or stripped.startswith("*")):
+            content = stripped.lstrip("-*").strip()
+            if content and "not disclosed" not in content.lower():
+                result[current_section].append(content)
+                result["available"] = True
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# P20.2: News Impact Scoring
+# ---------------------------------------------------------------------------
+
+_NEWS_IMPACT_TTL = 86_400  # 24 hours
+
+_NEWS_IMPACT_WEIGHTS = {
+    "High": 3,
+    "Medium": 2,
+    "Low": 1,
+    "Negligible": 0.5,
+}
+
+
+def score_news_impact(headlines: list[str]) -> list[dict]:
+    """Score a list of news headlines by their market impact level.
+
+    Makes a single non-streaming Claude API call with up to 10 headlines and
+    parses the response into structured impact ratings.
+
+    Parameters
+    ----------
+    headlines : list of headline strings (max 10 used)
+
+    Returns
+    -------
+    list of dicts with keys: headline (str), level (str), weight (float)
+    where level is one of High / Medium / Low / Negligible.
+    """
+    if not headlines:
+        return []
+
+    capped = headlines[:10]
+    cache_key = _compute_context_hash("|".join(capped))
+    cached = _disk_cache.get(f"news_impact:{cache_key}")
+    if cached is not None:
+        log.info("News impact cache hit (key=%s)", cache_key[:12])
+        return cached  # type: ignore[return-value]
+
+    numbered = "\n".join(f"{i}: {h}" for i, h in enumerate(capped))
+    prompt = f"""Rate the market impact of each headline below.
+For each headline, output EXACTLY one line in this format:
+{{index}}: {{level}}
+where level is one of: High, Medium, Low, Negligible
+
+Headlines:
+{numbered}
+
+Output only the rated lines, nothing else."""
+
+    def _default_result() -> list[dict]:
+        return [
+            {
+                "headline": h,
+                "level": "Medium",
+                "weight": _NEWS_IMPACT_WEIGHTS["Medium"],
+            }
+            for h in capped
+        ]
+
+    try:
+        client = _get_client()
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+    except Exception as exc:
+        log.warning("News impact scoring error: %s", exc)
+        return _default_result()
+
+    # Parse "index: level" lines
+    import re as _re
+
+    ratings: dict[int, str] = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        match = _re.match(r"^(\d+)\s*:\s*(High|Medium|Low|Negligible)", line, _re.IGNORECASE)
+        if match:
+            idx = int(match.group(1))
+            level = match.group(2).capitalize()
+            # Normalize "Negligible" capitalisation
+            if level.lower() == "negligible":
+                level = "Negligible"
+            ratings[idx] = level
+
+    results: list[dict] = []
+    for i, headline in enumerate(capped):
+        level = ratings.get(i, "Medium")
+        if level not in _NEWS_IMPACT_WEIGHTS:
+            level = "Medium"
+        results.append(
+            {
+                "headline": headline,
+                "level": level,
+                "weight": _NEWS_IMPACT_WEIGHTS[level],
+            }
+        )
+
+    _disk_cache.set(f"news_impact:{cache_key}", results, ttl=_NEWS_IMPACT_TTL)
+    log.info("News impact scores cached for %d headlines (key=%s)", len(results), cache_key[:12])
+    return results
