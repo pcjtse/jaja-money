@@ -1168,13 +1168,9 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
     # Liquidity
     curr_ann = _get("currentRatioAnnual")
     curr_q = _get("currentRatioQuarterly")
-    # Dilution
-    shares_ann = _get("sharesOutstanding") or _get("sharesFreeFloat")
     # Margins
     gm_ttm = _get("grossMarginTTM")
     gm_ann = _get("grossMarginAnnual")
-    # Asset turnover
-    at_ttm = _get("assetTurnoverTTM") or _get("assetTurnoverAnnual")
     # Total assets proxy (for accruals)
     assets = _get("totalAssets") or _get("bookValuePerShareAnnual")
 

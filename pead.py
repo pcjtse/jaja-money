@@ -191,7 +191,7 @@ def screen_pead_candidates(
     Returns list of dicts sorted by surprise_pct descending (biggest beats first).
     Each dict has: symbol, surprise_pct, signal, avg_beat_drift_1m, beat_consistency.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     def _analyze(symbol: str) -> dict | None:
         time.sleep(delay_between)
