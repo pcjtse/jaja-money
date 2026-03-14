@@ -10,7 +10,8 @@ To maintain code quality and adhere to project standards, please follow these in
 
 ## Workflow Integration
 1.  Modify the code as requested.
-2.  Execute `ruff check .` in the terminal.
-3.  Review output; if errors exist, iterate on the code until all issues are addressed.
-4.  Make sure all tests passes, iterate until all tests are successful.
-5.  Commit the change and push to the repo.
+2.  Add new tests covering the new changes.
+3.  Execute `ruff check .` in the terminal.
+4.  Review output; if errors exist, iterate on the code until all issues are addressed.
+5.  Make sure all tests passes, iterate until all tests are successful.
+6.  Commit the change and push to the repo.
