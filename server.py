@@ -115,6 +115,19 @@ class PortfolioRequest(BaseModel):
     )
 
 
+class ForwardPortfolioRequest(BaseModel):
+    name: str = Field(..., description="Portfolio name")
+
+
+class ForwardTradeRequest(BaseModel):
+    portfolio_id: int = Field(..., description="Target portfolio ID")
+    symbol: str = Field(..., description="Stock ticker symbol")
+    entry_price: float = Field(..., gt=0, description="Entry price per share")
+    factor_score: int | None = Field(None, ge=0, le=100)
+    risk_score: int | None = Field(None, ge=0, le=100)
+    shares: float = Field(1.0, gt=0, description="Number of shares")
+
+
 # ---------------------------------------------------------------------------
 # Lazy API/analyzer initialization
 # ---------------------------------------------------------------------------
@@ -366,6 +379,91 @@ async def chat(
                 yield chunk
 
         return StreamingResponse(_generate(), media_type="text/plain")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# P22.1: Forward Test endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/forward-test/portfolio")
+async def forward_test_portfolio(
+    req: ForwardPortfolioRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Create a new paper portfolio for forward testing.
+
+    Returns the new portfolio's id and name.
+    """
+    try:
+        from forward_test import create_portfolio
+
+        portfolio_id = create_portfolio(req.name)
+        return {"portfolio_id": portfolio_id, "name": req.name}
+    except Exception as exc:
+        log.error("Failed to create forward-test portfolio: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/forward-test/portfolios")
+async def forward_test_list_portfolios(
+    _key: str = Depends(_get_api_key),
+):
+    """List all paper portfolios."""
+    try:
+        from forward_test import list_portfolios
+
+        return {"portfolios": list_portfolios()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/forward-test/trade")
+async def forward_test_trade(
+    req: ForwardTradeRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Add a new position to a paper portfolio.
+
+    Returns the trade id and a snapshot of the current portfolio value.
+    """
+    try:
+        from forward_test import add_position, snapshot_portfolio
+
+        trade_id = add_position(
+            portfolio_id=req.portfolio_id,
+            symbol=req.symbol,
+            entry_price=req.entry_price,
+            factor_score=req.factor_score,
+            risk_score=req.risk_score,
+            shares=req.shares,
+        )
+        snapshot_portfolio(req.portfolio_id, {req.symbol.upper(): req.entry_price})
+        return {
+            "trade_id": trade_id,
+            "portfolio_id": req.portfolio_id,
+            "symbol": req.symbol.upper(),
+            "entry_price": req.entry_price,
+            "shares": req.shares,
+        }
+    except Exception as exc:
+        log.error("Failed to add forward-test trade: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/forward-test/portfolio/{portfolio_id}")
+async def forward_test_summary(
+    portfolio_id: int,
+    _key: str = Depends(_get_api_key),
+):
+    """Return full summary for a paper portfolio including positions, trades, and stats."""
+    try:
+        from forward_test import get_portfolio_summary
+
+        summary = get_portfolio_summary(portfolio_id)
+        return summary
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

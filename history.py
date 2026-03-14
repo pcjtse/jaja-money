@@ -56,6 +56,55 @@ def _ensure_table() -> None:
 _ensure_table()
 
 
+# ---------------------------------------------------------------------------
+# P22.1: Paper portfolio tables
+# ---------------------------------------------------------------------------
+
+
+def _ensure_paper_tables() -> None:
+    """Create paper portfolio tables if they don't exist."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_portfolio (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                name         TEXT NOT NULL,
+                created_date TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_trades (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id       INTEGER NOT NULL,
+                symbol             TEXT NOT NULL,
+                entry_price        REAL NOT NULL,
+                entry_date         TEXT NOT NULL,
+                exit_price         REAL,
+                exit_date          TEXT,
+                factor_score_entry INTEGER,
+                risk_score_entry   INTEGER,
+                shares             REAL NOT NULL DEFAULT 1.0,
+                FOREIGN KEY (portfolio_id) REFERENCES paper_portfolio(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_portfolio_history (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                date         TEXT NOT NULL,
+                total_value  REAL NOT NULL,
+                UNIQUE(portfolio_id, date),
+                FOREIGN KEY (portfolio_id) REFERENCES paper_portfolio(id)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_paper_trades_portfolio "
+            "ON paper_trades (portfolio_id)"
+        )
+
+
+_ensure_paper_tables()
+
+
 def save_analysis(
     symbol: str,
     price: float | None,

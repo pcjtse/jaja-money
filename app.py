@@ -1720,6 +1720,39 @@ if len(_snapshots) == 2:
         if not _new_flags and not _removed_flags:
             st.info("No flag changes since previous analysis.")
 
+# P22.1: Forward Test — Track in paper portfolio
+with st.expander("Track in Paper Portfolio (Forward Test)"):
+    import forward_test as _ft
+
+    _portfolios = _ft.list_portfolios()
+    _portfolio_options = {p["name"]: p["id"] for p in _portfolios}
+    _ft_col1, _ft_col2 = st.columns([3, 1])
+    if _portfolio_options:
+        _selected_pf_name = _ft_col1.selectbox(
+            "Portfolio", list(_portfolio_options.keys()), key="ft_portfolio_sel"
+        )
+        _selected_pf_id = _portfolio_options[_selected_pf_name]
+    else:
+        _ft_col1.caption("No portfolios yet — create one on the Forward Test page.")
+        _selected_pf_id = None
+    _ft_shares = _ft_col2.number_input(
+        "Shares", min_value=0.01, value=1.0, step=0.5, key="ft_shares"
+    )
+    if st.button("Add to Portfolio", key="ft_track_btn", disabled=_selected_pf_id is None):
+        _ft.add_position(
+            portfolio_id=_selected_pf_id,
+            symbol=symbol,
+            entry_price=price,
+            factor_score=_composite,
+            risk_score=_rscore,
+            shares=_ft_shares,
+        )
+        _ft.snapshot_portfolio(_selected_pf_id, {symbol: price})
+        st.success(
+            f"Added {symbol} @ ${price:,.2f} to **{_selected_pf_name}** "
+            f"(factor={_composite}, risk={_rscore})"
+        )
+
 # P2.5: Price Alerts configuration
 with st.expander("Configure Price Alert"):
     a_col1, a_col2, a_col3 = st.columns(3)
