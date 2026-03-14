@@ -199,3 +199,111 @@ def classify_rotation_phase(score: int, perf_1m: float | None, perf_3m: float | 
             elif perf_1m < 0 and perf_3m >= 0:
                 return "Weakening"
     return "Neutral"
+
+
+# ---------------------------------------------------------------------------
+# 21.9: Multi-Asset Class ETFs for Risk Parity Rotation
+# ---------------------------------------------------------------------------
+
+ASSET_CLASS_ETFS: list[dict] = [
+    {"ticker": "SPY",  "name": "US Equities",         "asset_class": "Equities"},
+    {"ticker": "EFA",  "name": "Intl Developed Eq.",  "asset_class": "Equities"},
+    {"ticker": "EEM",  "name": "Emerging Markets Eq.","asset_class": "Equities"},
+    {"ticker": "TLT",  "name": "Long-Term Treasuries", "asset_class": "Bonds"},
+    {"ticker": "IEF",  "name": "Mid-Term Treasuries",  "asset_class": "Bonds"},
+    {"ticker": "LQD",  "name": "Investment Grade Corp","asset_class": "Bonds"},
+    {"ticker": "GLD",  "name": "Gold",                 "asset_class": "Commodities"},
+    {"ticker": "DBC",  "name": "Broad Commodities",    "asset_class": "Commodities"},
+    {"ticker": "VNQ",  "name": "US Real Estate (REIT)","asset_class": "Real Estate"},
+    {"ticker": "BIL",  "name": "Short-Term T-Bills",   "asset_class": "Cash"},
+]
+
+
+def get_asset_class_data(api) -> list[dict]:
+    """Fetch momentum metrics for the multi-asset class ETF universe (21.9).
+
+    Returns list of dicts sorted by momentum score desc, each with:
+    ticker, name, asset_class, price, change_pct, score, perf_1m, perf_3m,
+    perf_6m, rsi, volatility, above_sma50, above_sma200.
+
+    Also computes equal-risk-contribution weights across all asset classes.
+    """
+    results = []
+    for etf in ASSET_CLASS_ETFS:
+        ticker = etf["ticker"]
+        try:
+            daily = api.get_daily(ticker, years=2)
+            close = pd.Series(daily["c"])
+            quote = api.get_quote(ticker)
+            price = float(quote.get("c") or 0)
+            change_pct = float(quote.get("dp") or 0)
+
+            metrics = sector_momentum_score(close)
+            results.append({
+                "ticker": ticker,
+                "name": etf["name"],
+                "asset_class": etf["asset_class"],
+                "price": price,
+                "change_pct": change_pct,
+                **metrics,
+            })
+            log.debug("Asset class ETF %s: score=%d", ticker, metrics["score"])
+        except Exception as exc:
+            log.warning("Failed to fetch asset class ETF %s: %s", ticker, exc)
+            results.append({
+                "ticker": ticker,
+                "name": etf["name"],
+                "asset_class": etf["asset_class"],
+                "price": None,
+                "change_pct": None,
+                "score": 50,
+                "perf_1m": None,
+                "perf_3m": None,
+                "perf_6m": None,
+                "rsi": None,
+                "volatility": None,
+                "above_sma50": None,
+                "above_sma200": None,
+            })
+
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return results
+
+
+def compute_asset_class_risk_parity_weights(asset_data: list[dict]) -> dict[str, float]:
+    """Compute inverse-volatility (risk parity) weights for asset class ETFs (21.9).
+
+    Tickers with missing volatility data receive equal weight as a fallback.
+
+    Parameters
+    ----------
+    asset_data : list of dicts from get_asset_class_data() with 'ticker' and 'volatility'
+
+    Returns
+    -------
+    dict mapping ticker -> weight (sums to 1.0)
+    """
+    valid = [(r["ticker"], r["volatility"]) for r in asset_data if r.get("volatility") and r["volatility"] > 0]
+    n_total = len(asset_data)
+    n_valid = len(valid)
+
+    if n_valid == 0 or n_total == 0:
+        eq = round(1.0 / n_total, 4) if n_total > 0 else 0.0
+        return {r["ticker"]: eq for r in asset_data}
+
+    inv_vol = {ticker: 1.0 / vol for ticker, vol in valid}
+    total_inv = sum(inv_vol.values())
+    weights = {ticker: round(iv / total_inv, 4) for ticker, iv in inv_vol.items()}
+
+    # Assign equal fallback weight for tickers without vol data
+    missing = [r["ticker"] for r in asset_data if r["ticker"] not in weights]
+    if missing:
+        # Re-normalise including missing tickers at mean weight
+        mean_w = sum(weights.values()) / len(weights) if weights else 1.0 / n_total
+        for t in missing:
+            weights[t] = round(mean_w, 4)
+        total_w = sum(weights.values())
+        weights = {t: round(w / total_w, 4) for t, w in weights.items()}
+
+    log.debug("Asset class risk-parity weights computed for %d ETFs", len(weights))
+    return weights

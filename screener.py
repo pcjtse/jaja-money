@@ -463,3 +463,241 @@ def sentiment_skipped_warning() -> str:
         "for performance reasons. Factor scores may be slightly lower than in the "
         "full single-stock analysis, which includes news sentiment scoring."
     )
+
+
+# ---------------------------------------------------------------------------
+# 21.3: Dividend Growth screen preset and qualifier
+# ---------------------------------------------------------------------------
+
+DIVIDEND_GROWTH_PRESET: dict = {
+    "min_yield_pct": 2.0,
+    "max_payout_ratio": 75.0,
+    "min_div_growth_rate_5y": 5.0,   # % CAGR
+    "max_risk_score": 55,
+    "min_factor_score": 45,
+}
+
+
+def is_dividend_growth_candidate(
+    result: dict,
+    financials: dict | None = None,
+) -> bool:
+    """Return True if a screener result meets dividend growth criteria (21.3).
+
+    Checks: yield ≥ 2%, payout ≤ 75%, risk score ≤ 55, factor score ≥ 45.
+    If financials are provided, also checks 5-year dividend growth rate ≥ 5%.
+    """
+    p = DIVIDEND_GROWTH_PRESET
+
+    # Risk and factor gates
+    if result.get("risk_score", 100) > p["max_risk_score"]:
+        return False
+    if result.get("factor_score", 0) < p["min_factor_score"]:
+        return False
+
+    metrics = financials or {}
+    div_yield = metrics.get("dividendYieldIndicatedAnnual") or result.get("div_yield")
+    payout = metrics.get("payoutRatioTTM") or result.get("payout_ratio")
+    div_growth = metrics.get("dividendGrowthRate5Y") or result.get("div_growth_rate_5y")
+
+    if div_yield is None or float(div_yield) < p["min_yield_pct"]:
+        return False
+    if payout is not None and float(payout) > p["max_payout_ratio"]:
+        return False
+    if div_growth is not None and float(div_growth) < p["min_div_growth_rate_5y"]:
+        return False
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# 21.4: Graham Number / Deep Value preset and filter
+# ---------------------------------------------------------------------------
+
+DEEP_VALUE_PRESET: dict = {
+    "min_margin_of_safety": 0.10,   # 10% minimum
+    "max_pe_ratio": 22.0,
+    "max_risk_score": 60,
+}
+
+
+def compute_graham_filter(result: dict, financials: dict | None = None) -> dict:
+    """Compute Graham Number metrics for a screener result (21.4).
+
+    Returns dict with: graham_number, margin_of_safety, is_deep_value.
+    """
+    from factors import compute_graham_number as _cgn
+
+    metrics = financials or {}
+    eps = metrics.get("epsTTM") or metrics.get("epsBasicExclExtraItemsTTM")
+    bvps = (
+        metrics.get("bookValuePerShareAnnual")
+        or metrics.get("bookValuePerShareQuarterly")
+    )
+    price = result.get("price")
+
+    if eps is None or bvps is None or price is None or float(price) <= 0:
+        return {"graham_number": None, "margin_of_safety": None, "is_deep_value": False}
+
+    graham = _cgn(float(eps), float(bvps))
+    if graham is None:
+        return {"graham_number": None, "margin_of_safety": None, "is_deep_value": False}
+
+    margin = (graham - float(price)) / graham
+    p = DEEP_VALUE_PRESET
+    is_deep = (
+        margin >= p["min_margin_of_safety"]
+        and (result.get("pe_ratio") is None or float(result["pe_ratio"]) <= p["max_pe_ratio"])
+        and result.get("risk_score", 100) <= p["max_risk_score"]
+    )
+
+    return {
+        "graham_number": round(graham, 2),
+        "margin_of_safety": round(margin, 4),
+        "is_deep_value": is_deep,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 21.5: Cross-Sectional Momentum (Relative Strength)
+# ---------------------------------------------------------------------------
+
+MOMENTUM_LEADERS_PRESET: dict = {
+    "top_decile_pct": 0.10,
+    "lookback_6m_days": 126,
+    "lookback_12m_days": 252,
+    "min_factor_score": 45,
+}
+
+
+def compute_cross_sectional_momentum(
+    tickers: list[str],
+    api,
+    max_workers: int = 4,
+    delay_between: float = 0.2,
+) -> list[dict]:
+    """Rank a ticker universe by 6-month and 12-month price momentum (21.5).
+
+    Returns list of dicts sorted by composite momentum rank (ascending rank = stronger).
+    Each dict includes: symbol, return_6m_pct, return_12m_pct, momentum_rank,
+    decile (1=top, 10=bottom).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import pandas as _pd
+
+    def _fetch_returns(symbol: str) -> dict | None:
+        time.sleep(delay_between)
+        try:
+            daily = api.get_daily(symbol, years=1.5)
+            close = _pd.Series(daily["c"])
+            n = len(close)
+            p = MOMENTUM_LEADERS_PRESET
+
+            ret_6m = ret_12m = None
+            if n >= p["lookback_6m_days"] + 1:
+                ret_6m = round(
+                    (float(close.iloc[-1]) / float(close.iloc[-p["lookback_6m_days"]]) - 1) * 100, 2
+                )
+            if n >= p["lookback_12m_days"] + 1:
+                ret_12m = round(
+                    (float(close.iloc[-1]) / float(close.iloc[-p["lookback_12m_days"]]) - 1) * 100, 2
+                )
+            return {"symbol": symbol, "return_6m_pct": ret_6m, "return_12m_pct": ret_12m}
+        except Exception as exc:
+            log.debug("Momentum fetch skipped %s: %s", symbol, exc)
+            return None
+
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_returns, t): t for t in tickers}
+        for fut in as_completed(futures):
+            r = fut.result()
+            if r and (r["return_6m_pct"] is not None or r["return_12m_pct"] is not None):
+                results.append(r)
+
+    if not results:
+        return []
+
+    # Composite momentum score: 40% 6M + 60% 12M (skip-1-month convention omitted for simplicity)
+    def _composite(r: dict) -> float:
+        r6 = r.get("return_6m_pct") or 0.0
+        r12 = r.get("return_12m_pct") or r6
+        return 0.4 * r6 + 0.6 * r12
+
+    results.sort(key=_composite, reverse=True)
+
+    # Assign rank and decile
+    n_total = len(results)
+    for rank, r in enumerate(results, start=1):
+        r["momentum_rank"] = rank
+        r["decile"] = min(10, int((rank - 1) / n_total * 10) + 1)
+        r["composite_momentum_pct"] = round(_composite(r), 2)
+
+    log.info("Cross-sectional momentum: ranked %d tickers", n_total)
+    return results
+
+
+def momentum_leaders(results: list[dict], top_pct: float = 0.10) -> list[dict]:
+    """Return the top-decile momentum leaders from a ranked list (21.5)."""
+    n = max(1, int(len(results) * top_pct))
+    return [r for r in results if r.get("decile", 10) == 1][:n]
+
+
+def momentum_laggards(results: list[dict], bottom_pct: float = 0.10) -> list[dict]:
+    """Return the bottom-decile momentum laggards from a ranked list (21.5)."""
+    return [r for r in results if r.get("decile", 1) == 10]
+
+
+# ---------------------------------------------------------------------------
+# 21.10: Short Selling screen preset and qualifier
+# ---------------------------------------------------------------------------
+
+SHORT_SELLING_PRESET: dict = {
+    "min_short_pct_float": 10.0,   # % of float sold short
+    "min_days_to_cover": 3.0,
+    "max_factor_score": 38,        # weak fundamentals required
+    "insider_signal": "Selling",   # insider selling activity
+    "max_earnings_beat_rate": 0.40,  # < 40% beat rate
+}
+
+
+def is_short_selling_candidate(
+    result: dict,
+    insider_summary: dict | None = None,
+    short_data: dict | None = None,
+) -> bool:
+    """Return True if a ticker meets short-selling screening criteria (21.10).
+
+    Combines weak factor score + high short interest + insider selling.
+    All three groups are individually weighted; at least two must be met.
+
+    Parameters
+    ----------
+    result         : screener result dict (factor_score, risk_score, etc.)
+    insider_summary: output of ownership.fetch_insider_summary()
+    short_data     : dict with short_pct_float and days_to_cover
+
+    Returns
+    -------
+    bool
+    """
+    p = SHORT_SELLING_PRESET
+    signals_met = 0
+
+    # Signal 1: Weak fundamentals
+    if result.get("factor_score", 100) <= p["max_factor_score"]:
+        signals_met += 1
+
+    # Signal 2: High short interest
+    if short_data:
+        short_pct = short_data.get("short_pct_float")
+        days_cover = short_data.get("days_to_cover")
+        if (short_pct is not None and float(short_pct) >= p["min_short_pct_float"]
+                and days_cover is not None and float(days_cover) >= p["min_days_to_cover"]):
+            signals_met += 1
+
+    # Signal 3: Insider selling
+    if insider_summary and insider_summary.get("signal") == p["insider_signal"]:
+        signals_met += 1
+
+    return signals_met >= 2

@@ -938,3 +938,600 @@ def composite_label_color(score: int) -> tuple[str, str]:
         if score >= threshold:
             return label, color
     return "Strong Sell", "#cf2929"
+
+
+# ---------------------------------------------------------------------------
+# 21.3: Dividend Growth scoring helper
+# ---------------------------------------------------------------------------
+
+def compute_dividend_growth_score(financials: dict | None) -> dict:
+    """Score dividend quality for dividend growth investing (21.3).
+
+    Combines yield, payout sustainability, and growth signals available
+    from Finnhub basic metrics into a 0-100 quality score.
+
+    Returns
+    -------
+    dict with:
+        score           – int 0-100
+        yield_pct       – float or None
+        payout_ratio    – float or None
+        growth_signal   – "Growing" | "Stable" | "At Risk" | "No Dividend"
+        qualifies       – bool (meets min criteria for dividend growth strategy)
+        detail          – human-readable summary
+    """
+    metrics = financials or {}
+    div_yield = metrics.get("dividendYieldIndicatedAnnual")
+    payout_ratio = metrics.get("payoutRatioTTM")
+    div_yield_5y = metrics.get("dividendYield5Y")
+    div_growth_rate = metrics.get("dividendGrowthRate5Y")
+
+    if div_yield is None or float(div_yield) <= 0:
+        return {
+            "score": 0,
+            "yield_pct": None,
+            "payout_ratio": None,
+            "growth_signal": "No Dividend",
+            "qualifies": False,
+            "detail": "No dividend paid",
+        }
+
+    div_yield = float(div_yield)
+    payout = float(payout_ratio) if payout_ratio is not None else None
+    yield_5y = float(div_yield_5y) if div_yield_5y is not None else None
+    growth_rate = float(div_growth_rate) if div_growth_rate is not None else None
+
+    score = 0
+    detail_parts = [f"Yield: {div_yield:.2f}%"]
+
+    # Yield component (0-30 pts)
+    if div_yield >= 4.0:
+        score += 25
+    elif div_yield >= 3.0:
+        score += 30
+    elif div_yield >= 2.0:
+        score += 22
+    elif div_yield >= 1.0:
+        score += 12
+    else:
+        score += 5
+
+    # Payout sustainability (0-30 pts)
+    if payout is not None:
+        detail_parts.append(f"Payout: {payout:.0f}%")
+        if payout <= 40:
+            score += 30
+        elif payout <= 60:
+            score += 22
+        elif payout <= 75:
+            score += 12
+        elif payout <= 100:
+            score += 4
+        else:
+            score += 0  # paying out more than earnings
+
+    # Growth signal (0-40 pts)
+    growth_signal = "Stable"
+    if growth_rate is not None:
+        detail_parts.append(f"5Y div CAGR: {growth_rate:.1f}%")
+        if growth_rate >= 7.0:
+            score += 40
+            growth_signal = "Growing"
+        elif growth_rate >= 3.0:
+            score += 28
+            growth_signal = "Growing"
+        elif growth_rate >= 0:
+            score += 16
+            growth_signal = "Stable"
+        else:
+            score += 0
+            growth_signal = "At Risk"
+    elif yield_5y is not None and div_yield >= yield_5y * 0.9:
+        # Yield has been at least maintained
+        score += 18
+        growth_signal = "Stable"
+        detail_parts.append("Yield maintained vs 5Y avg")
+
+    # Qualification: yield ≥ 2%, payout ≤ 75%, growth_signal != "At Risk"
+    qualifies = (
+        div_yield >= 2.0
+        and (payout is None or payout <= 75)
+        and growth_signal != "At Risk"
+    )
+
+    return {
+        "score": _clamp(score),
+        "yield_pct": round(div_yield, 2),
+        "payout_ratio": round(payout, 1) if payout is not None else None,
+        "growth_signal": growth_signal,
+        "qualifies": qualifies,
+        "detail": " | ".join(detail_parts),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 21.4: Graham Number / Deep Value
+# ---------------------------------------------------------------------------
+
+def compute_graham_number(eps: float, bvps: float) -> float | None:
+    """Compute Benjamin Graham's intrinsic value estimate.
+
+    Graham Number = √(22.5 × EPS × BVPS)
+
+    Only valid when both EPS and BVPS are positive.
+    Returns None if inputs are invalid.
+    """
+    if eps is None or bvps is None:
+        return None
+    try:
+        eps, bvps = float(eps), float(bvps)
+    except (TypeError, ValueError):
+        return None
+    if eps <= 0 or bvps <= 0:
+        return None
+    return round(math.sqrt(22.5 * eps * bvps), 2)
+
+
+def _factor_graham_number(financials: dict | None, price: float | None) -> dict:
+    """Graham Number deep-value factor (21.4).
+
+    Computes margin of safety = (Graham Number - Price) / Graham Number.
+    A positive margin means the stock trades below Graham's intrinsic value.
+    """
+    weight = _get_weight("graham", 0.0)  # informational by default; add to cfg to enable
+    metrics = financials or {}
+    eps = metrics.get("epsTTM") or metrics.get("epsBasicExclExtraItemsTTM")
+    bvps = (
+        metrics.get("bookValuePerShareAnnual")
+        or metrics.get("bookValuePerShareQuarterly")
+    )
+
+    graham = compute_graham_number(eps, bvps) if eps and bvps else None
+
+    if graham is None or price is None or price <= 0:
+        return dict(name="Graham Number", score=50, weight=weight,
+                    label="No data", detail="EPS or BVPS unavailable",
+                    graham_number=None, margin_of_safety=None)
+
+    margin = (graham - price) / graham
+    detail = f"Graham Number: ${graham:.2f} | Price: ${price:.2f} | MoS: {margin:.0%}"
+
+    if margin >= 0.30:
+        s, lbl = 95, "Deep value — large margin of safety"
+    elif margin >= 0.15:
+        s, lbl = 80, "Value — positive margin of safety"
+    elif margin >= 0.0:
+        s, lbl = 60, "Fair — near Graham Number"
+    elif margin >= -0.20:
+        s, lbl = 38, "Slight premium to Graham Number"
+    else:
+        s, lbl = 18, "Significant premium to Graham Number"
+
+    return dict(name="Graham Number", score=s, weight=weight,
+                label=lbl, detail=detail,
+                graham_number=graham,
+                margin_of_safety=round(margin, 4))
+
+
+# ---------------------------------------------------------------------------
+# 21.6: Piotroski F-Score
+# ---------------------------------------------------------------------------
+
+def compute_piotroski_fscore(financials: dict | None) -> dict:
+    """Compute the Piotroski F-Score (0–9) from available fundamentals (21.6).
+
+    The score is composed of three groups of binary signals:
+
+    Profitability (4 signals):
+      F1  ROA > 0  (net income positive)
+      F2  Operating Cash Flow > 0
+      F3  ΔROA > 0  (ROA improved year-over-year)
+      F4  Accruals < 0  (CFO/Assets > ROA → cash-backed earnings)
+
+    Leverage & Liquidity (3 signals):
+      F5  Long-term leverage decreased
+      F6  Current ratio improved
+      F7  No dilution (shares not increased)
+
+    Operating Efficiency (2 signals):
+      F8  Gross margin improved
+      F9  Asset turnover improved
+
+    Scoring: each signal = 1 if condition met, 0 otherwise.
+    Total 0-9; ≥7 = strong quality buy, ≤2 = distressed.
+
+    Parameters
+    ----------
+    financials : Finnhub basic-metrics dict or None
+
+    Returns
+    -------
+    dict with:
+        total_score      – int 0-9
+        signals          – dict mapping signal_name -> 0 | 1 | None (None = no data)
+        quality_label    – "Strong" | "Moderate" | "Weak" | "Distressed"
+        available_signals – int, count of signals with data
+        detail           – human-readable summary
+    """
+    m = financials or {}
+
+    def _get(key):
+        v = m.get(key)
+        return float(v) if v is not None else None
+
+    roa_ttm = _get("roaTTM")
+    roa_ann = _get("roaRfy") or _get("roa5Y")       # prior-year proxy
+    cfo_ttm = _get("cashFlowTTM") or _get("freeCashFlowTTM")
+    # Leverage
+    debt_eq_ann = _get("totalDebt/equityAnnual")
+    debt_eq_q = _get("totalDebt/equityQuarterly")
+    # Liquidity
+    curr_ann = _get("currentRatioAnnual")
+    curr_q = _get("currentRatioQuarterly")
+    # Dilution
+    shares_ann = _get("sharesOutstanding") or _get("sharesFreeFloat")
+    # Margins
+    gm_ttm = _get("grossMarginTTM")
+    gm_ann = _get("grossMarginAnnual")
+    # Asset turnover
+    at_ttm = _get("assetTurnoverTTM") or _get("assetTurnoverAnnual")
+    # Total assets proxy (for accruals)
+    assets = _get("totalAssets") or _get("bookValuePerShareAnnual")
+
+    signals: dict[str, int | None] = {}
+
+    # F1: ROA > 0
+    signals["F1_roa_positive"] = (1 if roa_ttm > 0 else 0) if roa_ttm is not None else None
+
+    # F2: Operating Cash Flow > 0
+    signals["F2_cfo_positive"] = (1 if cfo_ttm > 0 else 0) if cfo_ttm is not None else None
+
+    # F3: ΔROA > 0
+    if roa_ttm is not None and roa_ann is not None:
+        signals["F3_delta_roa"] = 1 if roa_ttm > roa_ann else 0
+    else:
+        signals["F3_delta_roa"] = None
+
+    # F4: Accruals < 0 (CFO > ROA implies cash-backed earnings)
+    if cfo_ttm is not None and roa_ttm is not None and assets is not None and assets > 0:
+        cfo_to_assets = cfo_ttm / assets
+        accruals = roa_ttm - cfo_to_assets
+        signals["F4_low_accruals"] = 1 if accruals < 0 else 0
+    else:
+        signals["F4_low_accruals"] = None
+
+    # F5: Leverage decreased
+    if debt_eq_ann is not None and debt_eq_q is not None:
+        signals["F5_leverage_decreased"] = 1 if debt_eq_q < debt_eq_ann else 0
+    else:
+        signals["F5_leverage_decreased"] = None
+
+    # F6: Liquidity improved
+    if curr_ann is not None and curr_q is not None:
+        signals["F6_liquidity_improved"] = 1 if curr_q > curr_ann else 0
+    else:
+        signals["F6_liquidity_improved"] = None
+
+    # F7: No dilution (shares_ann used as proxy; ideal needs prev-year share count)
+    # We infer from share buyback signal if available
+    signals["F7_no_dilution"] = None  # requires two-year share count data
+
+    # F8: Gross margin improved
+    if gm_ttm is not None and gm_ann is not None:
+        signals["F8_gm_improved"] = 1 if gm_ttm > gm_ann else 0
+    else:
+        signals["F8_gm_improved"] = None
+
+    # F9: Asset turnover improved
+    signals["F9_asset_turnover"] = None  # requires prior-year asset turnover
+
+    # Compute total from available signals
+    available = [v for v in signals.values() if v is not None]
+    total_score = sum(v for v in available)
+    available_count = len(available)
+
+    # Scale label
+    if available_count == 0:
+        quality_label = "No data"
+    elif total_score >= 7:
+        quality_label = "Strong"
+    elif total_score >= 5:
+        quality_label = "Moderate"
+    elif total_score >= 3:
+        quality_label = "Weak"
+    else:
+        quality_label = "Distressed"
+
+    detail = f"F-Score: {total_score}/{available_count} signals available"
+    if available_count < 9:
+        detail += f" ({9 - available_count} signals require additional data)"
+
+    log.debug("Piotroski F-Score: %d/%d — %s", total_score, available_count, quality_label)
+
+    return {
+        "total_score": total_score,
+        "signals": signals,
+        "quality_label": quality_label,
+        "available_signals": available_count,
+        "detail": detail,
+    }
+
+
+def _factor_piotroski(financials: dict | None) -> dict:
+    """Piotroski F-Score as a factor dimension (21.6)."""
+    weight = _get_weight("piotroski", 0.0)  # informational by default; add to cfg to enable
+    result = compute_piotroski_fscore(financials)
+    total = result["total_score"]
+    avail = result["available_signals"]
+    quality_label = result["quality_label"]
+
+    if avail == 0:
+        return dict(name="Piotroski F-Score", score=50, weight=weight,
+                    label="No data", detail="Fundamental data unavailable",
+                    fscore=None)
+
+    # Map 0-9 score to 0-100 factor score
+    raw_pct = total / max(avail, 1)
+    score = _clamp(raw_pct * 100)
+
+    detail = f"F-Score: {total}/{avail} | {quality_label}"
+
+    return dict(name="Piotroski F-Score", score=score, weight=weight,
+                label=quality_label, detail=detail,
+                fscore=total)
+
+
+# ---------------------------------------------------------------------------
+# 21.7: Extended Macro Regime Detection
+# ---------------------------------------------------------------------------
+
+# Per-regime factor weight adjustment presets (additive deltas to defaults)
+_REGIME_WEIGHT_DELTAS: dict[str, dict[str, float]] = {
+    "Strong Bull": {
+        "trend":    +0.05,
+        "rsi":      +0.02,
+        "valuation": -0.02,
+    },
+    "Bull": {
+        "trend":    +0.02,
+    },
+    "Neutral": {},
+    "Bear": {
+        "valuation": +0.03,
+        "earnings":  +0.03,
+        "trend":    -0.03,
+    },
+    "Strong Bear": {
+        "valuation": +0.05,
+        "earnings":  +0.05,
+        "trend":    -0.05,
+        "rsi":      -0.02,
+    },
+    "Stagflation": {
+        "valuation": +0.06,   # value stocks outperform
+        "dividend":  +0.04,   # income important in stagflation
+        "trend":    -0.04,
+        "rsi":      -0.02,
+    },
+    "Recovery": {
+        "trend":    +0.04,
+        "rsi":      +0.03,
+        "earnings": +0.03,
+        "valuation": -0.02,
+    },
+}
+
+
+def compute_market_regime_extended(
+    spy_close: "pd.Series | None",
+    vix: float | None,
+    yield_spread: float | None,
+    vix_prev: float | None = None,
+    days_since_sma_cross: int | None = None,
+) -> dict:
+    """Classify the macro regime into one of seven states (21.7).
+
+    Extends the base `compute_market_regime` function to distinguish
+    Stagflation and Recovery phases in addition to the core five.
+
+    Parameters
+    ----------
+    spy_close           : pd.Series of SPY daily closes (most recent last)
+    vix                 : current VIX level, or None
+    yield_spread        : 10Y-2Y Treasury spread in ppt (positive = normal,
+                          negative = inverted), or None
+    vix_prev            : VIX level from ~20 trading days ago (for trend), or None
+    days_since_sma_cross : days since SPY crossed its 200d SMA, or None
+                           (positive = recently crossed above, negative = below)
+
+    Returns
+    -------
+    dict with:
+        regime              – str (one of seven regime labels)
+        score_adjustment    – int applied to composite scores
+        detail              – human-readable explanation
+        weight_deltas       – dict of per-factor weight adjustments
+    """
+    spy_above_200 = None
+    sma200 = None
+    if spy_close is not None and len(spy_close) >= 200:
+        sma200 = float(spy_close.rolling(window=200).mean().iloc[-1])
+        current = float(spy_close.iloc[-1])
+        spy_above_200 = current > sma200
+
+    details = []
+    if spy_above_200 is not None:
+        details.append(f"SPY {'above' if spy_above_200 else 'below'} 200d SMA")
+    if vix is not None:
+        details.append(f"VIX={vix:.1f}")
+    if vix_prev is not None:
+        vix_trend = "↓" if vix < vix_prev else "↑"
+        details.append(f"VIX trend={vix_trend}")
+    if yield_spread is not None:
+        details.append(f"yield spread={yield_spread:+.2f}%")
+    if days_since_sma_cross is not None:
+        details.append(f"SMA cross={days_since_sma_cross}d ago")
+
+    # Classification logic (extended)
+    vix_high = vix is not None and vix > 25
+    vix_very_high = vix is not None and vix > 35
+    vix_declining = vix is not None and vix_prev is not None and vix < vix_prev * 0.85
+    yield_inverted = yield_spread is not None and yield_spread < -0.10
+    recent_sma_cross = days_since_sma_cross is not None and 0 < days_since_sma_cross <= 60
+
+    if vix_very_high and spy_above_200 is False:
+        regime, adj = "Strong Bear", -10
+
+    elif vix_high and yield_inverted and spy_above_200 is False:
+        # High volatility + inverted yield curve + falling market = Stagflation
+        regime, adj = "Stagflation", -8
+
+    elif vix_high:
+        regime, adj = "Bear", -5
+
+    elif spy_above_200 is True and vix_declining and recent_sma_cross:
+        # VIX declining + SPY recently crossed back above 200d = early Recovery
+        regime, adj = "Recovery", +4
+
+    elif spy_above_200 is True and vix is not None and vix < 18:
+        if yield_spread is not None and yield_spread > 0:
+            regime, adj = "Strong Bull", +5
+        else:
+            regime, adj = "Bull", +2
+
+    elif spy_above_200 is True:
+        regime, adj = "Bull", +2
+
+    else:
+        regime, adj = "Neutral", 0
+
+    detail = " | ".join(details) if details else "Insufficient data"
+    weight_deltas = _REGIME_WEIGHT_DELTAS.get(regime, {})
+
+    log.debug("Extended regime: %s (adj=%+d)", regime, adj)
+
+    return {
+        "regime": regime,
+        "score_adjustment": adj,
+        "detail": detail,
+        "weight_deltas": weight_deltas,
+    }
+
+
+def get_regime_factor_weights(regime: str, base_weights: dict[str, float] | None = None) -> dict[str, float]:
+    """Return factor weights adjusted for the given macro regime (21.7).
+
+    Parameters
+    ----------
+    regime      : regime string from compute_market_regime_extended()
+    base_weights: starting weights dict; defaults to cfg.factor_weights
+
+    Returns
+    -------
+    dict mapping factor name -> adjusted weight (values normalized to sum to 1).
+    """
+    if base_weights is None:
+        base_weights = dict(cfg.factor_weights)
+
+    deltas = _REGIME_WEIGHT_DELTAS.get(regime, {})
+    adjusted = {}
+    for k, v in base_weights.items():
+        delta = deltas.get(k, 0.0)
+        adjusted[k] = max(0.0, v + delta)
+
+    total = sum(adjusted.values())
+    if total > 0:
+        adjusted = {k: round(v / total, 4) for k, v in adjusted.items()}
+
+    return adjusted
+
+
+# ---------------------------------------------------------------------------
+# 21.8: Seasonal / Calendar Pattern Overlay
+# ---------------------------------------------------------------------------
+
+# Monthly seasonal bias in composite score points (−5 to +5)
+# Sources: January Effect, Sell in May, September Effect, Santa Claus rally
+_MONTHLY_SEASONAL_BIAS: dict[int, int] = {
+    1:  +3,   # January Effect — small-cap strength, new money inflows
+    2:  +1,   # Post-January momentum continuation
+    3:   0,   # Neutral
+    4:  +2,   # Spring rally — pre-earnings momentum
+    5:  -2,   # "Sell in May" seasonal weakness begins
+    6:  -1,   # Pre-summer lull
+    7:  +1,   # Summer rally — light vol, upward drift
+    8:  -1,   # Late summer weakness
+    9:  -3,   # September: historically the weakest month of the year
+    10: +1,   # October recovery after September weakness
+    11: +2,   # Pre-holiday buying, Q4 momentum
+    12: +3,   # Santa Claus rally, year-end positioning, tax-loss reversal
+}
+
+# Event-level biases for specific calendar windows
+_CALENDAR_EVENTS: list[dict] = [
+    {"name": "Tax-Loss Harvesting Season",    "months": [11, 12], "days_start": 15, "bias": -1},
+    {"name": "Santa Claus Rally Window",      "months": [12],     "days_start": 24, "bias": +2},
+    {"name": "January Effect Window",         "months": [1],      "days_start": 1,  "bias": +2},
+    {"name": "Pre-Earnings Season Momentum",  "months": [1, 4, 7, 10], "days_start": 1, "bias": +1},
+]
+
+
+def compute_seasonal_bias(month: int | None = None, day: int | None = None) -> dict:
+    """Compute calendar-based score adjustment for the current date (21.8).
+
+    Parameters
+    ----------
+    month : calendar month (1-12); uses current month if None
+    day   : day of month (1-31); uses current day if None
+
+    Returns
+    -------
+    dict with:
+        month           – int
+        base_bias       – int, monthly bias in score points
+        event_bias      – int, additional event-level adjustment
+        total_bias      – int, total seasonal adjustment
+        active_event    – str or None, name of active calendar event
+        detail          – human-readable description
+    """
+    import datetime
+    if month is None or day is None:
+        today = datetime.date.today()
+        month = month or today.month
+        day = day or today.day
+
+    base_bias = _MONTHLY_SEASONAL_BIAS.get(month, 0)
+
+    # Check for active calendar events
+    event_bias = 0
+    active_event = None
+    for event in _CALENDAR_EVENTS:
+        if month in event["months"] and day >= event["days_start"]:
+            if abs(event["bias"]) > abs(event_bias):
+                event_bias = event["bias"]
+                active_event = event["name"]
+
+    total_bias = base_bias + event_bias
+
+    month_names = {
+        1: "January", 2: "February", 3: "March", 4: "April",
+        5: "May", 6: "June", 7: "July", 8: "August",
+        9: "September", 10: "October", 11: "November", 12: "December",
+    }
+    month_name = month_names.get(month, str(month))
+
+    bias_str = f"{total_bias:+d} pts"
+    detail = f"{month_name} seasonal bias: {bias_str}"
+    if active_event:
+        detail += f" | Active: {active_event}"
+
+    log.debug("Seasonal bias month=%d day=%d: %+d pts", month, day, total_bias)
+
+    return {
+        "month": month,
+        "base_bias": base_bias,
+        "event_bias": event_bias,
+        "total_bias": total_bias,
+        "active_event": active_event,
+        "detail": detail,
+    }

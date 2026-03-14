@@ -1,4 +1,7 @@
-"""Institutional 13F ownership tracker using SEC EDGAR XBRL API (P16.2)."""
+"""Institutional 13F ownership tracker using SEC EDGAR XBRL API (P16.2).
+
+Also provides short interest scoring for the short-selling screen (21.10).
+"""
 from __future__ import annotations
 
 from log_setup import get_logger
@@ -192,4 +195,106 @@ def fetch_insider_summary(insider_txns: list) -> dict:
         "signal": signal,
         "recent_buyers": recent_buyers[:10],
         "recent_sellers": recent_sellers[:10],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 21.10: Short selling combined signal
+# ---------------------------------------------------------------------------
+
+def compute_short_selling_score(
+    factor_score: int,
+    insider_summary: dict | None,
+    short_data: dict | None,
+) -> dict:
+    """Compute a composite short-selling conviction score (21.10).
+
+    Combines three bearish signals into a 0-100 score:
+      - Weak fundamentals (factor score)
+      - High short interest (% float + days-to-cover)
+      - Insider net selling
+
+    Parameters
+    ----------
+    factor_score    : composite factor score 0-100 (lower = more bearish)
+    insider_summary : output of fetch_insider_summary(), or None
+    short_data      : dict with short_pct_float (float) and
+                      days_to_cover (float), or None
+
+    Returns
+    -------
+    dict with:
+        score           – int 0-100 (higher = stronger short conviction)
+        fundamental_sub – int 0-40 (contribution from weak factor score)
+        short_int_sub   – int 0-35 (contribution from short interest)
+        insider_sub     – int 0-25 (contribution from insider selling)
+        label           – "Strong Short" | "Moderate Short" | "Weak" | "No Signal"
+        detail          – human-readable summary
+    """
+    detail_parts = []
+
+    # Fundamental weakness: invert the factor score (0-100 → 0-40 contribution)
+    weak_score = max(0, 50 - factor_score)   # 0 when score=50, 50 when score=0
+    fundamental_sub = int(min(40, weak_score * 0.8))
+    detail_parts.append(f"Factor score: {factor_score}/100")
+
+    # Short interest component (0-35)
+    short_int_sub = 0
+    if short_data:
+        short_pct = short_data.get("short_pct_float")
+        days_cover = short_data.get("days_to_cover")
+        if short_pct is not None:
+            sp = float(short_pct)
+            if sp >= 25:
+                short_int_sub += 20
+            elif sp >= 15:
+                short_int_sub += 14
+            elif sp >= 10:
+                short_int_sub += 8
+            detail_parts.append(f"Short float: {sp:.1f}%")
+        if days_cover is not None:
+            dc = float(days_cover)
+            if dc >= 10:
+                short_int_sub += 15
+            elif dc >= 5:
+                short_int_sub += 9
+            elif dc >= 3:
+                short_int_sub += 4
+            detail_parts.append(f"Days-to-cover: {dc:.1f}")
+        short_int_sub = min(35, short_int_sub)
+
+    # Insider selling component (0-25)
+    insider_sub = 0
+    if insider_summary:
+        ins_signal = insider_summary.get("signal", "No activity")
+        net_shares = insider_summary.get("net_shares_bought", 0)
+        if ins_signal == "Selling":
+            insider_sub = 25
+        elif ins_signal == "Mixed" and net_shares < 0:
+            insider_sub = 12
+        detail_parts.append(f"Insider signal: {ins_signal}")
+
+    total = fundamental_sub + short_int_sub + insider_sub
+
+    if total >= 65:
+        label = "Strong Short"
+    elif total >= 40:
+        label = "Moderate Short"
+    elif total >= 20:
+        label = "Weak"
+    else:
+        label = "No Signal"
+
+    log.debug(
+        "Short selling score: %d (fundamental=%d, short_int=%d, insider=%d) — %s",
+        total, fundamental_sub, short_int_sub, insider_sub, label,
+    )
+
+    return {
+        "score": total,
+        "fundamental_sub": fundamental_sub,
+        "short_int_sub": short_int_sub,
+        "insider_sub": insider_sub,
+        "label": label,
+        "detail": " | ".join(detail_parts),
     }
