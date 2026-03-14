@@ -49,6 +49,8 @@ CONDITION_TYPES = [
     "Factor Score Above",
     "Factor Score Below",
     "Risk Score Above",
+    "Signal Change (Factor)",
+    "Signal Change (Risk Level)",
 ]
 
 
@@ -406,6 +408,162 @@ def _post_json(url: str, payload: dict) -> bool:
     except Exception as exc:
         log.warning("Webhook POST failed to %s: %s", url[:50], exc)
         return False
+
+
+# ---------------------------------------------------------------------------
+# P20.3: Signal change notifications
+# ---------------------------------------------------------------------------
+
+_RISK_LEVEL_NUMERIC = {
+    "Low": 1,
+    "Moderate": 2,
+    "Elevated": 3,
+    "High": 4,
+    "Extreme": 5,
+}
+
+
+def check_signal_changes(
+    symbol: str,
+    new_factor_score: int,
+    new_risk_level: str,
+    history_fn=None,
+) -> list[dict]:
+    """Detect significant signal changes by comparing to recent history.
+
+    Compares the provided new values against the most recent stored snapshot
+    for the symbol. A factor score change of more than 10 points, or a risk
+    level shift of 1 or more tiers, generates a change event.
+
+    Parameters
+    ----------
+    symbol : stock ticker symbol
+    new_factor_score : newly computed composite factor score (0-100)
+    new_risk_level : newly computed risk level string (Low/Moderate/Elevated/High/Extreme)
+    history_fn : optional callable that accepts symbol and returns list of
+                 snapshot dicts sorted newest-first. Defaults to importing
+                 get_last_n_snapshots from history module.
+
+    Returns
+    -------
+    list of dicts with keys:
+        symbol, change_type ("factor_score" | "risk_level"),
+        old_value, new_value, delta, message
+    """
+    if history_fn is None:
+        try:
+            from history import get_last_n_snapshots as history_fn  # type: ignore[assignment]
+        except ImportError:
+            log.warning("check_signal_changes: could not import history module")
+            return []
+
+    try:
+        snapshots = history_fn(symbol)
+    except Exception as exc:
+        log.warning("check_signal_changes: history_fn error for %s: %s", symbol, exc)
+        return []
+
+    if not snapshots or len(snapshots) < 2:
+        log.debug(
+            "check_signal_changes: fewer than 2 snapshots for %s; skipping", symbol
+        )
+        return []
+
+    # snapshots returned newest-first; previous snapshot is index 1
+    previous = snapshots[1]
+    changes: list[dict] = []
+
+    # --- Factor score change ---
+    prev_factor = previous.get("factor_score")
+    if prev_factor is not None:
+        delta = new_factor_score - int(prev_factor)
+        if abs(delta) > 10:
+            direction = "increased" if delta > 0 else "decreased"
+            changes.append(
+                {
+                    "symbol": symbol,
+                    "change_type": "factor_score",
+                    "old_value": int(prev_factor),
+                    "new_value": new_factor_score,
+                    "delta": delta,
+                    "message": (
+                        f"{symbol} factor score {direction} by {abs(delta)} points "
+                        f"({int(prev_factor)} → {new_factor_score})"
+                    ),
+                }
+            )
+
+    # --- Risk level change ---
+    prev_risk_level = previous.get("risk_level", "")
+    prev_risk_num = _RISK_LEVEL_NUMERIC.get(prev_risk_level)
+    new_risk_num = _RISK_LEVEL_NUMERIC.get(new_risk_level)
+    if prev_risk_num is not None and new_risk_num is not None:
+        level_delta = new_risk_num - prev_risk_num
+        if abs(level_delta) >= 1:
+            direction = "upgraded to lower risk" if level_delta < 0 else "elevated"
+            changes.append(
+                {
+                    "symbol": symbol,
+                    "change_type": "risk_level",
+                    "old_value": prev_risk_level,
+                    "new_value": new_risk_level,
+                    "delta": level_delta,
+                    "message": (
+                        f"{symbol} risk level changed from {prev_risk_level} "
+                        f"to {new_risk_level} ({direction})"
+                    ),
+                }
+            )
+
+    if changes:
+        log.info(
+            "Signal changes detected for %s: %d event(s)", symbol, len(changes)
+        )
+    return changes
+
+
+# ---------------------------------------------------------------------------
+# P17.5: Portfolio drift alert checking
+# ---------------------------------------------------------------------------
+
+
+def check_drift_alerts(
+    symbol: str,
+    current_weight: float,
+    target_weight: float,
+    threshold: float = 0.05,
+) -> dict | None:
+    """Check whether a position has drifted beyond an acceptable threshold.
+
+    Parameters
+    ----------
+    symbol : stock ticker symbol
+    current_weight : current portfolio weight as a decimal (e.g. 0.12 = 12%)
+    target_weight : target portfolio weight as a decimal
+    threshold : maximum allowed drift before an alert is raised (default 0.05 = 5pp)
+
+    Returns
+    -------
+    dict with keys symbol, current_weight, target_weight, drift, message
+    if the drift exceeds the threshold; otherwise None.
+    """
+    drift = current_weight - target_weight
+    if abs(drift) > threshold:
+        direction = "overweight" if drift > 0 else "underweight"
+        message = (
+            f"{symbol} is {direction} by {abs(drift) * 100:.1f}pp "
+            f"(current: {current_weight * 100:.1f}%, "
+            f"target: {target_weight * 100:.1f}%)"
+        )
+        log.info("Drift alert: %s", message)
+        return {
+            "symbol": symbol,
+            "current_weight": current_weight,
+            "target_weight": target_weight,
+            "drift": drift,
+            "message": message,
+        }
+    return None
 
 
 def send_test_webhook(

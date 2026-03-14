@@ -33,6 +33,12 @@ _DEFAULT_SECTIONS = {
     "chat": True,
     "history": True,
     "alerts": True,
+    "options_iv_surface": True,
+    "price_target": True,
+    "social_sentiment": True,
+    "ownership": True,
+    "supply_chain": True,
+    "earnings_history": True,
 }
 
 _DEFAULT_PREFS = {
@@ -135,6 +141,89 @@ def update_pref(key: str, value) -> None:
     _save(prefs)
 
 
+# ---------------------------------------------------------------------------
+# P18.1: Dark mode helpers
+# ---------------------------------------------------------------------------
+
+
+def is_dark_mode() -> bool:
+    """Return True if the current theme preference is dark mode."""
+    return _load().get("theme", "light") == "dark"
+
+
+def toggle_dark_mode() -> bool:
+    """Flip the theme between light and dark.
+
+    Returns
+    -------
+    bool — the new is_dark_mode() value after toggling.
+    """
+    prefs = _load()
+    current = prefs.get("theme", "light")
+    prefs["theme"] = "dark" if current == "light" else "light"
+    _save(prefs)
+    new_dark = prefs["theme"] == "dark"
+    log.info("Theme toggled to %s", prefs["theme"])
+    return new_dark
+
+
+# ---------------------------------------------------------------------------
+# P18.3: Shareable links
+# ---------------------------------------------------------------------------
+
+
+def encode_share_state(ticker: str, sections: dict | None = None) -> str:
+    """Encode ticker and optional section overrides as a base64 URL-safe string.
+
+    Parameters
+    ----------
+    ticker : stock ticker symbol to share
+    sections : optional dict of section visibility overrides to embed
+
+    Returns
+    -------
+    URL-safe base64-encoded string representing the share state.
+    """
+    import base64
+    import json as _json
+
+    payload = {"ticker": ticker, "sections": sections or {}}
+    raw = _json.dumps(payload, separators=(",", ":"))
+    encoded = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
+    return encoded
+
+
+def decode_share_state(encoded: str) -> dict | None:
+    """Decode a shareable link state string back to a dict.
+
+    Parameters
+    ----------
+    encoded : base64 URL-safe string produced by encode_share_state
+
+    Returns
+    -------
+    dict with keys ``ticker`` and ``sections``, or None if decoding fails.
+    """
+    import base64
+    import json as _json
+
+    try:
+        # Add padding if needed
+        padded = encoded + "=" * (-len(encoded) % 4)
+        raw = base64.urlsafe_b64decode(padded).decode("utf-8")
+        data = _json.loads(raw)
+        if not isinstance(data, dict) or "ticker" not in data:
+            log.warning("decode_share_state: missing 'ticker' key in decoded payload")
+            return None
+        # Ensure sections key exists
+        if "sections" not in data:
+            data["sections"] = {}
+        return data
+    except Exception as exc:
+        log.warning("decode_share_state failed: %s", exc)
+        return None
+
+
 # Section display names for the UI
 SECTION_LABELS = {
     "price_chart": "Price Chart",
@@ -150,6 +239,12 @@ SECTION_LABELS = {
     "chat": "Chat with Claude",
     "history": "Score History",
     "alerts": "Price Alerts",
+    "options_iv_surface": "Options IV Surface",
+    "price_target": "AI Price Target",
+    "social_sentiment": "Social Sentiment",
+    "ownership": "Institutional Ownership",
+    "supply_chain": "Supply Chain Analysis",
+    "earnings_history": "Earnings History",
 }
 
 # Onboarding tour steps

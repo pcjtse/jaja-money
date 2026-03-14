@@ -252,3 +252,87 @@ Be specific, cite section names when possible, and flag anything a fundamental i
                 yield text
     except Exception as exc:
         yield f"\n\n*Error during filing analysis: {exc}*"
+
+
+# ---------------------------------------------------------------------------
+# P19.2: Supply chain extraction — business section parser
+# ---------------------------------------------------------------------------
+
+
+def extract_business_sections(filing_text: str) -> dict:
+    """Extract the BUSINESS and RISK FACTORS sections from a 10-K filing.
+
+    Looks for section headers matching ``ITEM 1.`` (business) and
+    ``ITEM 1A.`` (risk factors), case-insensitively. The search is tolerant
+    of varied whitespace and punctuation between "ITEM" and the number.
+
+    Parameters
+    ----------
+    filing_text : plain text content of a 10-K filing as returned by
+                  fetch_filing_text
+
+    Returns
+    -------
+    dict with keys:
+        business_section : str  — first 4 000 chars of the Business section
+        risk_factors     : str  — first 3 000 chars of the Risk Factors section
+        available        : bool — True if at least one section was found
+    """
+    import re as _re
+
+    result = {
+        "business_section": "",
+        "risk_factors": "",
+        "available": False,
+    }
+
+    if not filing_text:
+        return result
+
+    # Patterns for common 10-K section headers (case-insensitive)
+    # Matches "ITEM 1." / "ITEM 1 ." / "Item 1:" etc.
+    _ITEM1_RE = _re.compile(
+        r"(?:^|\n)\s*ITEM\s+1\.?\s*[:\-]?\s*BUSINESS\b",
+        _re.IGNORECASE,
+    )
+    _ITEM1A_RE = _re.compile(
+        r"(?:^|\n)\s*ITEM\s+1A\.?\s*[:\-]?\s*RISK\s+FACTORS?\b",
+        _re.IGNORECASE,
+    )
+    # Generic next-item boundary: Item 2 onwards (or Item 1A when we are in Item 1)
+    _ITEM2_RE = _re.compile(
+        r"(?:^|\n)\s*ITEM\s+[2-9]",
+        _re.IGNORECASE,
+    )
+    _ITEM1A_BOUNDARY_RE = _re.compile(
+        r"(?:^|\n)\s*ITEM\s+1A\b",
+        _re.IGNORECASE,
+    )
+
+    # --- Extract BUSINESS section (Item 1) ---
+    m1 = _ITEM1_RE.search(filing_text)
+    if m1:
+        start = m1.end()
+        # End at Item 1A or Item 2+
+        end_match = _ITEM1A_BOUNDARY_RE.search(filing_text, start)
+        if not end_match:
+            end_match = _ITEM2_RE.search(filing_text, start)
+        end = end_match.start() if end_match else start + 6000
+        section_text = filing_text[start:end].strip()
+        result["business_section"] = section_text[:4000]
+        result["available"] = True
+        log.debug("Extracted BUSINESS section: %d chars", len(result["business_section"]))
+
+    # --- Extract RISK FACTORS section (Item 1A) ---
+    m1a = _ITEM1A_RE.search(filing_text)
+    if m1a:
+        start = m1a.end()
+        # End at Item 2+
+        end_match = _ITEM2_RE.search(filing_text, start)
+        end = end_match.start() if end_match else start + 5000
+        section_text = filing_text[start:end].strip()
+        result["risk_factors"] = section_text[:3000]
+        result["available"] = True
+        log.debug("Extracted RISK FACTORS section: %d chars", len(result["risk_factors"]))
+
+    return result

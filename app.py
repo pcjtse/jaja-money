@@ -44,25 +44,40 @@ from analyzer import (
     stream_chat_response,
     classify_stock_type,
     trim_chat_history,
+    stream_price_target,
+    parse_price_targets,
+    stream_transcript_qa,
+    stream_supply_chain_analysis,
+    extract_supply_chain_structured,
+    score_news_impact,
 )
-from sentiment import score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI
+from sentiment import (
+    score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI,
+    compute_impact_weighted_sentiment,
+)
 from factors import (
     compute_factors, composite_score, composite_label_color,
     calc_bollinger_bands, calc_obv, calc_vwap, calc_fibonacci_levels,
+    compute_factors_timeframe, compute_beat_consistency, compute_market_regime,
 )
-from guardrails import compute_risk
+from guardrails import compute_risk, apply_regime_adjustment
 from portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
 from watchlist import (
     get_watchlist, add_to_watchlist, remove_from_watchlist, is_in_watchlist,
 )
-from history import save_analysis, get_score_trend, get_latest_two_snapshots
+from history import save_analysis, get_score_trend, get_latest_two_snapshots, get_last_n_snapshots
 from alerts import (
     get_alerts, add_alert, check_alerts, delete_alert,
     CONDITION_TYPES, start_alert_scheduler, stop_alert_scheduler, is_scheduler_running,
+    check_signal_changes,
 )
 from export import factors_to_csv, price_history_to_csv, analysis_to_html, analysis_to_pdf
 from cache import get_cache
 from log_setup import get_logger
+from ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
+from options_analysis import build_iv_surface, compute_options_metrics, compute_hedge_suggestions
+from social import fetch_reddit_mentions, fetch_stocktwits_messages, compute_social_sentiment
+from ownership import fetch_institutional_ownership, fetch_insider_summary
 
 log = get_logger(__name__)
 
@@ -180,6 +195,22 @@ def fetch_macro_context() -> dict:
 def fetch_estimate_revisions(symbol: str) -> dict:
     return FinnhubAPI().get_estimate_revisions(symbol)
 
+@st.cache_data(ttl=3600)
+def fetch_weekly(symbol: str) -> dict:
+    return FinnhubAPI().get_weekly(symbol)
+
+@st.cache_data(ttl=86400)
+def fetch_monthly(symbol: str) -> dict:
+    return FinnhubAPI().get_monthly(symbol)
+
+@st.cache_data(ttl=86400)
+def fetch_analyst_price_targets(symbol: str) -> dict:
+    return FinnhubAPI().get_analyst_price_targets(symbol)
+
+@st.cache_data(ttl=86400)
+def fetch_earnings_history(symbol: str) -> list:
+    return FinnhubAPI().get_earnings_history(symbol)
+
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -226,6 +257,14 @@ with st.sidebar:
         st.caption(f"{len(active)} alert(s) active")
     else:
         st.caption("No alerts configured.")
+
+    st.divider()
+
+    # P18.1: Dark mode toggle
+    _dark = is_dark_mode()
+    if st.button("🌙 Dark Mode" if not _dark else "☀️ Light Mode", key="dark_mode_btn"):
+        toggle_dark_mode()
+        st.rerun()
 
     st.divider()
 
@@ -449,6 +488,10 @@ if profile:
             st.success(f"Added {symbol} to watchlist.")
         st.rerun()
 
+    # P18.3: Shareable link
+    _share_token = encode_share_state(symbol)
+    st.caption(f"Share token: `{_share_token[:20]}…`")
+
 # --- Daily prices (used for chart + technicals) ---
 daily = None
 df = None
@@ -670,6 +713,14 @@ if df is not None and len(df) > 0:
             mime="text/csv",
         )
 
+# Fetch insider transactions early (needed by ownership expander and factor section)
+_insider_txns = []
+try:
+    with st.spinner("Fetching insider transactions..."):
+        _insider_txns = fetch_insider_transactions(symbol)
+except Exception:
+    pass
+
 # --- Market Research ---
 st.header("Market Research")
 
@@ -732,6 +783,18 @@ if earnings:
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+# P19.4: Earnings history beat consistency
+try:
+    _earn_hist = fetch_earnings_history(symbol)
+    if _earn_hist:
+        _beat = compute_beat_consistency(_earn_hist)
+        bc1, bc2, bc3 = st.columns(3)
+        bc1.metric("Beat Rate", f"{_beat.get('consistency_score', 0):.0f}/100")
+        bc2.metric("Beat Streak", str(_beat.get("streak", 0)) + " qtrs")
+        bc3.metric("Beat Count", f"{_beat.get('beat_count', 0)} / {_beat.get('total', 0)}")
+except Exception:
+    pass
+
 try:
     with st.spinner("Fetching peer companies..."):
         peers = fetch_peers(symbol)
@@ -743,6 +806,37 @@ if peers:
     peer_list = [p for p in peers if p != symbol]
     if peer_list:
         st.write(" · ".join(peer_list))
+
+# P16.2: Institutional Ownership
+with st.expander("Institutional Ownership & Insider Summary (P16.2)", expanded=False):
+    try:
+        _inst_own = fetch_institutional_ownership(symbol)
+        if _inst_own.get("available"):
+            io1, io2, io3 = st.columns(3)
+            io1.metric("Institutional Hold %", f"{_inst_own.get('institutional_pct', 0):.1f}%")
+            io2.metric("Top Holders", str(_inst_own.get("holder_count", "N/A")))
+            _top_holders = _inst_own.get("top_holders", [])
+            if _top_holders:
+                io3.metric("Largest Holder", _top_holders[0].get("name", "N/A")[:20])
+            if _top_holders:
+                st.dataframe(
+                    pd.DataFrame(_top_holders[:5]),
+                    use_container_width=True, hide_index=True,
+                )
+        else:
+            st.caption("Institutional ownership data not available.")
+    except Exception as _e:
+        st.caption(f"Institutional ownership unavailable: {_e}")
+
+    try:
+        if _insider_txns:
+            _ins_summary = fetch_insider_summary(_insider_txns)
+            is1, is2, is3 = st.columns(3)
+            is1.metric("Insider Buys (90d)", _ins_summary.get("recent_buys", 0))
+            is2.metric("Insider Sells (90d)", _ins_summary.get("recent_sells", 0))
+            is3.metric("Net Value Bought", f"${_ins_summary.get('net_value', 0):,.0f}")
+    except Exception:
+        pass
 
 # P2.6: Options Market Data
 st.subheader("Options Market Data")
@@ -795,6 +889,52 @@ try:
         st.caption("Options data unavailable for this symbol (may require Finnhub premium tier).")
 except Exception as e:
     st.caption(f"Options data could not be fetched: {e}")
+
+# P16.3: Options IV Surface & advanced metrics
+with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False):
+    try:
+        _opt_raw = FinnhubAPI().get_option_chain(symbol) if hasattr(FinnhubAPI(), "get_option_chain") else {}
+        if _opt_raw and price:
+            _iv_surface = build_iv_surface(_opt_raw, price)
+            _opt_metrics = compute_options_metrics(_opt_raw, price)
+            _hedge = compute_hedge_suggestions(price, _opt_raw, position_value=10000)
+
+            if _opt_metrics.get("max_pain"):
+                oc1, oc2, oc3, oc4 = st.columns(4)
+                oc1.metric("Max Pain", f"${_opt_metrics['max_pain']:,.2f}")
+                oc2.metric("ATM Straddle", f"${_opt_metrics.get('atm_straddle_cost', 0):,.2f}")
+                oc3.metric("Implied Move", f"±{_opt_metrics.get('implied_move_pct', 0):.1f}%")
+                oc4.metric("Unusual Flows", str(_opt_metrics.get("unusual_flow_count", 0)))
+
+            if _iv_surface.get("strikes") and _iv_surface.get("expiries"):
+                _z = _iv_surface.get("iv_matrix", [])
+                if _z:
+                    fig_iv = go.Figure(go.Surface(
+                        z=_z,
+                        x=_iv_surface["expiries"],
+                        y=_iv_surface["strikes"],
+                        colorscale="Viridis",
+                        showscale=True,
+                    ))
+                    fig_iv.update_layout(
+                        title="Implied Volatility Surface",
+                        scene=dict(
+                            xaxis_title="Expiry",
+                            yaxis_title="Strike",
+                            zaxis_title="IV %",
+                        ),
+                        height=400,
+                        margin=dict(t=40, b=10),
+                    )
+                    st.plotly_chart(fig_iv, use_container_width=True)
+
+            if _hedge.get("protective_put"):
+                st.caption(f"Hedge suggestions — Protective put: ${_hedge['protective_put'].get('cost', 0):,.2f} | "
+                           f"Collar: ${_hedge.get('collar', {}).get('net_cost', 0):,.2f}")
+        else:
+            st.caption("Full options chain data not available for IV surface.")
+    except Exception as _e:
+        st.caption(f"IV surface unavailable: {_e}")
 
 # --- News Sentiment ---
 scores = []
@@ -861,6 +1001,20 @@ if news:
             if url:
                 col_link.markdown(f"[Read article]({url})")
 
+    # P20.2: Impact-weighted sentiment
+    try:
+        _impact_scores_raw = score_news_impact([a.get("headline", "") for a in displayed])
+        _impact_weighted = compute_impact_weighted_sentiment(displayed, scores, _impact_scores_raw)
+        _iw_net = _impact_weighted.get("weighted_net_score", 0)
+        _iw_signal = _impact_weighted.get("weighted_signal", "Mixed / Neutral")
+        _iw_dist = _impact_weighted.get("impact_distribution", {})
+        st.caption(
+            f"Impact-weighted signal: **{_iw_signal}** (net={_iw_net:+.2f}) | "
+            + " · ".join(f"{k}: {v}" for k, v in _iw_dist.items() if v > 0)
+        )
+    except Exception:
+        pass
+
     st.divider()
     run_themes = st.button("Analyze Sentiment Themes with Claude")
     if run_themes:
@@ -873,6 +1027,30 @@ if news:
                     themes_placeholder.markdown(themes_text)
         except Exception as e:
             st.error(f"Theme analysis failed: {e}")
+
+# P16.1: Social Sentiment (Reddit + StockTwits)
+with st.expander("Social Sentiment — Reddit & StockTwits (P16.1)", expanded=False):
+    if st.button("Fetch Social Sentiment", key="social_fetch"):
+        with st.spinner("Fetching Reddit & StockTwits data..."):
+            try:
+                from sentiment import _load_finbert
+                _reddit = fetch_reddit_mentions(symbol, limit=25)
+                _stwits = fetch_stocktwits_messages(symbol, limit=25)
+                _finbert_pipe = _load_finbert()
+                _social = compute_social_sentiment(_reddit, _stwits, _finbert_pipe)
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1.metric("Reddit Posts", _social.get("reddit_count", 0))
+                sc2.metric("StockTwits Posts", _social.get("stocktwits_count", 0))
+                sc3.metric("Social Signal", _social.get("overall_signal", "N/A"))
+                sc4.metric("Net Score", f"{_social.get('net_score', 0):+.2f}")
+                if _social.get("top_reddit_posts"):
+                    st.caption("Top Reddit mentions:")
+                    for _p in _social["top_reddit_posts"][:3]:
+                        st.markdown(f"- {_p.get('title', '')[:100]}")
+            except Exception as _e:
+                st.warning(f"Social data unavailable: {_e}")
+    else:
+        st.caption("Click to fetch live Reddit & StockTwits sentiment data.")
 
 # P2.3: Earnings Call Transcript Analysis
 st.divider()
@@ -907,6 +1085,24 @@ try:
                     t_text += chunk
                     t_placeholder.markdown(t_text)
 
+                # P15.5: Transcript Q&A
+                st.divider()
+                _qa_question = st.text_input(
+                    "Ask a question about this transcript (P15.5)",
+                    placeholder="What did management say about margins?",
+                    key="transcript_qa_input",
+                )
+                if _qa_question and st.button("Ask Claude about Transcript", key="transcript_qa_btn"):
+                    _qa_placeholder = st.empty()
+                    _qa_text = ""
+                    try:
+                        with st.spinner("Claude is answering your question..."):
+                            for _chunk in stream_transcript_qa(_qa_question, content, symbol):
+                                _qa_text += _chunk
+                                _qa_placeholder.markdown(_qa_text)
+                    except Exception as _e:
+                        st.error(f"Transcript Q&A failed: {_e}")
+
                 # P2.3 extension: Forward-looking statements
                 if st.button("Extract Forward-Looking Statements", key="fwd_btn"):
                     fl_placeholder = st.empty()
@@ -938,15 +1134,25 @@ _close = df["Close"] if df is not None and len(df) > 0 else None
 _recs_for_factors = recs
 _earnings_for_factors = earnings
 
-# Fetch additional data for new factors and guardrails
-_insider_txns = []
-_short_int = {}
-_revisions = {}
+# Fetch weekly/monthly data for multi-timeframe analysis (P15.3)
+_close_weekly = None
+_close_monthly = None
 try:
-    with st.spinner("Fetching insider transactions..."):
-        _insider_txns = fetch_insider_transactions(symbol)
+    _weekly_data = fetch_weekly(symbol)
+    if _weekly_data and _weekly_data.get("c"):
+        _close_weekly = pd.Series(_weekly_data["c"])
 except Exception:
     pass
+try:
+    _monthly_data = fetch_monthly(symbol)
+    if _monthly_data and _monthly_data.get("c"):
+        _close_monthly = pd.Series(_monthly_data["c"])
+except Exception:
+    pass
+
+# Fetch additional data for new factors and guardrails
+_short_int = {}
+_revisions = {}
 try:
     with st.spinner("Fetching short interest..."):
         _short_int = fetch_short_interest(symbol)
@@ -1042,6 +1248,56 @@ st.dataframe(
     },
 )
 
+# P15.3: Multi-timeframe factor alignment
+if _close_weekly is not None or _close_monthly is not None:
+    with st.expander("Multi-Timeframe Factor Alignment (P15.3)", expanded=False):
+        try:
+            _mtf = compute_factors_timeframe(
+                quote=quote, financials=financials,
+                close_daily=_close, close_weekly=_close_weekly, close_monthly=_close_monthly,
+                earnings=_earnings_for_factors, recommendations=_recs_for_factors,
+                sentiment_agg=agg, sector=_sector, revisions=_revisions if _revisions else None,
+            )
+            tf_cols = st.columns(4)
+            for _tf, _col in zip(["daily", "weekly", "monthly"], tf_cols[:3]):
+                _tf_score = _mtf.get(_tf)
+                if _tf_score is not None:
+                    _col.metric(f"{_tf.capitalize()} Score", f"{_tf_score}/100")
+            _alignment = _mtf.get("alignment", "N/A")
+            tf_cols[3].metric("Alignment", _alignment)
+        except Exception as _e:
+            st.caption(f"Multi-timeframe analysis unavailable: {_e}")
+
+# P20.1: Market Regime
+_market_regime = None
+try:
+    if _macro:
+        _spy_close = None
+        _vix_val = _macro.get("vix")
+        _yield_spread = _macro.get("spread_2y10y", 0)
+        try:
+            _spy_data = FinnhubAPI().get_daily("SPY")
+            if _spy_data and _spy_data.get("c"):
+                _spy_close = pd.Series(_spy_data["c"])
+        except Exception:
+            pass
+        if _spy_close is not None:
+            _market_regime = compute_market_regime(_spy_close, _vix_val, _yield_spread)
+            _regime_label = _market_regime.get("regime", "Unknown")
+            _regime_adj = _market_regime.get("score_adjustment", 0)
+            _regime_color = {"Bull": "#2da44e", "Bear": "#e05252", "Neutral": "#f0b429"}.get(
+                _regime_label.split()[0], "#888"
+            )
+            st.markdown(
+                f'<div style="border-left:4px solid {_regime_color};padding:6px 12px;'
+                f'border-radius:4px;margin:8px 0">'
+                f'<b>Market Regime:</b> {_regime_label} &nbsp;|&nbsp; '
+                f'Score adjustment: {_regime_adj:+d} pts</div>',
+                unsafe_allow_html=True,
+            )
+except Exception:
+    pass
+
 # --- Risk Guardrails ---
 st.divider()
 st.header("Risk Guardrails")
@@ -1059,6 +1315,20 @@ _risk = compute_risk(
     short_interest=_short_int if _short_int else None,
     macro_context=_macro,
 )
+# P20.1: Apply market regime adjustment to risk
+if _market_regime:
+    _risk = apply_regime_adjustment(_risk, _market_regime)
+
+# P20.3: Signal change detection
+try:
+    _signal_changes = check_signal_changes(
+        symbol, _composite, _risk.get("risk_level", "N/A"),
+        history_fn=lambda s: get_last_n_snapshots(s, 2),
+    )
+    for _sc in _signal_changes:
+        st.warning(f"Signal change: {_sc['message']}")
+except Exception:
+    pass
 
 risk_gauge_col, risk_meta_col = st.columns([1, 1])
 
@@ -1291,6 +1561,70 @@ if _run_memo:
                 _memo_placeholder.markdown(_memo_text)
     except Exception as e:
         st.error(f"Portfolio memo failed: {e}")
+
+# P15.2: AI Price Target
+st.divider()
+st.header("AI Price Target (P15.2)")
+st.caption("Claude generates bull/base/bear price targets based on fundamentals and technicals.")
+if st.button("Generate AI Price Target", key="price_target_btn"):
+    _pt_placeholder = st.empty()
+    _pt_text = ""
+    try:
+        _pt_data_prompt = build_data_prompt(
+            symbol=symbol, quote=quote, profile=profile,
+            financials=financials, technicals={},
+            recommendations=recs, earnings=earnings,
+            peers=peers, news=news,
+        )
+        with st.spinner("Claude is generating price targets..."):
+            for _chunk in stream_price_target(symbol, _pt_data_prompt, _stock_type):
+                _pt_text += _chunk
+                _pt_placeholder.markdown(_pt_text)
+        _pt_parsed = parse_price_targets(_pt_text, price)
+        if _pt_parsed.get("bull") or _pt_parsed.get("base") or _pt_parsed.get("bear"):
+            pt_c1, pt_c2, pt_c3 = st.columns(3)
+            if _pt_parsed.get("bull"):
+                _upside = (_pt_parsed["bull"] / price - 1) * 100 if price else 0
+                pt_c1.metric("Bull Target", f"${_pt_parsed['bull']:,.2f}", f"+{_upside:.1f}%")
+            if _pt_parsed.get("base"):
+                _base_upside = (_pt_parsed["base"] / price - 1) * 100 if price else 0
+                pt_c2.metric("Base Target", f"${_pt_parsed['base']:,.2f}", f"{_base_upside:+.1f}%")
+            if _pt_parsed.get("bear"):
+                _downside = (_pt_parsed["bear"] / price - 1) * 100 if price else 0
+                pt_c3.metric("Bear Target", f"${_pt_parsed['bear']:,.2f}", f"{_downside:+.1f}%")
+    except Exception as _e:
+        st.error(f"Price target generation failed: {_e}")
+
+# P19.1: Analyst Price Targets from Finnhub
+try:
+    _analyst_targets = fetch_analyst_price_targets(symbol)
+    if _analyst_targets and _analyst_targets.get("targetMean"):
+        at_c1, at_c2, at_c3, at_c4 = st.columns(4)
+        at_c1.metric("Analyst Mean Target", f"${_analyst_targets['targetMean']:,.2f}",
+                     f"{(_analyst_targets['targetMean'] / price - 1) * 100:+.1f}%" if price else None)
+        at_c2.metric("High Target", f"${_analyst_targets.get('targetHigh', 0):,.2f}")
+        at_c3.metric("Low Target", f"${_analyst_targets.get('targetLow', 0):,.2f}")
+        at_c4.metric("# Analysts", str(_analyst_targets.get("numberOfAnalysts", "N/A")))
+except Exception:
+    pass
+
+# P19.2: Supply Chain Analysis
+with st.expander("Supply Chain Analysis (P19.2)", expanded=False):
+    st.caption("Analyzes supplier/customer relationships from SEC filings.")
+    if st.button("Analyze Supply Chain with Claude", key="supply_chain_btn"):
+        _sc_placeholder = st.empty()
+        _sc_text = ""
+        try:
+            with st.spinner("Claude is analyzing supply chain relationships..."):
+                for _chunk in stream_supply_chain_analysis(symbol, filing_text=""):
+                    _sc_text += _chunk
+                    _sc_placeholder.markdown(_sc_text)
+            _sc_structured = extract_supply_chain_structured(_sc_text)
+            if _sc_structured.get("key_suppliers") or _sc_structured.get("key_customers"):
+                with st.expander("Structured Supply Chain Data"):
+                    st.json(_sc_structured)
+        except Exception as _e:
+            st.error(f"Supply chain analysis failed: {_e}")
 
 # --- Fundamental Analyzer ---
 st.divider()

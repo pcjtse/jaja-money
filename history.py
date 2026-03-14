@@ -286,6 +286,43 @@ def delete_snapshot(filename: str) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# P20.3: Signal change support
+# ---------------------------------------------------------------------------
+
+
+def get_last_n_snapshots(symbol: str, n: int = 2) -> list[dict]:
+    """Return the last n analysis snapshots for a symbol, newest first.
+
+    Parameters
+    ----------
+    symbol : stock ticker symbol
+    n : number of snapshots to retrieve (default 2)
+
+    Returns
+    -------
+    list of dicts with keys: date, price, factor_score, risk_score,
+    risk_level, composite_label — ordered newest first (index 0 is most recent).
+    Returns an empty list on error or if no records exist.
+    """
+    symbol = symbol.upper()
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT date, price, factor_score, risk_score, risk_level,
+                          composite_label
+                   FROM analysis_history
+                   WHERE symbol=?
+                   ORDER BY date DESC
+                   LIMIT ?""",
+                (symbol, n),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to fetch last %d snapshots for %s: %s", n, symbol, exc)
+        return []
+
+
 def diff_snapshots(snap_a: dict, snap_b: dict) -> dict:
     """Compare two snapshots and return a diff summary.
 

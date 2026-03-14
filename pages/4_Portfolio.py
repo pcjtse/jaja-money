@@ -1,10 +1,17 @@
-"""Portfolio-Level Risk & Correlation Analysis page (P2.4)."""
+"""Portfolio-Level Risk & Correlation Analysis page (P2.4 + P17.1–P17.5)."""
 
 import streamlit as st
 import plotly.graph_objects as go
+import pandas as pd
 
 from api import FinnhubAPI
-from portfolio_analysis import analyze_portfolio
+from portfolio_analysis import (
+    analyze_portfolio,
+    compute_risk_parity_weights,
+    run_stress_tests,
+    find_tax_loss_opportunities,
+    compute_portfolio_drift,
+)
 
 st.set_page_config(page_title="Portfolio Analysis", page_icon="💼", layout="wide")
 st.title("Portfolio Analysis")
@@ -228,3 +235,92 @@ Please provide:
                             event.delta.type == "text_delta"):
                         text += event.delta.text
                         placeholder.markdown(text)
+
+    # -------------------------------------------------------------------------
+    # P17.1: Risk Parity Weights
+    # -------------------------------------------------------------------------
+    st.divider()
+    st.subheader("Risk Parity Weights (P17.1)")
+    st.caption("Inverse-volatility weighting — allocates more to lower-volatility assets.")
+    returns_df = result.get("returns_df")
+    if returns_df is not None and not returns_df.empty:
+        try:
+            rp_weights = compute_risk_parity_weights(returns_df)
+            rp_cols = st.columns(len(tickers))
+            for i, t in enumerate(tickers):
+                rp_w = rp_weights.get(t, 0)
+                rp_cols[i].metric(t, f"{rp_w * 100:.1f}%")
+            st.caption("Compare to your current weights above. Higher allocation = lower volatility stock.")
+        except Exception as _e:
+            st.caption(f"Risk parity weights unavailable: {_e}")
+    else:
+        st.caption("Run portfolio analysis first to compute risk parity weights.")
+
+    # -------------------------------------------------------------------------
+    # P17.2: Stress Tests
+    # -------------------------------------------------------------------------
+    st.divider()
+    st.subheader("Historical Stress Tests (P17.2)")
+    st.caption("Simulates portfolio loss in major historical market crashes.")
+    _positions = [{"symbol": t, "weight": w, "sector": "Unknown"} for t, w in zip(tickers, weights)]
+    _total_value = st.number_input("Portfolio Value ($)", value=100000, step=10000, key="port_val")
+    try:
+        _stress_results = run_stress_tests(_positions, _total_value)
+        if _stress_results:
+            stress_rows = []
+            for _sr in _stress_results:
+                stress_rows.append({
+                    "Scenario": _sr["scenario"],
+                    "Est. Loss": f"${_sr['estimated_loss']:,.0f}",
+                    "Loss %": f"{_sr['loss_pct']:.1f}%",
+                    "Severity": _sr["severity"],
+                })
+            st.dataframe(pd.DataFrame(stress_rows), use_container_width=True, hide_index=True)
+    except Exception as _e:
+        st.caption(f"Stress tests unavailable: {_e}")
+
+    # -------------------------------------------------------------------------
+    # P17.3: Tax-Loss Harvesting
+    # -------------------------------------------------------------------------
+    st.divider()
+    st.subheader("Tax-Loss Harvesting Suggestions (P17.3)")
+    if returns_df is not None and not returns_df.empty:
+        try:
+            _tl_opportunities = find_tax_loss_opportunities(_positions, returns_df)
+            if _tl_opportunities:
+                for _tl in _tl_opportunities:
+                    st.info(
+                        f"**{_tl['symbol']}** → swap for **{_tl['swap_candidate']}** "
+                        f"(correlation: {_tl.get('correlation', 0):.2f}, "
+                        f"current loss: {_tl.get('ytd_return_pct', 0):.1f}%)"
+                    )
+            else:
+                st.caption("No tax-loss harvesting opportunities found.")
+        except Exception as _e:
+            st.caption(f"Tax-loss analysis unavailable: {_e}")
+    else:
+        st.caption("Run portfolio analysis first.")
+
+    # -------------------------------------------------------------------------
+    # P17.5: Portfolio Drift Alerts
+    # -------------------------------------------------------------------------
+    st.divider()
+    st.subheader("Portfolio Drift Alerts (P17.5)")
+    st.caption("Compares current weights to targets and flags positions that have drifted >5%.")
+    _target_weights = {t: 1 / len(tickers) for t in tickers}  # equal-weight target by default
+    try:
+        _drift_results = compute_portfolio_drift(
+            [{**p, "current_weight": w} for p, w in zip(_positions, weights)],
+            _target_weights,
+        )
+        _drifted = [d for d in _drift_results if d.get("needs_rebalance")]
+        if _drifted:
+            for _dr in _drifted:
+                st.warning(
+                    f"**{_dr['symbol']}** drifted {_dr['drift_pct']:+.1f}% from target "
+                    f"({_dr['target_weight'] * 100:.1f}% → {_dr['current_weight'] * 100:.1f}%)"
+                )
+        else:
+            st.success("Portfolio is within 5% of target weights — no rebalancing needed.")
+    except Exception as _e:
+        st.caption(f"Drift analysis unavailable: {_e}")

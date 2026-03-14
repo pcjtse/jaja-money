@@ -1,6 +1,10 @@
 import streamlit as st
 from transformers import pipeline
 
+from log_setup import get_logger
+
+log = get_logger(__name__)
+
 
 @st.cache_resource(show_spinner=False)
 def _load_finbert():
@@ -80,3 +84,115 @@ SENTIMENT_EMOJI = {
     "negative": "🔴",
     "neutral":  "⚪",
 }
+
+# ---------------------------------------------------------------------------
+# P20.2: News impact-weighted sentiment scoring
+# ---------------------------------------------------------------------------
+
+_IMPACT_WEIGHTS: dict[str, float] = {
+    "High": 3.0,
+    "Medium": 2.0,
+    "Low": 1.0,
+    "Negligible": 0.5,
+}
+
+
+def compute_impact_weighted_sentiment(
+    articles: list[dict],
+    sentiment_scores: list[dict],
+    impact_scores: list[dict],
+) -> dict:
+    """Compute sentiment weighted by article impact level (P20.2).
+
+    Each article is weighted by its impact level before contributing to the
+    net sentiment signal.  If impact_scores is empty or mismatched, falls
+    back to equal-weight aggregation (matching aggregate_sentiment behaviour).
+
+    Parameters
+    ----------
+    articles        : list of article dicts (used for length reference only).
+    sentiment_scores : list of dicts parallel to articles, each with:
+                       {label: "positive"|"negative"|"neutral", score: float}
+    impact_scores   : list of dicts parallel to articles, each with:
+                       {level: "High"|"Medium"|"Low"|"Negligible"}
+                       Pass an empty list to use equal weighting.
+
+    Returns
+    -------
+    dict with:
+        weighted_net_score   – float in [-1, +1], positive = more bullish
+        weighted_signal      – "Bullish" | "Bearish" | "Mixed / Neutral"
+        impact_distribution  – dict mapping level -> count of articles
+    """
+    if not sentiment_scores:
+        log.debug("compute_impact_weighted_sentiment: no sentiment scores, returning neutral")
+        return {
+            "weighted_net_score": 0.0,
+            "weighted_signal": "Mixed / Neutral",
+            "impact_distribution": {},
+        }
+
+    # Fall back to equal weights if impact_scores is empty or length mismatch
+    use_equal_weights = (
+        not impact_scores
+        or len(impact_scores) != len(sentiment_scores)
+    )
+
+    if use_equal_weights:
+        log.debug(
+            "compute_impact_weighted_sentiment: falling back to equal-weight aggregation"
+        )
+        agg = aggregate_sentiment(sentiment_scores)
+        return {
+            "weighted_net_score": round(agg["net_score"], 4),
+            "weighted_signal": agg["signal"],
+            "impact_distribution": {},
+        }
+
+    impact_distribution: dict[str, int] = {
+        "High": 0, "Medium": 0, "Low": 0, "Negligible": 0
+    }
+    weighted_positive = 0.0
+    weighted_negative = 0.0
+    total_weight = 0.0
+
+    for sent, imp in zip(sentiment_scores, impact_scores):
+        label = (sent.get("label") or "neutral").lower()
+        level = imp.get("level", "Low")
+        weight = _IMPACT_WEIGHTS.get(level, 1.0)
+
+        # Track distribution
+        if level in impact_distribution:
+            impact_distribution[level] += 1
+        else:
+            impact_distribution[level] = 1
+
+        if label == "positive":
+            weighted_positive += weight
+        elif label == "negative":
+            weighted_negative += weight
+
+        total_weight += weight
+
+    if total_weight == 0:
+        weighted_net = 0.0
+    else:
+        weighted_net = (weighted_positive - weighted_negative) / total_weight
+
+    if weighted_net > 0.2:
+        signal = "Bullish"
+    elif weighted_net < -0.2:
+        signal = "Bearish"
+    else:
+        signal = "Mixed / Neutral"
+
+    log.debug(
+        "Impact-weighted sentiment: net=%.3f signal=%s (total_weight=%.1f)",
+        weighted_net, signal, total_weight,
+    )
+
+    return {
+        "weighted_net_score": round(weighted_net, 4),
+        "weighted_signal": signal,
+        "impact_distribution": impact_distribution,
+    }

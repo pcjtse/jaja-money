@@ -17,6 +17,10 @@ from __future__ import annotations
 import math
 import pandas as pd
 
+from log_setup import get_logger
+
+log = get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -394,6 +398,62 @@ def _build_flags(
              f"Structural volatility trend — requires tighter risk management.")
 
     return flags
+
+
+# ---------------------------------------------------------------------------
+# P20.1: Market regime integration
+# ---------------------------------------------------------------------------
+
+def apply_regime_adjustment(risk_result: dict, regime_info: dict) -> dict:
+    """Integrate market regime context into a compute_risk() result.
+
+    Takes the dict returned by compute_risk() and the dict returned by
+    compute_market_regime() and adds regime metadata and, for a strong-bear
+    regime, a red-flag entry.
+
+    Parameters
+    ----------
+    risk_result  : dict returned by compute_risk()
+    regime_info  : dict returned by compute_market_regime(), expected keys:
+                   regime, score_adjustment, detail
+
+    Returns
+    -------
+    Modified risk_result dict with added keys:
+        regime        – regime label string
+        regime_detail – detail string from compute_market_regime()
+    If regime is "Strong Bear", a danger flag is prepended to flags list.
+    """
+    if not regime_info:
+        log.debug("apply_regime_adjustment: no regime_info provided, skipping")
+        return risk_result
+
+    regime = regime_info.get("regime", "Neutral")
+    detail = regime_info.get("detail", "")
+
+    risk_result = dict(risk_result)  # shallow copy to avoid mutating caller's dict
+    risk_result["regime"] = regime
+    risk_result["regime_detail"] = detail
+
+    if regime == "Strong Bear":
+        bear_flag = dict(
+            severity="danger",
+            icon="🌑",
+            title="Market in strong bear regime",
+            message=(
+                f"The broader market is classified as a Strong Bear regime "
+                f"({detail}). Individual stock risks are amplified in this "
+                f"environment. Reduce position sizes and prefer defensive assets."
+            ),
+        )
+        flags = list(risk_result.get("flags", []))
+        flags.insert(0, bear_flag)
+        risk_result["flags"] = flags
+        log.debug("apply_regime_adjustment: Strong Bear flag added")
+    else:
+        log.debug("apply_regime_adjustment: regime=%s, no extra flag", regime)
+
+    return risk_result
 
 
 # ---------------------------------------------------------------------------
