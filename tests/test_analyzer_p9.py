@@ -289,9 +289,10 @@ def _mock_stream_event(text: str):
 
 
 def _make_mock_stream(chunks):
-    events = [_mock_stream_event(c) for c in chunks]
+    stream_obj = MagicMock()
+    stream_obj.text_stream = iter(chunks)
     cm = MagicMock()
-    cm.__enter__ = MagicMock(return_value=iter(events))
+    cm.__enter__ = MagicMock(return_value=stream_obj)
     cm.__exit__ = MagicMock(return_value=False)
     return cm
 

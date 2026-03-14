@@ -242,10 +242,11 @@ def _mock_stream_event(text: str):
 
 
 def _make_mock_stream(chunks: list[str]):
-    """Return a context-manager mock that yields events."""
-    events = [_mock_stream_event(c) for c in chunks]
+    """Return a context-manager mock whose stream object exposes text_stream."""
+    stream_obj = MagicMock()
+    stream_obj.text_stream = iter(chunks)
     cm = MagicMock()
-    cm.__enter__ = MagicMock(return_value=iter(events))
+    cm.__enter__ = MagicMock(return_value=stream_obj)
     cm.__exit__ = MagicMock(return_value=False)
     return cm
 
@@ -256,24 +257,17 @@ def test_stream_fundamental_analysis_yields_chunks():
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["Hello ", "world!"])
     with patch("analyzer._get_client", return_value=mock_client):
-        chunks = list(stream_fundamental_analysis("test prompt"))
+        chunks = list(stream_fundamental_analysis("test prompt", use_cache=False))
     assert chunks == ["Hello ", "world!"]
 
 
 def test_stream_fundamental_analysis_skips_non_text_events():
     from analyzer import stream_fundamental_analysis
 
-    non_text_event = MagicMock()
-    non_text_event.type = "content_block_start"
-
-    text_event = _mock_stream_event("Some text")
-
-    cm = MagicMock()
-    cm.__enter__ = MagicMock(return_value=iter([non_text_event, text_event]))
-    cm.__exit__ = MagicMock(return_value=False)
-
+    # text_stream already filters out non-text events at the SDK level;
+    # verify that only the text yielded by text_stream reaches callers.
     mock_client = MagicMock()
-    mock_client.messages.stream.return_value = cm
+    mock_client.messages.stream.return_value = _make_mock_stream(["Some text"])
 
     with patch("analyzer._get_client", return_value=mock_client):
         chunks = list(stream_fundamental_analysis("prompt"))
