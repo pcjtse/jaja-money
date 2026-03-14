@@ -1,4 +1,5 @@
 """Tests for P10.3: Agent Mode and P10.5: Document Analysis."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -89,7 +90,9 @@ class TestAgentMode:
         with patch("agent.anthropic") as mock_anthropic_module:
             mock_anthropic_module.Anthropic.return_value = mock_client
 
-            chunks = list(run_research_agent("AAPL", mock_api, "What is the bull case?"))
+            chunks = list(
+                run_research_agent("AAPL", mock_api, "What is the bull case?")
+            )
 
         output = "".join(chunks)
         assert "AAPL" in output or "Strong fundamentals" in output
@@ -166,7 +169,9 @@ class TestDocumentAnalysis:
     def test_extract_pdf_with_pdfplumber(self):
         """Test extraction using pdfplumber mock."""
         pdf_data = b"%PDF-1.4 content"
-        with patch("document_analysis._try_pdfplumber", return_value="Extracted text from PDF"):
+        with patch(
+            "document_analysis._try_pdfplumber", return_value="Extracted text from PDF"
+        ):
             result = extract_pdf_text(pdf_data)
         assert result == "Extracted text from PDF"
 
@@ -196,11 +201,13 @@ class TestDocumentAnalysis:
             mock_stream.text_stream = iter(["Analysis: ", "Revenue grew."])
             mock_client.messages.stream.return_value = mock_stream
 
-            chunks = list(stream_document_analysis(
-                text,
-                document_name="Test Report",
-                symbol="AAPL",
-            ))
+            chunks = list(
+                stream_document_analysis(
+                    text,
+                    document_name="Test Report",
+                    symbol="AAPL",
+                )
+            )
 
         assert "".join(chunks) == "Analysis: Revenue grew."
 
@@ -218,11 +225,13 @@ class TestDocumentAnalysis:
             mock_stream.text_stream = iter(["Complete analysis."])
             mock_client.messages.stream.return_value = mock_stream
 
-            list(stream_document_analysis(
-                text,
-                symbol="AAPL",
-                market_data=market_data,
-            ))
+            list(
+                stream_document_analysis(
+                    text,
+                    symbol="AAPL",
+                    market_data=market_data,
+                )
+            )
 
         # Verify market data was included in prompt (check call args)
         call_args = mock_client.messages.stream.call_args

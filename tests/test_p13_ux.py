@@ -1,4 +1,5 @@
 """Tests for P13.x: UX & Personalization — Dashboard Layout, Onboarding, Snapshots."""
+
 from __future__ import annotations
 
 import json
@@ -169,12 +170,18 @@ class TestSnapshots:
 
     def test_list_snapshots_filtered(self, tmp_snapshots):
         save_named_snapshot(
-            "AAPL", "AAPL Snapshot",
-            {"price": 150}, {"trend": 70}, {"risk_score": 30, "risk_level": "Low", "flags": []}
+            "AAPL",
+            "AAPL Snapshot",
+            {"price": 150},
+            {"trend": 70},
+            {"risk_score": 30, "risk_level": "Low", "flags": []},
         )
         save_named_snapshot(
-            "MSFT", "MSFT Snapshot",
-            {"price": 350}, {"trend": 75}, {"risk_score": 40, "risk_level": "Moderate", "flags": []}
+            "MSFT",
+            "MSFT Snapshot",
+            {"price": 350},
+            {"trend": 75},
+            {"risk_score": 40, "risk_level": "Moderate", "flags": []},
         )
 
         aapl_snaps = list_snapshots(symbol="AAPL")
@@ -186,9 +193,13 @@ class TestSnapshots:
 
     def test_list_snapshots_newest_first(self, tmp_snapshots):
         # Use 2-second sleep to ensure different timestamps in filename
-        save_named_snapshot("AAPL", "Old", {}, {}, {"risk_score": 30, "risk_level": "Low", "flags": []})
+        save_named_snapshot(
+            "AAPL", "Old", {}, {}, {"risk_score": 30, "risk_level": "Low", "flags": []}
+        )
         time.sleep(1.1)
-        save_named_snapshot("AAPL", "New", {}, {}, {"risk_score": 35, "risk_level": "Low", "flags": []})
+        save_named_snapshot(
+            "AAPL", "New", {}, {}, {"risk_score": 35, "risk_level": "Low", "flags": []}
+        )
 
         snapshots = list_snapshots("AAPL")
         # Snapshots are sorted by filename (newest = higher timestamp)
@@ -198,8 +209,11 @@ class TestSnapshots:
 
     def test_delete_snapshot(self, tmp_snapshots):
         filename = save_named_snapshot(
-            "AAPL", "To Delete", {}, {},
-            {"risk_score": 30, "risk_level": "Low", "flags": []}
+            "AAPL",
+            "To Delete",
+            {},
+            {},
+            {"risk_score": 30, "risk_level": "Low", "flags": []},
         )
         assert Path(tmp_snapshots / filename).exists()
 
@@ -217,8 +231,11 @@ class TestSnapshots:
 
     def test_snapshot_filename_safe_chars(self, tmp_snapshots):
         filename = save_named_snapshot(
-            "AAPL", "Test with <special> chars & more!",
-            {}, {}, {"risk_score": 30, "risk_level": "Low", "flags": []}
+            "AAPL",
+            "Test with <special> chars & more!",
+            {},
+            {},
+            {"risk_score": 30, "risk_level": "Low", "flags": []},
         )
         # Filename should not contain special chars
         assert "<" not in filename
@@ -227,14 +244,18 @@ class TestSnapshots:
 
     def test_diff_snapshots_score_change(self, tmp_snapshots):
         snap_a = {
-            "symbol": "AAPL", "name": "Snapshot A", "date": "2024-01-01",
+            "symbol": "AAPL",
+            "name": "Snapshot A",
+            "date": "2024-01-01",
             "composite_score": 60,
             "factor_scores": {"trend": 70, "valuation": 60},
             "risk": {"risk_level": "Moderate"},
             "metrics": {"price": 140.0},
         }
         snap_b = {
-            "symbol": "AAPL", "name": "Snapshot B", "date": "2024-02-01",
+            "symbol": "AAPL",
+            "name": "Snapshot B",
+            "date": "2024-02-01",
             "composite_score": 75,
             "factor_scores": {"trend": 85, "valuation": 60},
             "risk": {"risk_level": "Low"},
@@ -250,14 +271,18 @@ class TestSnapshots:
 
     def test_diff_snapshots_factor_changes(self):
         snap_a = {
-            "symbol": "AAPL", "name": "A", "date": "2024-01-01",
+            "symbol": "AAPL",
+            "name": "A",
+            "date": "2024-01-01",
             "composite_score": 60,
             "factor_scores": {"trend": 60, "valuation": 70},
             "risk": {"risk_level": "Moderate"},
             "metrics": {},
         }
         snap_b = {
-            "symbol": "AAPL", "name": "B", "date": "2024-02-01",
+            "symbol": "AAPL",
+            "name": "B",
+            "date": "2024-02-01",
             "composite_score": 70,
             "factor_scores": {"trend": 80, "valuation": 70},
             "risk": {"risk_level": "Moderate"},
@@ -273,7 +298,9 @@ class TestSnapshots:
 
     def test_diff_snapshots_no_change(self):
         snap = {
-            "symbol": "AAPL", "name": "Same", "date": "2024-01-01",
+            "symbol": "AAPL",
+            "name": "Same",
+            "date": "2024-01-01",
             "composite_score": 65,
             "factor_scores": {"trend": 70},
             "risk": {"risk_level": "Moderate"},

@@ -1,4 +1,5 @@
 """Tests for portfolio_analysis.py (P2.4)."""
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -14,6 +15,7 @@ def _make_returns(tickers, n=252, seed=42):
 
 def test_correlation_matrix_shape():
     from portfolio_analysis import correlation_matrix
+
     returns = _make_returns(["AAPL", "MSFT", "GOOG"])
     corr = correlation_matrix(returns)
     assert corr.shape == (3, 3)
@@ -24,6 +26,7 @@ def test_correlation_matrix_shape():
 
 def test_correlation_matrix_symmetric():
     from portfolio_analysis import correlation_matrix
+
     returns = _make_returns(["A", "B", "C"])
     corr = correlation_matrix(returns)
     for i in corr.index:
@@ -33,6 +36,7 @@ def test_correlation_matrix_symmetric():
 
 def test_correlation_range():
     from portfolio_analysis import correlation_matrix
+
     returns = _make_returns(["X", "Y"])
     corr = correlation_matrix(returns)
     for i in corr.index:
@@ -42,16 +46,23 @@ def test_correlation_range():
 
 def test_portfolio_stats_keys():
     from portfolio_analysis import portfolio_stats
+
     returns = _make_returns(["AAPL", "MSFT"])
     weights = {"AAPL": 0.6, "MSFT": 0.4}
     stats = portfolio_stats(returns, weights)
-    for key in ["portfolio_return_pct", "portfolio_vol_pct", "sharpe",
-                "diversification_ratio", "effective_n"]:
+    for key in [
+        "portfolio_return_pct",
+        "portfolio_vol_pct",
+        "sharpe",
+        "diversification_ratio",
+        "effective_n",
+    ]:
         assert key in stats
 
 
 def test_portfolio_stats_vol_positive():
     from portfolio_analysis import portfolio_stats
+
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 0.5, "B": 0.5})
     assert stats["portfolio_vol_pct"] > 0
@@ -59,6 +70,7 @@ def test_portfolio_stats_vol_positive():
 
 def test_portfolio_stats_equal_weights():
     from portfolio_analysis import portfolio_stats
+
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 0.5, "B": 0.5})
     assert stats["weights"]["A"] == pytest.approx(0.5)
@@ -68,6 +80,7 @@ def test_portfolio_stats_equal_weights():
 def test_portfolio_stats_normalized_weights():
     """Weights that don't sum to 1 should be normalized."""
     from portfolio_analysis import portfolio_stats
+
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 50, "B": 50})  # sums to 100, not 1
     total = sum(stats["weights"].values())
@@ -76,6 +89,7 @@ def test_portfolio_stats_normalized_weights():
 
 def test_portfolio_beta():
     from portfolio_analysis import portfolio_beta
+
     returns = _make_returns(["A", "B", "SPY"])
     weights = {"A": 0.5, "B": 0.5}
     market = returns["SPY"]
@@ -87,6 +101,7 @@ def test_portfolio_beta():
 def test_build_returns_matrix():
     from portfolio_analysis import build_returns_matrix
     import pandas as pd
+
     s1 = pd.Series([100, 102, 101, 103], name="A")
     s2 = pd.Series([200, 198, 202, 204], name="B")
     closes = {"A": s1, "B": s2}

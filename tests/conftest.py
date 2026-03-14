@@ -1,4 +1,5 @@
 """Updated conftest.py — stubs transformers/torch and sets env vars for tests."""
+
 import os
 import sys
 import tempfile
@@ -8,10 +9,12 @@ import types
 # Stub out `transformers` so tests run without the full ML stack
 # ---------------------------------------------------------------------------
 
+
 def _make_transformers_stub():
     mod = types.ModuleType("transformers")
     mod.pipeline = lambda *a, **kw: None
     return mod
+
 
 if "transformers" not in sys.modules:
     sys.modules["transformers"] = _make_transformers_stub()
@@ -33,8 +36,11 @@ if "yfinance" not in sys.modules:
 # ---------------------------------------------------------------------------
 if "finnhub" not in sys.modules:
     finnhub_mod = types.ModuleType("finnhub")
+
     class _FakeClient:
-        def __init__(self, *a, **kw): pass
+        def __init__(self, *a, **kw):
+            pass
+
     finnhub_mod.Client = _FakeClient
     sys.modules["finnhub"] = finnhub_mod
 
@@ -43,8 +49,8 @@ if "finnhub" not in sys.modules:
 # ---------------------------------------------------------------------------
 if "streamlit" not in sys.modules:
     st = types.ModuleType("streamlit")
-    st.cache_resource = lambda **kw: (lambda fn: fn)
-    st.cache_data = lambda **kw: (lambda fn: fn)
+    st.cache_resource = lambda **kw: lambda fn: fn
+    st.cache_data = lambda **kw: lambda fn: fn
     st.session_state = {}
     sys.modules["streamlit"] = st
 
@@ -76,11 +82,17 @@ if "requests" not in sys.modules:
         req_mod = types.ModuleType("requests")
         req_mod.get = lambda *a, **kw: None
         req_mod.post = lambda *a, **kw: None
+
         class _FakeResp:
             status = 200
             text = ""
-            def json(self): return {}
-            def raise_for_status(self): pass
+
+            def json(self):
+                return {}
+
+            def raise_for_status(self):
+                pass
+
         req_mod.Response = _FakeResp
         sys.modules["requests"] = req_mod
 
@@ -92,15 +104,30 @@ if "redis" not in sys.modules:
         import redis  # noqa: F401
     except ImportError:
         redis_mod = types.ModuleType("redis")
+
         class _FakeRedis:
             @classmethod
-            def from_url(cls, *a, **kw): return cls()
-            def ping(self): raise ConnectionError("Redis stub")
-            def get(self, key): return None
-            def setex(self, key, ttl, val): pass
-            def delete(self, *keys): return 0
-            def keys(self, pattern="*"): return []
-            def info(self, section=""): return {}
+            def from_url(cls, *a, **kw):
+                return cls()
+
+            def ping(self):
+                raise ConnectionError("Redis stub")
+
+            def get(self, key):
+                return None
+
+            def setex(self, key, ttl, val):
+                pass
+
+            def delete(self, *keys):
+                return 0
+
+            def keys(self, pattern="*"):
+                return []
+
+            def info(self, section=""):
+                return {}
+
         redis_mod.Redis = _FakeRedis
         sys.modules["redis"] = redis_mod
 
@@ -115,15 +142,26 @@ except ImportError:
     fa_mod.Depends = lambda fn: None
     fa_mod.Security = lambda *a, **kw: None
     fa_mod.Request = object
+
     class _FakeApp:
-        def get(self, *a, **kw): return lambda fn: fn
-        def post(self, *a, **kw): return lambda fn: fn
-        def add_middleware(self, *a, **kw): pass
+        def get(self, *a, **kw):
+            return lambda fn: fn
+
+        def post(self, *a, **kw):
+            return lambda fn: fn
+
+        def add_middleware(self, *a, **kw):
+            pass
+
     fa_mod.FastAPI = lambda *a, **kw: _FakeApp()
     sys.modules["fastapi"] = fa_mod
-    for sub in ["fastapi.middleware", "fastapi.middleware.cors",
-                "fastapi.security", "fastapi.security.api_key",
-                "fastapi.responses"]:
+    for sub in [
+        "fastapi.middleware",
+        "fastapi.middleware.cors",
+        "fastapi.security",
+        "fastapi.security.api_key",
+        "fastapi.responses",
+    ]:
         sys.modules[sub] = types.ModuleType(sub)
     sys.modules["fastapi.middleware.cors"].CORSMiddleware = object
     sys.modules["fastapi.security.api_key"].APIKeyHeader = lambda **kw: None
@@ -142,8 +180,10 @@ try:
     import pydantic  # noqa: F401
 except ImportError:
     pyd_mod = types.ModuleType("pydantic")
+
     class _BaseModel:
         pass
+
     pyd_mod.BaseModel = _BaseModel
     pyd_mod.Field = lambda *a, **kw: None
     sys.modules["pydantic"] = pyd_mod
@@ -163,9 +203,12 @@ try:
     from google.oauth2 import service_account as _sa  # noqa: F401
 except ImportError:
     _sa_mod = types.ModuleType("google.oauth2.service_account")
+
     class _FakeCreds:
         @classmethod
-        def from_service_account_file(cls, *a, **kw): return cls()
+        def from_service_account_file(cls, *a, **kw):
+            return cls()
+
     _sa_mod.Credentials = _FakeCreds
     sys.modules["google.oauth2.service_account"] = _sa_mod
 

@@ -1,4 +1,5 @@
 """Tests for analyzer.py — mocks the Anthropic SDK (P4.4)."""
+
 from __future__ import annotations
 
 import os
@@ -14,8 +15,12 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test_key_ci")
 
 SAMPLE_QUOTE = {"c": 150.0, "d": 1.5, "dp": 1.0, "h": 152.0, "l": 148.0, "pc": 148.5}
 
-SAMPLE_PROFILE = {"name": "Apple Inc.", "finnhubIndustry": "Technology",
-                  "country": "US", "exchange": "NASDAQ"}
+SAMPLE_PROFILE = {
+    "name": "Apple Inc.",
+    "finnhubIndustry": "Technology",
+    "country": "US",
+    "exchange": "NASDAQ",
+}
 
 SAMPLE_FINANCIALS = {
     "peBasicExclExtraTTM": 28.5,
@@ -35,14 +40,37 @@ SAMPLE_TECHNICALS = {
     "macd_hist": "+0.0700",
 }
 
-SAMPLE_RECS = [{"period": "2024-01", "strongBuy": 20, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1}]
-SAMPLE_EARNINGS = [{"period": "2024-Q1", "actual": 2.5, "estimate": 2.3, "surprisePercent": 8.7}]
+SAMPLE_RECS = [
+    {
+        "period": "2024-01",
+        "strongBuy": 20,
+        "buy": 10,
+        "hold": 5,
+        "sell": 2,
+        "strongSell": 1,
+    }
+]
+SAMPLE_EARNINGS = [
+    {"period": "2024-Q1", "actual": 2.5, "estimate": 2.3, "surprisePercent": 8.7}
+]
 SAMPLE_PEERS = ["MSFT", "GOOGL", "AMZN"]
 SAMPLE_NEWS = [{"headline": "Apple surges on earnings", "source": "Reuters"}]
 
 SAMPLE_FACTORS = [
-    {"name": "Valuation (P/E)", "score": 63, "weight": 0.15, "label": "Moderately valued", "detail": "P/E 28.5x"},
-    {"name": "Trend (SMA)", "score": 90, "weight": 0.20, "label": "Strong uptrend", "detail": "Price > SMA50 > SMA200"},
+    {
+        "name": "Valuation (P/E)",
+        "score": 63,
+        "weight": 0.15,
+        "label": "Moderately valued",
+        "detail": "P/E 28.5x",
+    },
+    {
+        "name": "Trend (SMA)",
+        "score": 90,
+        "weight": 0.20,
+        "label": "Strong uptrend",
+        "detail": "Price > SMA50 > SMA200",
+    },
 ]
 
 SAMPLE_RISK = {
@@ -58,8 +86,10 @@ SAMPLE_RISK = {
 # build_data_prompt
 # ---------------------------------------------------------------------------
 
+
 def test_build_data_prompt_contains_symbol():
     from analyzer import build_data_prompt
+
     prompt = build_data_prompt(
         symbol="AAPL",
         quote=SAMPLE_QUOTE,
@@ -76,18 +106,34 @@ def test_build_data_prompt_contains_symbol():
 
 def test_build_data_prompt_contains_price():
     from analyzer import build_data_prompt
+
     prompt = build_data_prompt(
-        symbol="AAPL", quote=SAMPLE_QUOTE, profile=None, financials=None,
-        technicals={}, recommendations=[], earnings=[], peers=[], news=[],
+        symbol="AAPL",
+        quote=SAMPLE_QUOTE,
+        profile=None,
+        financials=None,
+        technicals={},
+        recommendations=[],
+        earnings=[],
+        peers=[],
+        news=[],
     )
     assert "150.0" in prompt
 
 
 def test_build_data_prompt_handles_missing_profile():
     from analyzer import build_data_prompt
+
     prompt = build_data_prompt(
-        symbol="AAPL", quote=SAMPLE_QUOTE, profile=None, financials=None,
-        technicals={}, recommendations=[], earnings=[], peers=[], news=[],
+        symbol="AAPL",
+        quote=SAMPLE_QUOTE,
+        profile=None,
+        financials=None,
+        technicals={},
+        recommendations=[],
+        earnings=[],
+        peers=[],
+        news=[],
     )
     assert isinstance(prompt, str)
     assert len(prompt) > 0
@@ -95,20 +141,34 @@ def test_build_data_prompt_handles_missing_profile():
 
 def test_build_data_prompt_includes_peers():
     from analyzer import build_data_prompt
+
     prompt = build_data_prompt(
-        symbol="AAPL", quote=SAMPLE_QUOTE, profile=SAMPLE_PROFILE,
-        financials=None, technicals={}, recommendations=[],
-        earnings=[], peers=SAMPLE_PEERS, news=[],
+        symbol="AAPL",
+        quote=SAMPLE_QUOTE,
+        profile=SAMPLE_PROFILE,
+        financials=None,
+        technicals={},
+        recommendations=[],
+        earnings=[],
+        peers=SAMPLE_PEERS,
+        news=[],
     )
     assert "MSFT" in prompt
 
 
 def test_build_data_prompt_includes_news_headline():
     from analyzer import build_data_prompt
+
     prompt = build_data_prompt(
-        symbol="AAPL", quote=SAMPLE_QUOTE, profile=None, financials=None,
-        technicals={}, recommendations=[], earnings=[],
-        peers=[], news=SAMPLE_NEWS,
+        symbol="AAPL",
+        quote=SAMPLE_QUOTE,
+        profile=None,
+        financials=None,
+        technicals={},
+        recommendations=[],
+        earnings=[],
+        peers=[],
+        news=SAMPLE_NEWS,
     )
     assert "Apple surges" in prompt
 
@@ -117,12 +177,19 @@ def test_build_data_prompt_includes_news_headline():
 # build_chat_system_prompt
 # ---------------------------------------------------------------------------
 
+
 def test_build_chat_system_prompt_contains_symbol():
     from analyzer import build_chat_system_prompt
+
     prompt = build_chat_system_prompt(
-        symbol="AAPL", profile=SAMPLE_PROFILE, quote=SAMPLE_QUOTE,
-        financials=SAMPLE_FINANCIALS, factors=SAMPLE_FACTORS,
-        risk=SAMPLE_RISK, composite_score=72, composite_label="Strong Buy",
+        symbol="AAPL",
+        profile=SAMPLE_PROFILE,
+        quote=SAMPLE_QUOTE,
+        financials=SAMPLE_FINANCIALS,
+        factors=SAMPLE_FACTORS,
+        risk=SAMPLE_RISK,
+        composite_score=72,
+        composite_label="Strong Buy",
     )
     assert "AAPL" in prompt
     assert "Apple Inc." in prompt
@@ -130,10 +197,16 @@ def test_build_chat_system_prompt_contains_symbol():
 
 def test_build_chat_system_prompt_contains_score():
     from analyzer import build_chat_system_prompt
+
     prompt = build_chat_system_prompt(
-        symbol="AAPL", profile=None, quote=SAMPLE_QUOTE,
-        financials=None, factors=SAMPLE_FACTORS,
-        risk=SAMPLE_RISK, composite_score=72, composite_label="Buy",
+        symbol="AAPL",
+        profile=None,
+        quote=SAMPLE_QUOTE,
+        financials=None,
+        factors=SAMPLE_FACTORS,
+        risk=SAMPLE_RISK,
+        composite_score=72,
+        composite_label="Buy",
     )
     assert "72" in prompt
     assert "Buy" in prompt
@@ -141,10 +214,16 @@ def test_build_chat_system_prompt_contains_score():
 
 def test_build_chat_system_prompt_handles_no_profile():
     from analyzer import build_chat_system_prompt
+
     prompt = build_chat_system_prompt(
-        symbol="TSLA", profile=None, quote=SAMPLE_QUOTE,
-        financials=None, factors=[], risk={"risk_score": 50, "risk_level": "Moderate", "flags": []},
-        composite_score=50, composite_label="Neutral",
+        symbol="TSLA",
+        profile=None,
+        quote=SAMPLE_QUOTE,
+        financials=None,
+        factors=[],
+        risk={"risk_score": 50, "risk_level": "Moderate", "flags": []},
+        composite_score=50,
+        composite_label="Neutral",
     )
     assert isinstance(prompt, str)
 
@@ -152,6 +231,7 @@ def test_build_chat_system_prompt_handles_no_profile():
 # ---------------------------------------------------------------------------
 # stream_fundamental_analysis — mocked stream
 # ---------------------------------------------------------------------------
+
 
 def _mock_stream_event(text: str):
     event = MagicMock()
@@ -172,6 +252,7 @@ def _make_mock_stream(chunks: list[str]):
 
 def test_stream_fundamental_analysis_yields_chunks():
     from analyzer import stream_fundamental_analysis
+
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["Hello ", "world!"])
     with patch("analyzer._get_client", return_value=mock_client):
@@ -202,6 +283,7 @@ def test_stream_fundamental_analysis_skips_non_text_events():
 # ---------------------------------------------------------------------------
 # parse_nl_screen
 # ---------------------------------------------------------------------------
+
 
 def test_parse_nl_screen_returns_filters():
     from analyzer import parse_nl_screen
@@ -254,12 +336,18 @@ def test_parse_nl_screen_handles_empty_response():
 # stream_forward_looking_analysis
 # ---------------------------------------------------------------------------
 
+
 def test_stream_forward_looking_analysis_yields_chunks():
     from analyzer import stream_forward_looking_analysis
+
     mock_client = MagicMock()
-    mock_client.messages.stream.return_value = _make_mock_stream(["Forward ", "guidance."])
+    mock_client.messages.stream.return_value = _make_mock_stream(
+        ["Forward ", "guidance."]
+    )
     with patch("analyzer._get_client", return_value=mock_client):
-        chunks = list(stream_forward_looking_analysis("AAPL", "We expect revenue to grow 10%..."))
+        chunks = list(
+            stream_forward_looking_analysis("AAPL", "We expect revenue to grow 10%...")
+        )
     assert "".join(chunks) == "Forward guidance."
 
 
@@ -267,8 +355,10 @@ def test_stream_forward_looking_analysis_yields_chunks():
 # _get_client — key validation
 # ---------------------------------------------------------------------------
 
+
 def test_get_client_raises_without_key(monkeypatch):
     from analyzer import _get_client
+
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         _get_client()
@@ -276,6 +366,7 @@ def test_get_client_raises_without_key(monkeypatch):
 
 def test_get_client_raises_on_placeholder(monkeypatch):
     from analyzer import _get_client
+
     monkeypatch.setenv("ANTHROPIC_API_KEY", "your_anthropic_api_key_here")
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         _get_client()

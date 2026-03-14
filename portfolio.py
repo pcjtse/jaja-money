@@ -37,11 +37,12 @@ _TOLERANCE_KEY = {t: t.lower() for t in RISK_TOLERANCES}
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     if close is None or len(close) < window + 1:
         return None
     ratio = (close / close.shift(1)).dropna()
-    ratio = ratio[ratio > 0]   # guard against zero/negative prices
+    ratio = ratio[ratio > 0]  # guard against zero/negative prices
     if len(ratio) < window:
         return None
     log_returns = ratio.apply(math.log)
@@ -63,6 +64,7 @@ def _rsi(close: pd.Series, length: int = 14) -> float | None:
 # ---------------------------------------------------------------------------
 # Core suggestion logic
 # ---------------------------------------------------------------------------
+
 
 def suggest_position(
     risk_tolerance: str,
@@ -96,32 +98,40 @@ def suggest_position(
 
     # ----- 1. Action label -----
     if composite_factor >= 70 and risk_score < 45:
-        action, action_color = "Buy",           "#2da44e"
+        action, action_color = "Buy", "#2da44e"
     elif composite_factor >= 55 and risk_score < 65:
-        action, action_color = "Accumulate",    "#4CAF50"
+        action, action_color = "Accumulate", "#4CAF50"
     elif composite_factor >= 45 and risk_score < 65:
-        action, action_color = "Hold",          "#f0b429"
+        action, action_color = "Hold", "#f0b429"
     elif composite_factor >= 30 and risk_score < 80:
-        action, action_color = "Reduce",        "#e05252"
+        action, action_color = "Reduce", "#e05252"
     else:
-        action, action_color = "Avoid",         "#cf2929"
+        action, action_color = "Avoid", "#cf2929"
 
     # ----- 2. Position sizing -----
     base_max = {"conservative": 5.0, "moderate": 10.0, "aggressive": 20.0}[tol]
 
     factor_mult = (
-        1.00 if composite_factor >= 70 else
-        0.75 if composite_factor >= 55 else
-        0.50 if composite_factor >= 45 else
-        0.25 if composite_factor >= 30 else
-        0.05
+        1.00
+        if composite_factor >= 70
+        else 0.75
+        if composite_factor >= 55
+        else 0.50
+        if composite_factor >= 45
+        else 0.25
+        if composite_factor >= 30
+        else 0.05
     )
     risk_mult = (
-        1.00 if risk_score < 25 else
-        0.85 if risk_score < 45 else
-        0.65 if risk_score < 65 else
-        0.35 if risk_score < 80 else
-        0.10
+        1.00
+        if risk_score < 25
+        else 0.85
+        if risk_score < 45
+        else 0.65
+        if risk_score < 65
+        else 0.35
+        if risk_score < 80
+        else 0.10
     )
     horizon_mult = {"short": 0.70, "medium": 1.00, "long": 1.15}[hor]
 
@@ -166,14 +176,14 @@ def suggest_position(
 
     # ----- 4. Stop-loss -----
     stop_price: float | None = None
-    stop_pct: float | None   = None
+    stop_pct: float | None = None
 
     hv_ratio = _hist_vol(close) if close is not None else None
     if price > 0 and hv_ratio is not None:
         # volatility-normalised stop: z-sigma move over 2-week window
         daily_vol = hv_ratio / math.sqrt(252)
         z_mult = {"conservative": 1.5, "moderate": 2.0, "aggressive": 2.5}[tol]
-        stop_pct = daily_vol * math.sqrt(14) * z_mult * 100   # convert to %
+        stop_pct = daily_vol * math.sqrt(14) * z_mult * 100  # convert to %
         stop_pct = round(stop_pct, 1)
         stop_price = round(price * (1 - stop_pct / 100), 2)
     elif price > 0:
@@ -184,15 +194,13 @@ def suggest_position(
 
     # ----- 5. Price targets -----
     target_pcts = {
-        "short":  (0.10, 0.18),
+        "short": (0.10, 0.18),
         "medium": (0.20, 0.35),
-        "long":   (0.35, 0.60),
+        "long": (0.35, 0.60),
     }[hor]
     # Scale targets up for strong factors, down for weak
     t_scale = (
-        1.15 if composite_factor >= 70 else
-        1.00 if composite_factor >= 55 else
-        0.80
+        1.15 if composite_factor >= 70 else 1.00 if composite_factor >= 55 else 0.80
     )
     target_1 = round(price * (1 + target_pcts[0] * t_scale), 2) if price > 0 else None
     target_2 = round(price * (1 + target_pcts[1] * t_scale), 2) if price > 0 else None
@@ -208,48 +216,72 @@ def suggest_position(
 
     # Factor score context
     if composite_factor >= 70:
-        rationale.append(f"Factor score {composite_factor}/100 — strong buy signal across most dimensions.")
+        rationale.append(
+            f"Factor score {composite_factor}/100 — strong buy signal across most dimensions."
+        )
     elif composite_factor >= 55:
-        rationale.append(f"Factor score {composite_factor}/100 — moderate buy signal; majority of factors are positive.")
+        rationale.append(
+            f"Factor score {composite_factor}/100 — moderate buy signal; majority of factors are positive."
+        )
     elif composite_factor >= 45:
-        rationale.append(f"Factor score {composite_factor}/100 — neutral; no strong directional bias from fundamentals/technicals.")
+        rationale.append(
+            f"Factor score {composite_factor}/100 — neutral; no strong directional bias from fundamentals/technicals."
+        )
     else:
-        rationale.append(f"Factor score {composite_factor}/100 — multiple factors are negative; unfavourable entry conditions.")
+        rationale.append(
+            f"Factor score {composite_factor}/100 — multiple factors are negative; unfavourable entry conditions."
+        )
 
     # Risk context
     if risk_score < 25:
-        rationale.append(f"Risk score {risk_score}/100 (Low) — volatility, drawdown, and flag conditions are all benign.")
+        rationale.append(
+            f"Risk score {risk_score}/100 (Low) — volatility, drawdown, and flag conditions are all benign."
+        )
     elif risk_score < 45:
-        rationale.append(f"Risk score {risk_score}/100 (Moderate) — conditions are manageable with standard position sizing.")
+        rationale.append(
+            f"Risk score {risk_score}/100 (Moderate) — conditions are manageable with standard position sizing."
+        )
     elif risk_score < 65:
-        rationale.append(f"Risk score {risk_score}/100 (Elevated) — position size is reduced proportionally to compensate.")
+        rationale.append(
+            f"Risk score {risk_score}/100 (Elevated) — position size is reduced proportionally to compensate."
+        )
     elif risk_score < 80:
-        rationale.append(f"Risk score {risk_score}/100 (High) — only a minimal allocation is warranted if any.")
+        rationale.append(
+            f"Risk score {risk_score}/100 (High) — only a minimal allocation is warranted if any."
+        )
     else:
-        rationale.append(f"Risk score {risk_score}/100 (Extreme) — avoid new positions until risk conditions improve.")
+        rationale.append(
+            f"Risk score {risk_score}/100 (Extreme) — avoid new positions until risk conditions improve."
+        )
 
     # RSI context
     if rsi is not None:
         if rsi > 72:
-            rationale.append(f"RSI-14 at {rsi:.0f} — overbought; entry timing is unfavourable for the short run.")
+            rationale.append(
+                f"RSI-14 at {rsi:.0f} — overbought; entry timing is unfavourable for the short run."
+            )
         elif rsi < 30:
-            rationale.append(f"RSI-14 at {rsi:.0f} — oversold; wait for stabilisation before committing capital.")
+            rationale.append(
+                f"RSI-14 at {rsi:.0f} — oversold; wait for stabilisation before committing capital."
+            )
         else:
-            rationale.append(f"RSI-14 at {rsi:.0f} — within normal momentum range; timing is acceptable.")
+            rationale.append(
+                f"RSI-14 at {rsi:.0f} — within normal momentum range; timing is acceptable."
+            )
 
     # Horizon context
     horizon_notes = {
-        "short":  "Short horizon limits upside runway — strict stop discipline is essential.",
+        "short": "Short horizon limits upside runway — strict stop discipline is essential.",
         "medium": "Medium horizon gives the thesis time to play out through one earnings cycle.",
-        "long":   "Long horizon allows compounding if the fundamental thesis proves correct; scale in patiently.",
+        "long": "Long horizon allows compounding if the fundamental thesis proves correct; scale in patiently.",
     }
     rationale.append(horizon_notes[hor])
 
     # Tolerance context
     tolerance_notes = {
         "conservative": f"Conservative risk profile caps max allocation at {base_max:.0f}% of portfolio.",
-        "moderate":     f"Moderate risk profile allows up to {base_max:.0f}% of portfolio.",
-        "aggressive":   f"Aggressive risk profile permits up to {base_max:.0f}% of portfolio for high-conviction ideas.",
+        "moderate": f"Moderate risk profile allows up to {base_max:.0f}% of portfolio.",
+        "aggressive": f"Aggressive risk profile permits up to {base_max:.0f}% of portfolio for high-conviction ideas.",
     }
     rationale.append(tolerance_notes[tol])
 

@@ -1,11 +1,30 @@
 """Tests for export.py (P1.3)."""
+
 import pandas as pd
 
 
 SAMPLE_FACTORS = [
-    {"name": "Valuation (P/E)", "score": 75, "weight": 0.15, "label": "Fairly valued", "detail": "P/E 18x"},
-    {"name": "Trend (SMA)", "score": 85, "weight": 0.20, "label": "Strong uptrend", "detail": "Price > SMA50 > SMA200"},
-    {"name": "Momentum (RSI)", "score": 65, "weight": 0.10, "label": "Healthy zone", "detail": "RSI 52.3"},
+    {
+        "name": "Valuation (P/E)",
+        "score": 75,
+        "weight": 0.15,
+        "label": "Fairly valued",
+        "detail": "P/E 18x",
+    },
+    {
+        "name": "Trend (SMA)",
+        "score": 85,
+        "weight": 0.20,
+        "label": "Strong uptrend",
+        "detail": "Price > SMA50 > SMA200",
+    },
+    {
+        "name": "Momentum (RSI)",
+        "score": 65,
+        "weight": 0.10,
+        "label": "Healthy zone",
+        "detail": "RSI 52.3",
+    },
 ]
 
 SAMPLE_QUOTE = {"c": 150.0, "d": 2.5, "dp": 1.7, "h": 152.0, "l": 148.0, "pc": 147.5}
@@ -17,7 +36,12 @@ SAMPLE_RISK = {
     "hv": 22.5,
     "drawdown_pct": 12.3,
     "flags": [
-        {"severity": "warning", "icon": "⚡", "title": "High Vol", "message": "HV elevated"},
+        {
+            "severity": "warning",
+            "icon": "⚡",
+            "title": "High Vol",
+            "message": "HV elevated",
+        },
     ],
 }
 
@@ -33,19 +57,26 @@ SAMPLE_FINANCIALS = {
 
 def test_factors_to_csv_returns_bytes():
     from export import factors_to_csv
-    result = factors_to_csv("AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS)
+
+    result = factors_to_csv(
+        "AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS
+    )
     assert isinstance(result, bytes)
     assert len(result) > 0
 
 
 def test_factors_to_csv_contains_symbol():
     from export import factors_to_csv
-    result = factors_to_csv("AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS)
+
+    result = factors_to_csv(
+        "AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS
+    )
     assert b"AAPL" in result
 
 
 def test_factors_to_csv_contains_factor_names():
     from export import factors_to_csv
+
     result = factors_to_csv("TSLA", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE)
     decoded = result.decode("utf-8")
     assert "Valuation (P/E)" in decoded
@@ -54,14 +85,18 @@ def test_factors_to_csv_contains_factor_names():
 
 def test_factors_to_csv_contains_flags():
     from export import factors_to_csv
+
     result = factors_to_csv("AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE)
     assert b"High Vol" in result
 
 
 def test_price_history_to_csv():
     from export import price_history_to_csv
-    df = pd.DataFrame({"Open": [100, 101], "Close": [102, 103]},
-                      index=pd.date_range("2024-01-01", periods=2))
+
+    df = pd.DataFrame(
+        {"Open": [100, 101], "Close": [102, 103]},
+        index=pd.date_range("2024-01-01", periods=2),
+    )
     result = price_history_to_csv("AAPL", df)
     assert isinstance(result, bytes)
     assert b"AAPL" in result
@@ -70,6 +105,7 @@ def test_price_history_to_csv():
 
 def test_analysis_to_html_returns_bytes():
     from export import analysis_to_html
+
     result = analysis_to_html(
         symbol="AAPL",
         quote=SAMPLE_QUOTE,
@@ -87,6 +123,7 @@ def test_analysis_to_html_returns_bytes():
 
 def test_analysis_to_html_valid_html():
     from export import analysis_to_html
+
     result = analysis_to_html(
         symbol="MSFT",
         quote=SAMPLE_QUOTE,

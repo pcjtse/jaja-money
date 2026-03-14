@@ -6,6 +6,7 @@ by (symbol, date) in ~/.jaja-money/history.db.
 Usage:
     from history import save_analysis, get_history, get_score_trend
 """
+
 from __future__ import annotations
 
 import json
@@ -212,9 +213,9 @@ def save_named_snapshot(
         "risk": risk,
         "claude_output": claude_output,
         "factors_list": factors_list or [],
-        "composite_score": risk.get("composite_score") or sum(
-            v for v in factor_scores.values() if isinstance(v, (int, float))
-        ) / max(len(factor_scores), 1),
+        "composite_score": risk.get("composite_score")
+        or sum(v for v in factor_scores.values() if isinstance(v, (int, float)))
+        / max(len(factor_scores), 1),
     }
 
     try:
@@ -244,16 +245,18 @@ def list_snapshots(symbol: str | None = None) -> list[dict]:
                 data = json.load(f)
             if symbol and data.get("symbol", "").upper() != symbol.upper():
                 continue
-            snapshots.append({
-                "filename": path.name,
-                "path": str(path),
-                "symbol": data.get("symbol", ""),
-                "name": data.get("name", ""),
-                "date": data.get("date", ""),
-                "timestamp": data.get("timestamp", 0),
-                "composite_score": data.get("composite_score", 0),
-                "risk_level": data.get("risk", {}).get("risk_level", ""),
-            })
+            snapshots.append(
+                {
+                    "filename": path.name,
+                    "path": str(path),
+                    "symbol": data.get("symbol", ""),
+                    "name": data.get("name", ""),
+                    "date": data.get("date", ""),
+                    "timestamp": data.get("timestamp", 0),
+                    "composite_score": data.get("composite_score", 0),
+                    "risk_level": data.get("risk", {}).get("risk_level", ""),
+                }
+            )
         except Exception as exc:
             log.debug("Could not read snapshot %s: %s", path.name, exc)
 
@@ -356,13 +359,15 @@ def diff_snapshots(snap_a: dict, snap_b: dict) -> dict:
         if a_val is not None and b_val is not None:
             diff = b_val - a_val
             if abs(diff) >= 5:
-                changes["changed_factors"].append({
-                    "factor": factor,
-                    "before": a_val,
-                    "after": b_val,
-                    "change": round(diff, 1),
-                    "direction": "up" if diff > 0 else "down",
-                })
+                changes["changed_factors"].append(
+                    {
+                        "factor": factor,
+                        "before": a_val,
+                        "after": b_val,
+                        "change": round(diff, 1),
+                        "direction": "up" if diff > 0 else "down",
+                    }
+                )
 
     # Composite score change
     score_a = snap_a.get("composite_score", 0)
@@ -387,12 +392,14 @@ def diff_snapshots(snap_a: dict, snap_b: dict) -> dict:
             try:
                 pct_change = (float(b_val) - float(a_val)) / abs(float(a_val)) * 100
                 if abs(pct_change) >= 5:
-                    changes["changed_metrics"].append({
-                        "metric": key,
-                        "before": a_val,
-                        "after": b_val,
-                        "pct_change": round(pct_change, 1),
-                    })
+                    changes["changed_metrics"].append(
+                        {
+                            "metric": key,
+                            "before": a_val,
+                            "after": b_val,
+                            "pct_change": round(pct_change, 1),
+                        }
+                    )
             except (TypeError, ZeroDivisionError):
                 pass
 

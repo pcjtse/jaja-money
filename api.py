@@ -6,6 +6,7 @@ Enhanced with:
 - Earnings call transcript fetch (P2.3)
 - Structured logging (P4.3)
 """
+
 from __future__ import annotations
 
 import os
@@ -50,33 +51,40 @@ class FinnhubAPI:
 
     def get_quote(self, symbol: str) -> dict:
         """Return real-time quote with keys: c, d, dp, h, l, o, pc, t."""
+
         def _fetch():
             data = self.client.quote(symbol)
             if not data or data.get("c") is None or data.get("c") == 0:
                 raise ValueError(f"No quote data found for symbol '{symbol}'.")
             return data
+
         return self._cached(f"quote:{symbol}", _fetch, ttl=60)  # quotes expire faster
 
     def get_profile(self, symbol: str) -> dict:
         """Return company profile: name, finnhubIndustry, logo, etc."""
+
         def _fetch():
             data = self.client.company_profile2(symbol=symbol)
             if not data or not data.get("name"):
                 raise ValueError(f"No profile data found for symbol '{symbol}'.")
             return data
+
         return self._cached(f"profile:{symbol}", _fetch)
 
     def get_financials(self, symbol: str) -> dict:
         """Return basic financials (metric key has P/E, EPS, market cap, etc.)."""
+
         def _fetch():
             data = self.client.company_basic_financials(symbol, "all")
             if not data or not data.get("metric"):
                 raise ValueError(f"No financial data found for symbol '{symbol}'.")
             return data["metric"]
+
         return self._cached(f"financials:{symbol}", _fetch)
 
     def get_daily(self, symbol: str, years: int = 2) -> dict:
         """Return daily candles for the last `years` years."""
+
         def _fetch():
             to_ts = int(time.time())
             from_ts = to_ts - (years * 365 * 24 * 60 * 60)
@@ -84,10 +92,12 @@ class FinnhubAPI:
             if not data or data.get("s") != "ok":
                 raise ValueError(f"No daily price data found for symbol '{symbol}'.")
             return data
+
         return self._cached(f"daily:{symbol}:{years}y", _fetch)
 
     def get_news(self, symbol: str, days: int = 7) -> list:
         """Return recent company news articles for the last `days` days."""
+
         def _fetch():
             to_dt = time.strftime("%Y-%m-%d", time.localtime())
             from_dt = time.strftime(
@@ -96,27 +106,34 @@ class FinnhubAPI:
             )
             data = self.client.company_news(symbol, _from=from_dt, to=to_dt)
             return data if data else []
+
         return self._cached(f"news:{symbol}:{days}d", _fetch, ttl=900)
 
     def get_recommendations(self, symbol: str) -> list:
         """Return analyst recommendation trends (buy/hold/sell counts)."""
+
         def _fetch():
             data = self.client.recommendation_trends(symbol)
             return data if data else []
+
         return self._cached(f"recs:{symbol}", _fetch)
 
     def get_earnings(self, symbol: str, limit: int = 4) -> list:
         """Return recent EPS surprises (actual vs. estimated earnings)."""
+
         def _fetch():
             data = self.client.company_earnings(symbol, limit=limit)
             return data if data else []
+
         return self._cached(f"earnings:{symbol}:{limit}", _fetch)
 
     def get_peers(self, symbol: str) -> list:
         """Return list of peer/comparable company ticker symbols."""
+
         def _fetch():
             data = self.client.company_peers(symbol)
             return data if data else []
+
         return self._cached(f"peers:{symbol}", _fetch)
 
     # ------------------------------------------------------------------
@@ -129,6 +146,7 @@ class FinnhubAPI:
         Returns dict with keys: code, data (list of expiry dates with strikes).
         Falls back to empty dict if unavailable on free tier.
         """
+
         def _fetch():
             try:
                 data = self.client.stock_options(symbol)
@@ -136,6 +154,7 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Option chain unavailable for %s: %s", symbol, exc)
                 return {}
+
         return self._cached(f"options:{symbol}", _fetch, ttl=600)
 
     def get_option_metrics(self, symbol: str) -> dict:
@@ -186,6 +205,7 @@ class FinnhubAPI:
 
     def get_transcripts_list(self, symbol: str) -> list:
         """Return list of available earnings call transcripts."""
+
         def _fetch():
             try:
                 data = self.client.stock_transcripts_list(symbol)
@@ -193,10 +213,12 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Transcripts list unavailable for %s: %s", symbol, exc)
                 return []
+
         return self._cached(f"transcripts_list:{symbol}", _fetch, ttl=86400)
 
     def get_transcript(self, transcript_id: str) -> dict:
         """Return a specific earnings call transcript by ID."""
+
         def _fetch():
             try:
                 data = self.client.stock_transcript(transcript_id)
@@ -204,6 +226,7 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Transcript %s unavailable: %s", transcript_id, exc)
                 return {}
+
         return self._cached(f"transcript:{transcript_id}", _fetch, ttl=86400 * 7)
 
     # ------------------------------------------------------------------
@@ -217,13 +240,14 @@ class FinnhubAPI:
         historical_reactions (list of {date, change_pct}),
         implied_move_pct (float|None) computed from ATM straddle / current price.
         """
+
         def _fetch():
             try:
                 import time as _time
+
                 from_dt = _time.strftime("%Y-%m-%d")
                 to_dt = _time.strftime(
-                    "%Y-%m-%d",
-                    _time.localtime(_time.time() + 90 * 24 * 3600)
+                    "%Y-%m-%d", _time.localtime(_time.time() + 90 * 24 * 3600)
                 )
                 cal = self.client.earnings_calendar(
                     _from=from_dt, to=to_dt, symbol=symbol
@@ -238,6 +262,7 @@ class FinnhubAPI:
                     }
                 # Sort by date ascending and pick first future date
                 import datetime as _dt
+
                 today = _dt.date.today()
                 future = [e for e in earnings_list if e.get("date")]
                 future.sort(key=lambda x: x["date"])
@@ -263,26 +288,38 @@ class FinnhubAPI:
                             options_map = nearest.get("options", {})
                             calls = options_map.get("CALL", [])
                             puts = options_map.get("PUT", [])
-                            valid_calls = [c for c in calls if c.get("strike") is not None]
-                            valid_puts = [p for p in puts if p.get("strike") is not None]
+                            valid_calls = [
+                                c for c in calls if c.get("strike") is not None
+                            ]
+                            valid_puts = [
+                                p for p in puts if p.get("strike") is not None
+                            ]
                             if valid_calls and valid_puts:
                                 atm_call = min(
                                     valid_calls,
-                                    key=lambda c: abs(float(c["strike"]) - current_price),
+                                    key=lambda c: abs(
+                                        float(c["strike"]) - current_price
+                                    ),
                                 )
                                 atm_put = min(
                                     valid_puts,
-                                    key=lambda p: abs(float(p["strike"]) - current_price),
+                                    key=lambda p: abs(
+                                        float(p["strike"]) - current_price
+                                    ),
                                 )
                                 call_ask = float(
-                                    atm_call.get("ask") or atm_call.get("lastPrice") or 0
+                                    atm_call.get("ask")
+                                    or atm_call.get("lastPrice")
+                                    or 0
                                 )
                                 put_ask = float(
                                     atm_put.get("ask") or atm_put.get("lastPrice") or 0
                                 )
                                 if call_ask > 0 and put_ask > 0:
                                     straddle = call_ask + put_ask
-                                    implied_move_pct = round(straddle / current_price * 100, 2)
+                                    implied_move_pct = round(
+                                        straddle / current_price * 100, 2
+                                    )
                 except Exception as exc:
                     log.debug("Implied move calc failed for %s: %s", symbol, exc)
 
@@ -300,6 +337,7 @@ class FinnhubAPI:
                     "historical_reactions": [],
                     "implied_move_pct": None,
                 }
+
         return self._cached(f"earnings_cal:{symbol}", _fetch, ttl=3600 * 6)
 
     # ------------------------------------------------------------------
@@ -312,13 +350,14 @@ class FinnhubAPI:
         Each entry: {name, share, change, transactionDate, transactionCode}
         transactionCode: 'P' = purchase, 'S' = sale
         """
+
         def _fetch():
             try:
                 import time as _t
+
                 to_dt = _t.strftime("%Y-%m-%d")
                 from_dt = _t.strftime(
-                    "%Y-%m-%d",
-                    _t.localtime(_t.time() - 90 * 24 * 3600)
+                    "%Y-%m-%d", _t.localtime(_t.time() - 90 * 24 * 3600)
                 )
                 data = self.client.stock_insider_transactions(
                     symbol, _from=from_dt, to=to_dt
@@ -328,6 +367,7 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Insider transactions unavailable for %s: %s", symbol, exc)
                 return []
+
         return self._cached(f"insider:{symbol}", _fetch, ttl=3600 * 12)
 
     # ------------------------------------------------------------------
@@ -340,10 +380,12 @@ class FinnhubAPI:
         Falls back to yfinance for short percent of float if Finnhub unavailable.
         Returns: {short_interest (shares), short_pct_float, days_to_cover, available}
         """
+
         def _fetch():
             # Try yfinance first as it has better short data
             try:
                 import yfinance as yf
+
                 ticker = yf.Ticker(symbol)
                 info = ticker.info or {}
                 short_pct = info.get("shortPercentOfFloat")
@@ -354,13 +396,16 @@ class FinnhubAPI:
                     days_to_cover = round(shares_short / avg_vol, 1)
                 return {
                     "available": short_pct is not None,
-                    "short_pct_float": round(float(short_pct) * 100, 2) if short_pct else None,
+                    "short_pct_float": round(float(short_pct) * 100, 2)
+                    if short_pct
+                    else None,
                     "shares_short": shares_short,
                     "days_to_cover": days_to_cover,
                 }
             except Exception as exc:
                 log.warning("Short interest unavailable for %s: %s", symbol, exc)
                 return {"available": False}
+
         return self._cached(f"short_interest:{symbol}", _fetch, ttl=3600 * 6)
 
     # ------------------------------------------------------------------
@@ -373,6 +418,7 @@ class FinnhubAPI:
         Uses yfinance for VIX and Treasury data (free, no key required).
         Returns: {vix, yield_2y, yield_10y, spread_2y10y, tbill_3m, risk_free_rate}
         """
+
         def _fetch():
             result = {
                 "vix": None,
@@ -384,6 +430,7 @@ class FinnhubAPI:
             }
             try:
                 import yfinance as yf
+
                 # Fetch VIX, 2Y, 10Y Treasury, 3M T-bill
                 tickers = yf.download(
                     ["^VIX", "^IRX", "^TNX", "^TYX"],
@@ -393,6 +440,7 @@ class FinnhubAPI:
                 )
                 if tickers is not None and not tickers.empty:
                     close = tickers["Close"] if "Close" in tickers else tickers
+
                     def _last(col):
                         try:
                             s = close[col].dropna()
@@ -401,13 +449,15 @@ class FinnhubAPI:
                             return None
 
                     vix = _last("^VIX")
-                    irx = _last("^IRX")   # 13-week T-bill rate (annualized %)
-                    tnx = _last("^TNX")   # 10Y Treasury yield
+                    irx = _last("^IRX")  # 13-week T-bill rate (annualized %)
+                    tnx = _last("^TNX")  # 10Y Treasury yield
                     # 2Y not directly available; use ^TNX - spread approximation
-                    _last("^TYX")   # 30Y Treasury
+                    _last("^TYX")  # 30Y Treasury
 
                     result["vix"] = round(vix, 2) if vix else None
-                    result["yield_10y"] = round(tnx / 10, 3) if tnx else None  # ^TNX is in *10
+                    result["yield_10y"] = (
+                        round(tnx / 10, 3) if tnx else None
+                    )  # ^TNX is in *10
                     # ^TNX reports in units of 0.1%, so actual yield = value / 10
                     tnx_pct = round(tnx / 10, 3) if tnx else None
                     irx_pct = round(irx / 10, 3) if irx else None
@@ -424,6 +474,7 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Macro context fetch failed: %s", exc)
             return result
+
         return self._cached("macro_context", _fetch, ttl=3600 * 24)
 
     def get_risk_free_rate(self) -> float:
@@ -444,16 +495,20 @@ class FinnhubAPI:
         Returns dict with current_estimate, revision_direction ('up'|'down'|'flat'),
         analyst_count.
         """
+
         def _fetch():
             try:
                 import yfinance as yf
+
                 ticker = yf.Ticker(symbol)
                 info = ticker.info or {}
                 # Use forward EPS and number of analyst opinions as proxy
                 forward_eps = info.get("forwardEps")
                 trailing_eps = info.get("trailingEps")
                 analyst_count = info.get("numberOfAnalystOpinions")
-                recommendation_mean = info.get("recommendationMean")  # 1=Strong Buy, 5=Sell
+                recommendation_mean = info.get(
+                    "recommendationMean"
+                )  # 1=Strong Buy, 5=Sell
 
                 # Try to get earnings estimates history
                 try:
@@ -461,8 +516,16 @@ class FinnhubAPI:
                     if earnings_df is not None and not earnings_df.empty:
                         # Check surprise direction for recent quarters
                         recent = earnings_df.tail(4)
-                        pos_surprises = (recent["Surprise(%)"] > 0).sum() if "Surprise(%)" in recent.columns else 0
-                        neg_surprises = (recent["Surprise(%)"] < 0).sum() if "Surprise(%)" in recent.columns else 0
+                        pos_surprises = (
+                            (recent["Surprise(%)"] > 0).sum()
+                            if "Surprise(%)" in recent.columns
+                            else 0
+                        )
+                        neg_surprises = (
+                            (recent["Surprise(%)"] < 0).sum()
+                            if "Surprise(%)" in recent.columns
+                            else 0
+                        )
                         if pos_surprises > neg_surprises:
                             direction = "up"
                         elif neg_surprises > pos_surprises:
@@ -485,6 +548,7 @@ class FinnhubAPI:
             except Exception as exc:
                 log.warning("Estimate revisions unavailable for %s: %s", symbol, exc)
                 return {"available": False, "revision_direction": "flat"}
+
         return self._cached(f"estimates:{symbol}", _fetch, ttl=3600 * 12)
 
     # ------------------------------------------------------------------
@@ -500,6 +564,7 @@ class FinnhubAPI:
 
         Useful for multi-timeframe trend analysis. Cached for 1 hour.
         """
+
         def _fetch():
             to_ts = int(time.time())
             from_ts = to_ts - (years * 365 * 24 * 60 * 60)
@@ -507,6 +572,7 @@ class FinnhubAPI:
             if not data or data.get("s") != "ok":
                 raise ValueError(f"No weekly price data found for symbol '{symbol}'.")
             return data
+
         return self._cached(f"weekly:{symbol}:{years}y", _fetch, ttl=3600)
 
     def get_monthly(self, symbol: str, years: int = 5) -> dict:
@@ -514,6 +580,7 @@ class FinnhubAPI:
 
         Useful for long-term trend analysis. Cached for 24 hours.
         """
+
         def _fetch():
             to_ts = int(time.time())
             from_ts = to_ts - (years * 365 * 24 * 60 * 60)
@@ -521,6 +588,7 @@ class FinnhubAPI:
             if not data or data.get("s") != "ok":
                 raise ValueError(f"No monthly price data found for symbol '{symbol}'.")
             return data
+
         return self._cached(f"monthly:{symbol}:{years}y", _fetch, ttl=86400)
 
     # ------------------------------------------------------------------
@@ -534,6 +602,7 @@ class FinnhubAPI:
         high_target, mean_target, median_target, analyst_count.
         Cached for 24 hours.
         """
+
         def _fetch():
             try:
                 data = self.client.stock_price_target(symbol)
@@ -547,11 +616,14 @@ class FinnhubAPI:
                     "high_target": data.get("targetHigh"),
                     "mean_target": data.get("targetMean"),
                     "median_target": data.get("targetMedian"),
-                    "analyst_count": data.get("lastUpdated"),  # Finnhub returns lastUpdated
+                    "analyst_count": data.get(
+                        "lastUpdated"
+                    ),  # Finnhub returns lastUpdated
                 }
             except Exception as exc:
                 log.warning("Analyst price targets unavailable for %s: %s", symbol, exc)
                 return {"available": False}
+
         return self._cached(f"price_targets:{symbol}", _fetch, ttl=86400)
 
     # ------------------------------------------------------------------
@@ -564,6 +636,7 @@ class FinnhubAPI:
         Each entry includes: date, actual, estimate, surprise, surprisePercent.
         Cached for 24 hours.
         """
+
         def _fetch():
             try:
                 data = self.client.company_earnings(symbol, limit=10)
@@ -579,20 +652,25 @@ class FinnhubAPI:
                         try:
                             surprise = round(float(actual) - float(estimate), 4)
                             if estimate != 0:
-                                surprise_pct = round(surprise / abs(float(estimate)) * 100, 2)
+                                surprise_pct = round(
+                                    surprise / abs(float(estimate)) * 100, 2
+                                )
                         except (TypeError, ValueError):
                             pass
-                    results.append({
-                        "date": entry.get("period", entry.get("date", "")),
-                        "actual": actual,
-                        "estimate": estimate,
-                        "surprise": surprise,
-                        "surprisePercent": surprise_pct,
-                    })
+                    results.append(
+                        {
+                            "date": entry.get("period", entry.get("date", "")),
+                            "actual": actual,
+                            "estimate": estimate,
+                            "surprise": surprise,
+                            "surprisePercent": surprise_pct,
+                        }
+                    )
                 return results
             except Exception as exc:
                 log.warning("Earnings history unavailable for %s: %s", symbol, exc)
                 return []
+
         return self._cached(f"earnings_history:{symbol}", _fetch, ttl=86400)
 
     def get_dividends(self, symbol: str, years: int = 5) -> dict:
@@ -602,24 +680,34 @@ class FinnhubAPI:
             dates  : list of ISO date strings (YYYY-MM-DD)
             amounts: list of dividend amounts (per share) matching dates
         """
+
         def _fetch():
             try:
                 import yfinance as yf
+
                 ticker = yf.Ticker(symbol)
                 divs = ticker.dividends  # pandas Series, DatetimeIndex → float
                 if divs is None or divs.empty:
                     return {"dates": [], "amounts": []}
                 # Filter to requested window
                 import pandas as pd
-                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(years * 365))
+
+                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(
+                    days=int(years * 365)
+                )
                 divs = divs[divs.index >= cutoff]
                 # Normalize index to tz-naive date strings
-                dates = [d.strftime("%Y-%m-%d") for d in divs.index.tz_localize(None) if hasattr(d, "strftime")]
+                dates = [
+                    d.strftime("%Y-%m-%d")
+                    for d in divs.index.tz_localize(None)
+                    if hasattr(d, "strftime")
+                ]
                 amounts = [round(float(a), 6) for a in divs.values]
                 return {"dates": dates, "amounts": amounts}
             except Exception as exc:
                 log.warning("Dividend data unavailable for %s: %s", symbol, exc)
                 return {"dates": [], "amounts": []}
+
         return self._cached(f"dividends:{symbol}:{years}", _fetch, ttl=3600 * 24)
 
     # ------------------------------------------------------------------
@@ -657,8 +745,7 @@ class FinnhubAPI:
 
         with ThreadPoolExecutor(max_workers=8) as executor:
             future_to_name = {
-                executor.submit(_timed_call, fn): name
-                for name, fn in tasks.items()
+                executor.submit(_timed_call, fn): name for name, fn in tasks.items()
             }
             for future in as_completed(future_to_name):
                 name = future_to_name[future]
@@ -677,7 +764,9 @@ class FinnhubAPI:
 
         log.info(
             "fetch_all_parallel(%s): %d sources in %.2fs",
-            symbol, len(tasks), total_elapsed,
+            symbol,
+            len(tasks),
+            total_elapsed,
         )
         return results
 
@@ -685,6 +774,7 @@ class FinnhubAPI:
 def _timed_call(fn):
     """Call fn() and return (result, elapsed_seconds)."""
     import time as _time
+
     t0 = _time.monotonic()
     result = fn()
     return result, _time.monotonic() - t0

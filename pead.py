@@ -7,6 +7,7 @@ a significant miss (<-5%) historically precedes negative drift.
 Usage:
     from pead import compute_pead_drift, screen_pead_candidates, PEADResult
 """
+
 from __future__ import annotations
 
 import time
@@ -19,19 +20,20 @@ from log_setup import get_logger
 log = get_logger(__name__)
 
 # Default surprise thresholds
-POSITIVE_SURPRISE_THRESHOLD = 5.0    # % EPS beat → long signal
-NEGATIVE_SURPRISE_THRESHOLD = -5.0   # % EPS miss → short signal
+POSITIVE_SURPRISE_THRESHOLD = 5.0  # % EPS beat → long signal
+NEGATIVE_SURPRISE_THRESHOLD = -5.0  # % EPS miss → short signal
 
 
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PEADDrift:
-    quarter: str               # e.g. "2024-09-30"
-    surprise_pct: float        # EPS surprise %
-    direction: str             # "beat" | "miss" | "inline"
+    quarter: str  # e.g. "2024-09-30"
+    surprise_pct: float  # EPS surprise %
+    direction: str  # "beat" | "miss" | "inline"
     drift_1w_pct: float | None  # price return 1 week post-earnings
     drift_2w_pct: float | None  # price return 2 weeks post-earnings
     drift_1m_pct: float | None  # price return 1 month post-earnings
@@ -41,16 +43,19 @@ class PEADDrift:
 class PEADResult:
     symbol: str
     latest_surprise_pct: float | None
-    signal: str                         # "Long (PEAD Beat)" | "Short Signal (PEAD Miss)" | "Neutral"
-    avg_beat_drift_1m: float | None     # avg 1-month return after beats
-    avg_miss_drift_1m: float | None     # avg 1-month return after misses
-    beat_drift_consistency: float | None  # % of beats followed by positive 1-month drift
+    signal: str  # "Long (PEAD Beat)" | "Short Signal (PEAD Miss)" | "Neutral"
+    avg_beat_drift_1m: float | None  # avg 1-month return after beats
+    avg_miss_drift_1m: float | None  # avg 1-month return after misses
+    beat_drift_consistency: (
+        float | None
+    )  # % of beats followed by positive 1-month drift
     drifts: list[PEADDrift] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
 # Core computation
 # ---------------------------------------------------------------------------
+
 
 def compute_pead_drift(
     symbol: str,
@@ -74,7 +79,12 @@ def compute_pead_drift(
     -------
     PEADResult with per-quarter drift breakdown and summary stats.
     """
-    if not earnings or close_series is None or dates_series is None or len(close_series) < 5:
+    if (
+        not earnings
+        or close_series is None
+        or dates_series is None
+        or len(close_series) < 5
+    ):
         return PEADResult(
             symbol=symbol,
             latest_surprise_pct=None,
@@ -97,8 +107,10 @@ def compute_pead_drift(
         period = str(q.get("period", "") or "")
 
         direction = (
-            "beat" if surprise >= min_surprise_pct
-            else "miss" if surprise <= -min_surprise_pct
+            "beat"
+            if surprise >= min_surprise_pct
+            else "miss"
+            if surprise <= -min_surprise_pct
             else "inline"
         )
 
@@ -123,14 +135,16 @@ def compute_pead_drift(
                     if len(future) >= 21:
                         drift_1m = round((float(future.iloc[20]) / base - 1) * 100, 2)
 
-        drifts.append(PEADDrift(
-            quarter=period or "Unknown",
-            surprise_pct=round(surprise, 2),
-            direction=direction,
-            drift_1w_pct=drift_1w,
-            drift_2w_pct=drift_2w,
-            drift_1m_pct=drift_1m,
-        ))
+        drifts.append(
+            PEADDrift(
+                quarter=period or "Unknown",
+                surprise_pct=round(surprise, 2),
+                direction=direction,
+                drift_1w_pct=drift_1w,
+                drift_2w_pct=drift_2w,
+                drift_1m_pct=drift_1m,
+            )
+        )
 
     # Determine signal from latest earnings
     latest_surprise = None
@@ -145,19 +159,30 @@ def compute_pead_drift(
                 signal = "Short Signal (PEAD Miss)"
 
     # Aggregate drift stats
-    beat_1m = [d.drift_1m_pct for d in drifts if d.direction == "beat" and d.drift_1m_pct is not None]
-    miss_1m = [d.drift_1m_pct for d in drifts if d.direction == "miss" and d.drift_1m_pct is not None]
+    beat_1m = [
+        d.drift_1m_pct
+        for d in drifts
+        if d.direction == "beat" and d.drift_1m_pct is not None
+    ]
+    miss_1m = [
+        d.drift_1m_pct
+        for d in drifts
+        if d.direction == "miss" and d.drift_1m_pct is not None
+    ]
 
     avg_beat_1m = round(sum(beat_1m) / len(beat_1m), 2) if beat_1m else None
     avg_miss_1m = round(sum(miss_1m) / len(miss_1m), 2) if miss_1m else None
     beat_consistency = (
         round(sum(1 for d in beat_1m if d > 0) / len(beat_1m) * 100, 1)
-        if beat_1m else None
+        if beat_1m
+        else None
     )
 
     log.debug(
         "PEAD %s: signal=%s, latest_surprise=%.1f%%, beat_consistency=%s",
-        symbol, signal, latest_surprise or 0,
+        symbol,
+        signal,
+        latest_surprise or 0,
         f"{beat_consistency:.0f}%" if beat_consistency is not None else "N/A",
     )
 
@@ -175,6 +200,7 @@ def compute_pead_drift(
 # ---------------------------------------------------------------------------
 # Screener
 # ---------------------------------------------------------------------------
+
 
 def screen_pead_candidates(
     tickers: list[str],
@@ -212,7 +238,9 @@ def screen_pead_candidates(
                 close = None
                 dates = None
 
-            result = compute_pead_drift(symbol, earnings, close, dates, min_surprise_pct)
+            result = compute_pead_drift(
+                symbol, earnings, close, dates, min_surprise_pct
+            )
             return {
                 "symbol": symbol,
                 "surprise_pct": round(float(sp), 2),

@@ -28,6 +28,7 @@ log = get_logger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> int:
     return int(max(lo, min(hi, value)))
 
@@ -66,6 +67,7 @@ def _rsi(close: pd.Series, length: int = 14):
 # ---------------------------------------------------------------------------
 # P1.4: New technical indicator helpers
 # ---------------------------------------------------------------------------
+
 
 def calc_bollinger_bands(
     close: pd.Series,
@@ -148,19 +150,19 @@ def calc_fibonacci_levels(df: pd.DataFrame, lookback: int = 100) -> dict | None:
     diff = high - low
     levels = {
         "100.0%": round(high, 2),
-        "78.6%":  round(high - 0.236 * diff, 2),
-        "61.8%":  round(high - 0.382 * diff, 2),
-        "50.0%":  round(high - 0.500 * diff, 2),
-        "38.2%":  round(high - 0.618 * diff, 2),
-        "23.6%":  round(high - 0.764 * diff, 2),
-        "0.0%":   round(low, 2),
+        "78.6%": round(high - 0.236 * diff, 2),
+        "61.8%": round(high - 0.382 * diff, 2),
+        "50.0%": round(high - 0.500 * diff, 2),
+        "38.2%": round(high - 0.618 * diff, 2),
+        "23.6%": round(high - 0.764 * diff, 2),
+        "0.0%": round(low, 2),
     }
     last_close = float(window["Close"].iloc[-1])
     trend = "up" if last_close >= (high + low) / 2 else "down"
 
     return {
         "swing_high": round(high, 2),
-        "swing_low":  round(low, 2),
+        "swing_low": round(low, 2),
         "levels": levels,
         "trend": trend,
     }
@@ -189,6 +191,7 @@ def calc_vwap(df: pd.DataFrame) -> float | None:
 # Individual factor scorers
 # ---------------------------------------------------------------------------
 
+
 def _get_weight(name: str, default: float) -> float:
     weights = cfg.factor_weights
     return float(weights.get(name, default))
@@ -200,12 +203,22 @@ def _factor_valuation(financials: dict | None) -> dict:
     pe = (financials or {}).get("peBasicExclExtraTTM")
 
     if pe is None:
-        return dict(name="Valuation (P/E)", score=50, weight=weight,
-                    label="No data", detail="P/E ratio unavailable")
+        return dict(
+            name="Valuation (P/E)",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="P/E ratio unavailable",
+        )
     pe = float(pe)
     if pe <= 0:
-        return dict(name="Valuation (P/E)", score=25, weight=weight,
-                    label="Negative earnings", detail=f"P/E={pe:.1f} — company is not yet profitable")
+        return dict(
+            name="Valuation (P/E)",
+            score=25,
+            weight=weight,
+            label="Negative earnings",
+            detail=f"P/E={pe:.1f} — company is not yet profitable",
+        )
     if pe < 15:
         s, lbl = 88, "Attractively valued"
     elif pe < 20:
@@ -218,29 +231,52 @@ def _factor_valuation(financials: dict | None) -> dict:
         s, lbl = 32, "Expensive"
     else:
         s, lbl = 16, "Very expensive"
-    return dict(name="Valuation (P/E)", score=s, weight=weight,
-                label=lbl, detail=f"Trailing P/E: {pe:.1f}×")
+    return dict(
+        name="Valuation (P/E)",
+        score=s,
+        weight=weight,
+        label=lbl,
+        detail=f"Trailing P/E: {pe:.1f}×",
+    )
 
 
 def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
     """Price position relative to SMA-50 and SMA-200."""
     weight = _get_weight("trend", 0.20)
     if close is None or price is None:
-        return dict(name="Trend (SMA)", score=50, weight=weight,
-                    label="No data", detail="Price data unavailable")
+        return dict(
+            name="Trend (SMA)",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Price data unavailable",
+        )
 
-    sma50  = _sma(close, 50)
+    sma50 = _sma(close, 50)
     sma200 = _sma(close, 200)
 
     if sma50 is None:
-        return dict(name="Trend (SMA)", score=50, weight=weight,
-                    label="Insufficient data", detail="Fewer than 50 trading days available")
+        return dict(
+            name="Trend (SMA)",
+            score=50,
+            weight=weight,
+            label="Insufficient data",
+            detail="Fewer than 50 trading days available",
+        )
 
     if sma200 is None:
         if price > sma50:
-            s, lbl, detail = 65, "Above SMA-50", f"Price ${price:.2f} > SMA-50 ${sma50:.2f}"
+            s, lbl, detail = (
+                65,
+                "Above SMA-50",
+                f"Price ${price:.2f} > SMA-50 ${sma50:.2f}",
+            )
         else:
-            s, lbl, detail = 38, "Below SMA-50", f"Price ${price:.2f} < SMA-50 ${sma50:.2f}"
+            s, lbl, detail = (
+                38,
+                "Below SMA-50",
+                f"Price ${price:.2f} < SMA-50 ${sma50:.2f}",
+            )
     elif price > sma50 and sma50 > sma200:
         s, lbl = 90, "Strong uptrend"
         detail = f"Price > SMA-50 > SMA-200 (${sma50:.2f} > ${sma200:.2f})"
@@ -264,13 +300,23 @@ def _factor_rsi(close: pd.Series | None) -> dict:
     """RSI-14 momentum / mean-reversion factor."""
     weight = _get_weight("rsi", 0.10)
     if close is None:
-        return dict(name="Momentum (RSI)", score=50, weight=weight,
-                    label="No data", detail="Price data unavailable")
+        return dict(
+            name="Momentum (RSI)",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Price data unavailable",
+        )
 
     rsi = _rsi(close)
     if rsi is None:
-        return dict(name="Momentum (RSI)", score=50, weight=weight,
-                    label="Insufficient data", detail="Fewer than 15 trading days")
+        return dict(
+            name="Momentum (RSI)",
+            score=50,
+            weight=weight,
+            label="Insufficient data",
+            detail="Fewer than 15 trading days",
+        )
 
     if rsi < 20:
         s, lbl = 15, "Extreme oversold"
@@ -289,21 +335,36 @@ def _factor_rsi(close: pd.Series | None) -> dict:
     else:
         s, lbl = 20, "Extreme overbought"
 
-    return dict(name="Momentum (RSI)", score=s, weight=weight,
-                label=lbl, detail=f"RSI-14: {rsi:.1f}")
+    return dict(
+        name="Momentum (RSI)",
+        score=s,
+        weight=weight,
+        label=lbl,
+        detail=f"RSI-14: {rsi:.1f}",
+    )
 
 
 def _factor_macd(close: pd.Series | None) -> dict:
     """MACD histogram direction (current vs previous bar)."""
     weight = _get_weight("macd", 0.10)
     if close is None:
-        return dict(name="MACD Signal", score=50, weight=weight,
-                    label="No data", detail="Price data unavailable")
+        return dict(
+            name="MACD Signal",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Price data unavailable",
+        )
 
     hist, hist_prev = _macd_histograms(close)
     if hist is None:
-        return dict(name="MACD Signal", score=50, weight=weight,
-                    label="Insufficient data", detail="Fewer than 36 trading days")
+        return dict(
+            name="MACD Signal",
+            score=50,
+            weight=weight,
+            label="Insufficient data",
+            detail="Fewer than 36 trading days",
+        )
 
     if hist > 0 and hist > hist_prev:
         s, lbl = 88, "Bullish & accelerating"
@@ -315,16 +376,26 @@ def _factor_macd(close: pd.Series | None) -> dict:
         s, lbl = 15, "Bearish & deteriorating"
 
     direction = "↑" if hist > hist_prev else "↓"
-    return dict(name="MACD Signal", score=s, weight=weight,
-                label=lbl, detail=f"Histogram: {hist:+.4f} {direction}")
+    return dict(
+        name="MACD Signal",
+        score=s,
+        weight=weight,
+        label=lbl,
+        detail=f"Histogram: {hist:+.4f} {direction}",
+    )
 
 
 def _factor_sentiment(sentiment_agg: dict | None) -> dict:
     """FinBERT aggregate news sentiment net score."""
     weight = _get_weight("sentiment", 0.15)
     if not sentiment_agg:
-        return dict(name="News Sentiment", score=50, weight=weight,
-                    label="No data", detail="Sentiment data unavailable")
+        return dict(
+            name="News Sentiment",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Sentiment data unavailable",
+        )
 
     net = float(sentiment_agg.get("net_score", 0.0))
     score = _clamp((net + 1) / 2 * 100)
@@ -336,8 +407,9 @@ def _factor_sentiment(sentiment_agg: dict | None) -> dict:
         f"🔴 {counts.get('negative', 0)} · "
         f"⚪ {counts.get('neutral', 0)}"
     )
-    return dict(name="News Sentiment", score=score, weight=weight,
-                label=signal, detail=detail)
+    return dict(
+        name="News Sentiment", score=score, weight=weight, label=signal, detail=detail
+    )
 
 
 def _factor_earnings(earnings: list) -> dict:
@@ -349,8 +421,13 @@ def _factor_earnings(earnings: list) -> dict:
         if e.get("surprisePercent") is not None
     ]
     if not surprises:
-        return dict(name="Earnings Quality", score=50, weight=weight,
-                    label="No data", detail="No EPS surprise data")
+        return dict(
+            name="Earnings Quality",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="No EPS surprise data",
+        )
 
     avg = sum(surprises) / len(surprises)
     beat_count = sum(1 for s in surprises if s > 0)
@@ -369,31 +446,41 @@ def _factor_earnings(earnings: list) -> dict:
         s, lbl = 18, "Significantly missing"
 
     detail = (
-        f"Avg surprise: {avg:+.1f}%  |  "
-        f"Beat {beat_count}/{len(surprises)} quarters"
+        f"Avg surprise: {avg:+.1f}%  |  Beat {beat_count}/{len(surprises)} quarters"
     )
-    return dict(name="Earnings Quality", score=s, weight=weight,
-                label=lbl, detail=detail)
+    return dict(
+        name="Earnings Quality", score=s, weight=weight, label=lbl, detail=detail
+    )
 
 
 def _factor_analyst(recommendations: list) -> dict:
     """Buy/Hold/Sell consensus from the most recent recommendation period."""
     weight = _get_weight("analyst", 0.10)
     if not recommendations:
-        return dict(name="Analyst Consensus", score=50, weight=weight,
-                    label="No data", detail="No analyst recommendations")
+        return dict(
+            name="Analyst Consensus",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="No analyst recommendations",
+        )
 
     latest = recommendations[0]
-    strong_buy  = int(latest.get("strongBuy", 0))
-    buy         = int(latest.get("buy", 0))
-    hold        = int(latest.get("hold", 0))
-    sell        = int(latest.get("sell", 0))
+    strong_buy = int(latest.get("strongBuy", 0))
+    buy = int(latest.get("buy", 0))
+    hold = int(latest.get("hold", 0))
+    sell = int(latest.get("sell", 0))
     strong_sell = int(latest.get("strongSell", 0))
     total = strong_buy + buy + hold + sell + strong_sell
 
     if total == 0:
-        return dict(name="Analyst Consensus", score=50, weight=weight,
-                    label="No coverage", detail="No analyst ratings available")
+        return dict(
+            name="Analyst Consensus",
+            score=50,
+            weight=weight,
+            label="No coverage",
+            detail="No analyst ratings available",
+        )
 
     bullish = strong_buy + buy
     ratio = bullish / total
@@ -413,8 +500,9 @@ def _factor_analyst(recommendations: list) -> dict:
         f"SB:{strong_buy} B:{buy} H:{hold} S:{sell} SS:{strong_sell}  |  "
         f"Bull ratio: {ratio:.0%}  |  Period: {latest.get('period', '?')}"
     )
-    return dict(name="Analyst Consensus", score=s, weight=weight,
-                label=lbl, detail=detail)
+    return dict(
+        name="Analyst Consensus", score=s, weight=weight, label=lbl, detail=detail
+    )
 
 
 def _factor_range_position(financials: dict | None, price: float | None) -> dict:
@@ -422,16 +510,26 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
     weight = _get_weight("range", 0.05)
     metrics = financials or {}
     high52 = metrics.get("52WeekHigh")
-    low52  = metrics.get("52WeekLow")
+    low52 = metrics.get("52WeekLow")
 
     if high52 is None or low52 is None or price is None:
-        return dict(name="52-Wk Strength", score=50, weight=weight,
-                    label="No data", detail="52-week range unavailable")
+        return dict(
+            name="52-Wk Strength",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="52-week range unavailable",
+        )
 
     high52, low52, price = float(high52), float(low52), float(price)
     if high52 <= low52:
-        return dict(name="52-Wk Strength", score=50, weight=weight,
-                    label="Flat range", detail="52-week high equals low")
+        return dict(
+            name="52-Wk Strength",
+            score=50,
+            weight=weight,
+            label="Flat range",
+            detail="52-week high equals low",
+        )
 
     pct = (price - low52) / (high52 - low52)
     score = _clamp(pct * 100)
@@ -451,8 +549,9 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
         f"${price:.2f}  |  Low: ${low52:.2f}  High: ${high52:.2f}  |  "
         f"Percentile: {pct:.0%}"
     )
-    return dict(name="52-Wk Strength", score=score, weight=weight,
-                label=lbl, detail=detail)
+    return dict(
+        name="52-Wk Strength", score=score, weight=weight, label=lbl, detail=detail
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -497,18 +596,30 @@ def _get_sector_pe_median(sector: str | None) -> float:
     return _SECTOR_PE_MEDIANS["default"]
 
 
-def _factor_valuation_sector_adjusted(financials: dict | None, sector: str | None) -> dict:
+def _factor_valuation_sector_adjusted(
+    financials: dict | None, sector: str | None
+) -> dict:
     """Sector-relative P/E valuation.  Compares stock P/E to sector median."""
     weight = _get_weight("valuation", 0.15)
     pe = (financials or {}).get("peBasicExclExtraTTM")
 
     if pe is None:
-        return dict(name="Valuation (P/E)", score=50, weight=weight,
-                    label="No data", detail="P/E ratio unavailable")
+        return dict(
+            name="Valuation (P/E)",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="P/E ratio unavailable",
+        )
     pe = float(pe)
     if pe <= 0:
-        return dict(name="Valuation (P/E)", score=25, weight=weight,
-                    label="Negative earnings", detail=f"P/E={pe:.1f} — company is not yet profitable")
+        return dict(
+            name="Valuation (P/E)",
+            score=25,
+            weight=weight,
+            label="Negative earnings",
+            detail=f"P/E={pe:.1f} — company is not yet profitable",
+        )
 
     sector_median = _get_sector_pe_median(sector)
     relative = pe / sector_median  # 1.0 = at sector median
@@ -541,6 +652,7 @@ def _factor_valuation_sector_adjusted(financials: dict | None, sector: str | Non
 # P5.7: Dividend Yield Factor
 # ---------------------------------------------------------------------------
 
+
 def _factor_dividend_yield(financials: dict | None) -> dict:
     """Dividend yield factor.  Higher sustainable yield = positive signal."""
     weight = _get_weight("dividend", 0.05)
@@ -549,8 +661,13 @@ def _factor_dividend_yield(financials: dict | None) -> dict:
     payout_ratio = metrics.get("payoutRatioTTM")
 
     if div_yield is None:
-        return dict(name="Dividend Yield", score=50, weight=weight,
-                    label="No data", detail="Dividend data unavailable")
+        return dict(
+            name="Dividend Yield",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Dividend data unavailable",
+        )
 
     div_yield = float(div_yield)
 
@@ -590,13 +707,19 @@ def _factor_dividend_yield(financials: dict | None) -> dict:
 # P5.2: Analyst Estimate Revision Momentum
 # ---------------------------------------------------------------------------
 
+
 def _factor_estimate_revisions(revisions: dict | None) -> dict:
     """EPS estimate revision direction as a factor signal."""
     weight = _get_weight("estimate_revision", 0.08)
 
     if not revisions or not revisions.get("available"):
-        return dict(name="Estimate Revisions", score=50, weight=weight,
-                    label="No data", detail="Estimate revision data unavailable")
+        return dict(
+            name="Estimate Revisions",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Estimate revision data unavailable",
+        )
 
     direction = revisions.get("revision_direction", "flat")
     analyst_count = revisions.get("analyst_count")
@@ -617,12 +740,15 @@ def _factor_estimate_revisions(revisions: dict | None) -> dict:
         detail_parts.append(f"Fwd EPS: ${fwd_eps:.2f}")
     detail = " | ".join(detail_parts)
 
-    return dict(name="Estimate Revisions", score=s, weight=weight, label=lbl, detail=detail)
+    return dict(
+        name="Estimate Revisions", score=s, weight=weight, label=lbl, detail=detail
+    )
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_factors(
     quote: dict,
@@ -662,6 +788,7 @@ def compute_factors(
 # ---------------------------------------------------------------------------
 # P15.3: Multi-timeframe factor support
 # ---------------------------------------------------------------------------
+
 
 def compute_factors_timeframe(
     quote: dict,
@@ -745,7 +872,10 @@ def compute_factors_timeframe(
 
     log.debug(
         "Timeframe composites — daily=%d weekly=%d monthly=%d alignment=%s",
-        daily_composite, weekly_composite, monthly_composite, alignment,
+        daily_composite,
+        weekly_composite,
+        monthly_composite,
+        alignment,
     )
 
     return {
@@ -762,6 +892,7 @@ def compute_factors_timeframe(
 # ---------------------------------------------------------------------------
 # P19.4: Earnings 8-quarter beat consistency
 # ---------------------------------------------------------------------------
+
 
 def compute_beat_consistency(earnings_history: list) -> dict:
     """Compute earnings beat consistency over up to 8 quarters.
@@ -794,10 +925,7 @@ def compute_beat_consistency(earnings_history: list) -> dict:
 
     # Use up to 8 quarters; assume list order is most-recent first
     quarters = earnings_history[:8]
-    valid = [
-        q for q in quarters
-        if q.get("surprisePercent") is not None
-    ]
+    valid = [q for q in quarters if q.get("surprisePercent") is not None]
     total = len(valid)
 
     if total == 0:
@@ -829,7 +957,10 @@ def compute_beat_consistency(earnings_history: list) -> dict:
 
     log.debug(
         "Beat consistency: %d/%d beats, streak=%d, score=%d",
-        beat_count, total, streak, consistency_score,
+        beat_count,
+        total,
+        streak,
+        consistency_score,
     )
 
     return {
@@ -845,6 +976,7 @@ def compute_beat_consistency(earnings_history: list) -> dict:
 # ---------------------------------------------------------------------------
 # P20.1: Market regime factor
 # ---------------------------------------------------------------------------
+
 
 def compute_market_regime(
     spy_close: "pd.Series | None",
@@ -904,7 +1036,11 @@ def compute_market_regime(
         regime = "Neutral"
         adj = 0
 
-    detail = " | ".join(details) if details else "Insufficient data for regime classification"
+    detail = (
+        " | ".join(details)
+        if details
+        else "Insufficient data for regime classification"
+    )
     log.debug("Market regime: %s (adj=%+d) — %s", regime, adj, detail)
 
     return {
@@ -924,11 +1060,11 @@ def composite_score(factors: list[dict]) -> int:
 
 
 COMPOSITE_LABEL = [
-    (70, "Strong Buy",   "#1a7f37"),
-    (55, "Buy",          "#2da44e"),
-    (45, "Neutral",      "#888888"),
-    (30, "Sell",         "#e05252"),
-    ( 0, "Strong Sell",  "#cf2929"),
+    (70, "Strong Buy", "#1a7f37"),
+    (55, "Buy", "#2da44e"),
+    (45, "Neutral", "#888888"),
+    (30, "Sell", "#e05252"),
+    (0, "Strong Sell", "#cf2929"),
 ]
 
 
@@ -943,6 +1079,7 @@ def composite_label_color(score: int) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 # 21.3: Dividend Growth scoring helper
 # ---------------------------------------------------------------------------
+
 
 def compute_dividend_growth_score(financials: dict | None) -> dict:
     """Score dividend quality for dividend growth investing (21.3).
@@ -1053,6 +1190,7 @@ def compute_dividend_growth_score(financials: dict | None) -> dict:
 # 21.4: Graham Number / Deep Value
 # ---------------------------------------------------------------------------
 
+
 def compute_graham_number(eps: float, bvps: float) -> float | None:
     """Compute Benjamin Graham's intrinsic value estimate.
 
@@ -1078,20 +1216,27 @@ def _factor_graham_number(financials: dict | None, price: float | None) -> dict:
     Computes margin of safety = (Graham Number - Price) / Graham Number.
     A positive margin means the stock trades below Graham's intrinsic value.
     """
-    weight = _get_weight("graham", 0.0)  # informational by default; add to cfg to enable
+    weight = _get_weight(
+        "graham", 0.0
+    )  # informational by default; add to cfg to enable
     metrics = financials or {}
     eps = metrics.get("epsTTM") or metrics.get("epsBasicExclExtraItemsTTM")
-    bvps = (
-        metrics.get("bookValuePerShareAnnual")
-        or metrics.get("bookValuePerShareQuarterly")
+    bvps = metrics.get("bookValuePerShareAnnual") or metrics.get(
+        "bookValuePerShareQuarterly"
     )
 
     graham = compute_graham_number(eps, bvps) if eps and bvps else None
 
     if graham is None or price is None or price <= 0:
-        return dict(name="Graham Number", score=50, weight=weight,
-                    label="No data", detail="EPS or BVPS unavailable",
-                    graham_number=None, margin_of_safety=None)
+        return dict(
+            name="Graham Number",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="EPS or BVPS unavailable",
+            graham_number=None,
+            margin_of_safety=None,
+        )
 
     margin = (graham - price) / graham
     detail = f"Graham Number: ${graham:.2f} | Price: ${price:.2f} | MoS: {margin:.0%}"
@@ -1107,15 +1252,21 @@ def _factor_graham_number(financials: dict | None, price: float | None) -> dict:
     else:
         s, lbl = 18, "Significant premium to Graham Number"
 
-    return dict(name="Graham Number", score=s, weight=weight,
-                label=lbl, detail=detail,
-                graham_number=graham,
-                margin_of_safety=round(margin, 4))
+    return dict(
+        name="Graham Number",
+        score=s,
+        weight=weight,
+        label=lbl,
+        detail=detail,
+        graham_number=graham,
+        margin_of_safety=round(margin, 4),
+    )
 
 
 # ---------------------------------------------------------------------------
 # 21.6: Piotroski F-Score
 # ---------------------------------------------------------------------------
+
 
 def compute_piotroski_fscore(financials: dict | None) -> dict:
     """Compute the Piotroski F-Score (0–9) from available fundamentals (21.6).
@@ -1160,7 +1311,7 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
         return float(v) if v is not None else None
 
     roa_ttm = _get("roaTTM")
-    roa_ann = _get("roaRfy") or _get("roa5Y")       # prior-year proxy
+    roa_ann = _get("roaRfy") or _get("roa5Y")  # prior-year proxy
     cfo_ttm = _get("cashFlowTTM") or _get("freeCashFlowTTM")
     # Leverage
     debt_eq_ann = _get("totalDebt/equityAnnual")
@@ -1177,10 +1328,14 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
     signals: dict[str, int | None] = {}
 
     # F1: ROA > 0
-    signals["F1_roa_positive"] = (1 if roa_ttm > 0 else 0) if roa_ttm is not None else None
+    signals["F1_roa_positive"] = (
+        (1 if roa_ttm > 0 else 0) if roa_ttm is not None else None
+    )
 
     # F2: Operating Cash Flow > 0
-    signals["F2_cfo_positive"] = (1 if cfo_ttm > 0 else 0) if cfo_ttm is not None else None
+    signals["F2_cfo_positive"] = (
+        (1 if cfo_ttm > 0 else 0) if cfo_ttm is not None else None
+    )
 
     # F3: ΔROA > 0
     if roa_ttm is not None and roa_ann is not None:
@@ -1189,7 +1344,12 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
         signals["F3_delta_roa"] = None
 
     # F4: Accruals < 0 (CFO > ROA implies cash-backed earnings)
-    if cfo_ttm is not None and roa_ttm is not None and assets is not None and assets > 0:
+    if (
+        cfo_ttm is not None
+        and roa_ttm is not None
+        and assets is not None
+        and assets > 0
+    ):
         cfo_to_assets = cfo_ttm / assets
         accruals = roa_ttm - cfo_to_assets
         signals["F4_low_accruals"] = 1 if accruals < 0 else 0
@@ -1242,7 +1402,9 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
     if available_count < 9:
         detail += f" ({9 - available_count} signals require additional data)"
 
-    log.debug("Piotroski F-Score: %d/%d — %s", total_score, available_count, quality_label)
+    log.debug(
+        "Piotroski F-Score: %d/%d — %s", total_score, available_count, quality_label
+    )
 
     return {
         "total_score": total_score,
@@ -1255,16 +1417,23 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
 
 def _factor_piotroski(financials: dict | None) -> dict:
     """Piotroski F-Score as a factor dimension (21.6)."""
-    weight = _get_weight("piotroski", 0.0)  # informational by default; add to cfg to enable
+    weight = _get_weight(
+        "piotroski", 0.0
+    )  # informational by default; add to cfg to enable
     result = compute_piotroski_fscore(financials)
     total = result["total_score"]
     avail = result["available_signals"]
     quality_label = result["quality_label"]
 
     if avail == 0:
-        return dict(name="Piotroski F-Score", score=50, weight=weight,
-                    label="No data", detail="Fundamental data unavailable",
-                    fscore=None)
+        return dict(
+            name="Piotroski F-Score",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Fundamental data unavailable",
+            fscore=None,
+        )
 
     # Map 0-9 score to 0-100 factor score
     raw_pct = total / max(avail, 1)
@@ -1272,9 +1441,14 @@ def _factor_piotroski(financials: dict | None) -> dict:
 
     detail = f"F-Score: {total}/{avail} | {quality_label}"
 
-    return dict(name="Piotroski F-Score", score=score, weight=weight,
-                label=quality_label, detail=detail,
-                fscore=total)
+    return dict(
+        name="Piotroski F-Score",
+        score=score,
+        weight=weight,
+        label=quality_label,
+        detail=detail,
+        fscore=total,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1284,34 +1458,34 @@ def _factor_piotroski(financials: dict | None) -> dict:
 # Per-regime factor weight adjustment presets (additive deltas to defaults)
 _REGIME_WEIGHT_DELTAS: dict[str, dict[str, float]] = {
     "Strong Bull": {
-        "trend":    +0.05,
-        "rsi":      +0.02,
+        "trend": +0.05,
+        "rsi": +0.02,
         "valuation": -0.02,
     },
     "Bull": {
-        "trend":    +0.02,
+        "trend": +0.02,
     },
     "Neutral": {},
     "Bear": {
         "valuation": +0.03,
-        "earnings":  +0.03,
-        "trend":    -0.03,
+        "earnings": +0.03,
+        "trend": -0.03,
     },
     "Strong Bear": {
         "valuation": +0.05,
-        "earnings":  +0.05,
-        "trend":    -0.05,
-        "rsi":      -0.02,
+        "earnings": +0.05,
+        "trend": -0.05,
+        "rsi": -0.02,
     },
     "Stagflation": {
-        "valuation": +0.06,   # value stocks outperform
-        "dividend":  +0.04,   # income important in stagflation
-        "trend":    -0.04,
-        "rsi":      -0.02,
+        "valuation": +0.06,  # value stocks outperform
+        "dividend": +0.04,  # income important in stagflation
+        "trend": -0.04,
+        "rsi": -0.02,
     },
     "Recovery": {
-        "trend":    +0.04,
-        "rsi":      +0.03,
+        "trend": +0.04,
+        "rsi": +0.03,
         "earnings": +0.03,
         "valuation": -0.02,
     },
@@ -1373,7 +1547,9 @@ def compute_market_regime_extended(
     vix_very_high = vix is not None and vix > 35
     vix_declining = vix is not None and vix_prev is not None and vix < vix_prev * 0.85
     yield_inverted = yield_spread is not None and yield_spread < -0.10
-    recent_sma_cross = days_since_sma_cross is not None and 0 < days_since_sma_cross <= 60
+    recent_sma_cross = (
+        days_since_sma_cross is not None and 0 < days_since_sma_cross <= 60
+    )
 
     if vix_very_high and spy_above_200 is False:
         regime, adj = "Strong Bear", -10
@@ -1414,7 +1590,9 @@ def compute_market_regime_extended(
     }
 
 
-def get_regime_factor_weights(regime: str, base_weights: dict[str, float] | None = None) -> dict[str, float]:
+def get_regime_factor_weights(
+    regime: str, base_weights: dict[str, float] | None = None
+) -> dict[str, float]:
     """Return factor weights adjusted for the given macro regime (21.7).
 
     Parameters
@@ -1449,26 +1627,36 @@ def get_regime_factor_weights(regime: str, base_weights: dict[str, float] | None
 # Monthly seasonal bias in composite score points (−5 to +5)
 # Sources: January Effect, Sell in May, September Effect, Santa Claus rally
 _MONTHLY_SEASONAL_BIAS: dict[int, int] = {
-    1:  +3,   # January Effect — small-cap strength, new money inflows
-    2:  +1,   # Post-January momentum continuation
-    3:   0,   # Neutral
-    4:  +2,   # Spring rally — pre-earnings momentum
-    5:  -2,   # "Sell in May" seasonal weakness begins
-    6:  -1,   # Pre-summer lull
-    7:  +1,   # Summer rally — light vol, upward drift
-    8:  -1,   # Late summer weakness
-    9:  -3,   # September: historically the weakest month of the year
-    10: +1,   # October recovery after September weakness
-    11: +2,   # Pre-holiday buying, Q4 momentum
-    12: +3,   # Santa Claus rally, year-end positioning, tax-loss reversal
+    1: +3,  # January Effect — small-cap strength, new money inflows
+    2: +1,  # Post-January momentum continuation
+    3: 0,  # Neutral
+    4: +2,  # Spring rally — pre-earnings momentum
+    5: -2,  # "Sell in May" seasonal weakness begins
+    6: -1,  # Pre-summer lull
+    7: +1,  # Summer rally — light vol, upward drift
+    8: -1,  # Late summer weakness
+    9: -3,  # September: historically the weakest month of the year
+    10: +1,  # October recovery after September weakness
+    11: +2,  # Pre-holiday buying, Q4 momentum
+    12: +3,  # Santa Claus rally, year-end positioning, tax-loss reversal
 }
 
 # Event-level biases for specific calendar windows
 _CALENDAR_EVENTS: list[dict] = [
-    {"name": "Tax-Loss Harvesting Season",    "months": [11, 12], "days_start": 15, "bias": -1},
-    {"name": "Santa Claus Rally Window",      "months": [12],     "days_start": 24, "bias": +2},
-    {"name": "January Effect Window",         "months": [1],      "days_start": 1,  "bias": +2},
-    {"name": "Pre-Earnings Season Momentum",  "months": [1, 4, 7, 10], "days_start": 1, "bias": +1},
+    {
+        "name": "Tax-Loss Harvesting Season",
+        "months": [11, 12],
+        "days_start": 15,
+        "bias": -1,
+    },
+    {"name": "Santa Claus Rally Window", "months": [12], "days_start": 24, "bias": +2},
+    {"name": "January Effect Window", "months": [1], "days_start": 1, "bias": +2},
+    {
+        "name": "Pre-Earnings Season Momentum",
+        "months": [1, 4, 7, 10],
+        "days_start": 1,
+        "bias": +1,
+    },
 ]
 
 
@@ -1491,6 +1679,7 @@ def compute_seasonal_bias(month: int | None = None, day: int | None = None) -> d
         detail          – human-readable description
     """
     import datetime
+
     if month is None or day is None:
         today = datetime.date.today()
         month = month or today.month
@@ -1510,9 +1699,18 @@ def compute_seasonal_bias(month: int | None = None, day: int | None = None) -> d
     total_bias = base_bias + event_bias
 
     month_names = {
-        1: "January", 2: "February", 3: "March", 4: "April",
-        5: "May", 6: "June", 7: "July", 8: "August",
-        9: "September", 10: "October", 11: "November", 12: "December",
+        1: "January",
+        2: "February",
+        3: "March",
+        4: "April",
+        5: "May",
+        6: "June",
+        7: "July",
+        8: "August",
+        9: "September",
+        10: "October",
+        11: "November",
+        12: "December",
     }
     month_name = month_names.get(month, str(month))
 

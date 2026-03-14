@@ -18,6 +18,7 @@ Usage:
     or:
     python server.py
 """
+
 from __future__ import annotations
 
 import os
@@ -37,9 +38,7 @@ try:
     _HAS_FASTAPI = True
 except ImportError:
     _HAS_FASTAPI = False
-    raise ImportError(
-        "FastAPI not installed. Run: pip install fastapi uvicorn"
-    )
+    raise ImportError("FastAPI not installed. Run: pip install fastapi uvicorn")
 
 from log_setup import get_logger  # noqa: E402
 
@@ -111,7 +110,9 @@ class ScreenRequest(BaseModel):
 
 class PortfolioRequest(BaseModel):
     tickers: list[str] = Field(..., description="Portfolio tickers")
-    weights: list[float] | None = Field(None, description="Portfolio weights (sum to 1)")
+    weights: list[float] | None = Field(
+        None, description="Portfolio weights (sum to 1)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -125,14 +126,19 @@ _api_error = None
 def _get_api():
     global _api_instance, _api_error
     if _api_error:
-        raise HTTPException(status_code=503, detail=f"API initialization failed: {_api_error}")
+        raise HTTPException(
+            status_code=503, detail=f"API initialization failed: {_api_error}"
+        )
     if _api_instance is None:
         try:
             from api import FinnhubAPI
+
             _api_instance = FinnhubAPI()
         except Exception as exc:
             _api_error = str(exc)
-            raise HTTPException(status_code=503, detail=f"API initialization failed: {exc}")
+            raise HTTPException(
+                status_code=503, detail=f"API initialization failed: {exc}"
+            )
     return _api_instance
 
 
@@ -294,7 +300,9 @@ async def portfolio(
         if req.weights:
             weights = req.weights
             if len(weights) != n:
-                raise HTTPException(status_code=400, detail="weights length must match tickers")
+                raise HTTPException(
+                    status_code=400, detail="weights length must match tickers"
+                )
         else:
             weights = [1 / n] * n
 
@@ -307,7 +315,9 @@ async def portfolio(
             "weights": result["weights"],
             "stats": result["stats"],
             "portfolio_beta": result["portfolio_beta"],
-            "correlation": corr.to_dict() if corr is not None and not corr.empty else {},
+            "correlation": corr.to_dict()
+            if corr is not None and not corr.empty
+            else {},
         }
     except HTTPException:
         raise

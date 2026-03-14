@@ -1,4 +1,5 @@
 """Tests for api.py — mocks the Finnhub SDK to test all API wrappers (P4.4)."""
+
 from __future__ import annotations
 
 import os
@@ -14,12 +15,14 @@ os.environ.setdefault("FINNHUB_API_KEY", "test_key_ci")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_api():
     """Return a FinnhubAPI instance with a mocked finnhub client."""
     with patch("finnhub.Client") as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
         from api import FinnhubAPI
+
         api = FinnhubAPI.__new__(FinnhubAPI)
         api.client = mock_client
         return api, mock_client
@@ -29,10 +32,12 @@ def _make_api():
 # Initialisation
 # ---------------------------------------------------------------------------
 
+
 def test_init_requires_api_key(monkeypatch):
     monkeypatch.setenv("FINNHUB_API_KEY", "")
     with patch("finnhub.Client"):
         import api as _api_mod
+
         with pytest.raises(ValueError, match="FINNHUB_API_KEY"):
             _api_mod.FinnhubAPI()
 
@@ -42,6 +47,7 @@ def test_init_succeeds_with_key(monkeypatch):
     with patch("finnhub.Client") as mock_cls:
         mock_cls.return_value = MagicMock()
         from api import FinnhubAPI
+
         api = FinnhubAPI()
         assert api.client is not None
 
@@ -50,9 +56,17 @@ def test_init_succeeds_with_key(monkeypatch):
 # get_quote
 # ---------------------------------------------------------------------------
 
+
 def test_get_quote_returns_dict():
     api, client = _make_api()
-    client.quote.return_value = {"c": 150.0, "d": 1.5, "dp": 1.0, "h": 152.0, "l": 148.0, "pc": 148.5}
+    client.quote.return_value = {
+        "c": 150.0,
+        "d": 1.5,
+        "dp": 1.0,
+        "h": 152.0,
+        "l": 148.0,
+        "pc": 148.5,
+    }
     with patch.object(api, "_cached", side_effect=lambda key, fn, **kw: fn()):
         result = api.get_quote("AAPL")
     assert result["c"] == 150.0
@@ -78,9 +92,13 @@ def test_get_quote_raises_on_none():
 # get_profile
 # ---------------------------------------------------------------------------
 
+
 def test_get_profile_returns_dict():
     api, client = _make_api()
-    client.company_profile2.return_value = {"name": "Apple Inc.", "finnhubIndustry": "Technology"}
+    client.company_profile2.return_value = {
+        "name": "Apple Inc.",
+        "finnhubIndustry": "Technology",
+    }
     with patch.object(api, "_cached", side_effect=lambda key, fn, **kw: fn()):
         result = api.get_profile("AAPL")
     assert result["name"] == "Apple Inc."
@@ -97,6 +115,7 @@ def test_get_profile_raises_on_empty():
 # ---------------------------------------------------------------------------
 # get_financials
 # ---------------------------------------------------------------------------
+
 
 def test_get_financials_extracts_metric():
     api, client = _make_api()
@@ -119,6 +138,7 @@ def test_get_financials_raises_on_missing_metric():
 # ---------------------------------------------------------------------------
 # get_daily
 # ---------------------------------------------------------------------------
+
 
 def test_get_daily_returns_candle_data():
     api, client = _make_api()
@@ -149,6 +169,7 @@ def test_get_daily_raises_on_bad_status():
 # get_news
 # ---------------------------------------------------------------------------
 
+
 def test_get_news_returns_list():
     api, client = _make_api()
     client.company_news.return_value = [
@@ -172,10 +193,18 @@ def test_get_news_returns_empty_on_none():
 # get_recommendations
 # ---------------------------------------------------------------------------
 
+
 def test_get_recommendations_returns_list():
     api, client = _make_api()
     client.recommendation_trends.return_value = [
-        {"period": "2024-01", "strongBuy": 20, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1}
+        {
+            "period": "2024-01",
+            "strongBuy": 20,
+            "buy": 10,
+            "hold": 5,
+            "sell": 2,
+            "strongSell": 1,
+        }
     ]
     with patch.object(api, "_cached", side_effect=lambda key, fn, **kw: fn()):
         result = api.get_recommendations("AAPL")
@@ -185,6 +214,7 @@ def test_get_recommendations_returns_list():
 # ---------------------------------------------------------------------------
 # get_earnings
 # ---------------------------------------------------------------------------
+
 
 def test_get_earnings_returns_list():
     api, client = _make_api()
@@ -200,6 +230,7 @@ def test_get_earnings_returns_list():
 # get_peers
 # ---------------------------------------------------------------------------
 
+
 def test_get_peers_returns_list():
     api, client = _make_api()
     client.company_peers.return_value = ["MSFT", "GOOGL", "AMZN"]
@@ -211,6 +242,7 @@ def test_get_peers_returns_list():
 # ---------------------------------------------------------------------------
 # get_option_metrics — no data
 # ---------------------------------------------------------------------------
+
 
 def test_get_option_metrics_unavailable():
     api, client = _make_api()
@@ -230,6 +262,7 @@ def test_get_option_metrics_no_chain():
 # Caching
 # ---------------------------------------------------------------------------
 
+
 def test_cached_stores_and_retrieves(tmp_path):
     """Verify _cached() calls fn once and returns the same value on repeat."""
     api, client = _make_api()
@@ -241,6 +274,7 @@ def test_cached_stores_and_retrieves(tmp_path):
         return {"value": 42}
 
     from cache import DiskCache
+
     with patch("api._disk_cache", DiskCache(cache_dir=str(tmp_path))):
         r1 = api._cached("test:key", _fn, ttl=60)
         r2 = api._cached("test:key", _fn, ttl=60)

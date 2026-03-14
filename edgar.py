@@ -6,6 +6,7 @@ covering key risks, revenue drivers, guidance language, and red flags.
 Usage:
     from edgar import get_recent_filings, fetch_filing_text, stream_filing_analysis
 """
+
 from __future__ import annotations
 
 import os
@@ -150,11 +151,21 @@ def fetch_filing_text(filing: dict, max_chars: int = 50_000) -> str:
 def _strip_html(html: str) -> str:
     """Remove HTML tags and decode basic entities."""
     # Remove script/style blocks
-    html = re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(
+        r"<(script|style)[^>]*>.*?</(script|style)>",
+        " ",
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
     # Remove all tags
     text = re.sub(r"<[^>]+>", " ", html)
     # Decode entities
-    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+    )
     return text
 
 
@@ -321,7 +332,9 @@ def extract_business_sections(filing_text: str) -> dict:
         section_text = filing_text[start:end].strip()
         result["business_section"] = section_text[:4000]
         result["available"] = True
-        log.debug("Extracted BUSINESS section: %d chars", len(result["business_section"]))
+        log.debug(
+            "Extracted BUSINESS section: %d chars", len(result["business_section"])
+        )
 
     # --- Extract RISK FACTORS section (Item 1A) ---
     m1a = _ITEM1A_RE.search(filing_text)
@@ -333,6 +346,8 @@ def extract_business_sections(filing_text: str) -> dict:
         section_text = filing_text[start:end].strip()
         result["risk_factors"] = section_text[:3000]
         result["available"] = True
-        log.debug("Extracted RISK FACTORS section: %d chars", len(result["risk_factors"]))
+        log.debug(
+            "Extracted RISK FACTORS section: %d chars", len(result["risk_factors"])
+        )
 
     return result

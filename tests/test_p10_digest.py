@@ -1,4 +1,5 @@
 """Tests for P10.1: Automated Daily Watchlist Digest."""
+
 from __future__ import annotations
 
 from pathlib import Path

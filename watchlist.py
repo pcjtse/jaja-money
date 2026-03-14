@@ -3,6 +3,7 @@
 Persists a JSON file at ~/.jaja-money/watchlist.json.
 Each entry stores ticker, name, last price, factor score, and timestamp.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,14 +62,16 @@ def add_to_watchlist(
     symbol = symbol.upper()
     # Remove existing entry for this symbol
     items = [e for e in items if e["symbol"] != symbol]
-    items.append({
-        "symbol": symbol,
-        "name": name,
-        "price": price,
-        "factor_score": factor_score,
-        "risk_score": risk_score,
-        "added_at": int(time.time()),
-    })
+    items.append(
+        {
+            "symbol": symbol,
+            "name": name,
+            "price": price,
+            "factor_score": factor_score,
+            "risk_score": risk_score,
+            "added_at": int(time.time()),
+        }
+    )
     _save(items)
     log.info("Added %s to watchlist", symbol)
 

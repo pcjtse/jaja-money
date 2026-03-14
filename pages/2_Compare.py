@@ -8,7 +8,9 @@ from comparison import compare_tickers, comparison_dataframe
 
 st.set_page_config(page_title="Compare Stocks", page_icon="⚖️", layout="wide")
 st.title("Multi-Stock Comparison")
-st.caption("Compare up to 5 stocks side-by-side across factor scores, risk, and key metrics.")
+st.caption(
+    "Compare up to 5 stocks side-by-side across factor scores, risk, and key metrics."
+)
 
 # --- Input ---
 raw_input = st.text_input(
@@ -68,17 +70,21 @@ if st.button("Run Comparison", type="primary"):
     fig_bar = go.Figure()
     for r in results:
         color = r.get("composite_color", "#888")
-        fig_bar.add_trace(go.Bar(
-            name=r["symbol"],
-            x=[r["symbol"]],
-            y=[r["factor_score"]],
-            marker_color=color,
-            text=[f"{r['factor_score']}/100<br>{r['composite_label']}"],
-            textposition="outside",
-        ))
+        fig_bar.add_trace(
+            go.Bar(
+                name=r["symbol"],
+                x=[r["symbol"]],
+                y=[r["factor_score"]],
+                marker_color=color,
+                text=[f"{r['factor_score']}/100<br>{r['composite_label']}"],
+                textposition="outside",
+            )
+        )
     fig_bar.update_layout(
-        height=350, yaxis=dict(range=[0, 110]),
-        showlegend=False, margin=dict(t=10),
+        height=350,
+        yaxis=dict(range=[0, 110]),
+        showlegend=False,
+        margin=dict(t=10),
         title="Composite Factor Score",
     )
     st.plotly_chart(fig_bar, use_container_width=True)
@@ -94,21 +100,24 @@ if st.button("Run Comparison", type="primary"):
     for i, r in enumerate(results):
         scores = [f["score"] for f in r["factors"]]
         scores_closed = scores + [scores[0]]
-        fig_radar.add_trace(go.Scatterpolar(
-            r=scores_closed,
-            theta=factor_names_closed,
-            fill="toself",
-            fillcolor=f"rgba({int(colors[i][1:3], 16)},{int(colors[i][3:5], 16)},{int(colors[i][5:], 16)},0.1)",
-            line=dict(color=colors[i], width=2),
-            name=r["symbol"],
-        ))
+        fig_radar.add_trace(
+            go.Scatterpolar(
+                r=scores_closed,
+                theta=factor_names_closed,
+                fill="toself",
+                fillcolor=f"rgba({int(colors[i][1:3], 16)},{int(colors[i][3:5], 16)},{int(colors[i][5:], 16)},0.1)",
+                line=dict(color=colors[i], width=2),
+                name=r["symbol"],
+            )
+        )
 
     fig_radar.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=9)),
             angularaxis=dict(tickfont=dict(size=10)),
         ),
-        showlegend=True, height=450,
+        showlegend=True,
+        height=450,
     )
     st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -117,17 +126,21 @@ if st.button("Run Comparison", type="primary"):
     fig_risk = go.Figure()
     for r in results:
         risk_color = r.get("risk_color", "#888")
-        fig_risk.add_trace(go.Bar(
-            name=r["symbol"],
-            x=[r["symbol"]],
-            y=[r["risk_score"]],
-            marker_color=risk_color,
-            text=[f"{r['risk_score']}/100<br>{r['risk_level']}"],
-            textposition="outside",
-        ))
+        fig_risk.add_trace(
+            go.Bar(
+                name=r["symbol"],
+                x=[r["symbol"]],
+                y=[r["risk_score"]],
+                marker_color=risk_color,
+                text=[f"{r['risk_score']}/100<br>{r['risk_level']}"],
+                textposition="outside",
+            )
+        )
     fig_risk.update_layout(
-        height=350, yaxis=dict(range=[0, 120]),
-        showlegend=False, margin=dict(t=10),
+        height=350,
+        yaxis=dict(range=[0, 120]),
+        showlegend=False,
+        margin=dict(t=10),
         title="Risk Score (higher = more risk)",
     )
     st.plotly_chart(fig_risk, use_container_width=True)
@@ -139,10 +152,18 @@ if st.button("Run Comparison", type="primary"):
         with col:
             st.markdown(f"### {r['symbol']}")
             st.caption(r["name"][:30])
-            st.metric("Price", f"${r['price']:,.2f}" if r["price"] else "N/A",
-                      f"{r['change_pct']:+.2f}%" if r.get("change_pct") is not None else None)
+            st.metric(
+                "Price",
+                f"${r['price']:,.2f}" if r["price"] else "N/A",
+                f"{r['change_pct']:+.2f}%" if r.get("change_pct") is not None else None,
+            )
             st.metric("P/E", f"{r['pe']:.1f}×" if r.get("pe") else "N/A")
             st.metric("Sector", r.get("sector", "N/A"))
             st.metric("Volatility", f"{r['hv']:.1f}%" if r.get("hv") else "N/A")
-            st.metric("Drawdown", f"{r['drawdown_pct']:.1f}%" if r.get("drawdown_pct") is not None else "N/A")
+            st.metric(
+                "Drawdown",
+                f"{r['drawdown_pct']:.1f}%"
+                if r.get("drawdown_pct") is not None
+                else "N/A",
+            )
             st.metric("Risk Flags", r.get("flag_count", 0))

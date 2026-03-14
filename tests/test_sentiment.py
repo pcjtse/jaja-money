@@ -12,6 +12,7 @@ from sentiment import aggregate_sentiment
 # aggregate_sentiment — counts
 # ---------------------------------------------------------------------------
 
+
 def test_aggregate_empty_list():
     result = aggregate_sentiment([])
     assert result["total"] == 0
@@ -49,10 +50,9 @@ def test_aggregate_all_neutral():
 
 def test_aggregate_mixed_bullish():
     # 6 positive, 1 negative → net = 5/7 ≈ 0.71 > 0.2 → Bullish
-    scores = (
-        [{"label": "positive", "score": 0.9}] * 6
-        + [{"label": "negative", "score": 0.8}] * 1
-    )
+    scores = [{"label": "positive", "score": 0.9}] * 6 + [
+        {"label": "negative", "score": 0.8}
+    ] * 1
     result = aggregate_sentiment(scores)
     assert result["signal"] == "Bullish"
     assert result["net_score"] == pytest.approx(5 / 7)
@@ -60,10 +60,9 @@ def test_aggregate_mixed_bullish():
 
 def test_aggregate_mixed_bearish():
     # 1 positive, 6 negative → net = -5/7 ≈ -0.71 < -0.2 → Bearish
-    scores = (
-        [{"label": "positive", "score": 0.8}] * 1
-        + [{"label": "negative", "score": 0.9}] * 6
-    )
+    scores = [{"label": "positive", "score": 0.8}] * 1 + [
+        {"label": "negative", "score": 0.9}
+    ] * 6
     result = aggregate_sentiment(scores)
     assert result["signal"] == "Bearish"
     assert result["net_score"] == pytest.approx(-5 / 7)
@@ -85,6 +84,7 @@ def test_aggregate_near_neutral_boundary():
 # Label validation — unknown labels must fall back to "neutral"
 # ---------------------------------------------------------------------------
 
+
 def test_aggregate_unknown_label_falls_back():
     scores = [{"label": "unknown_label", "score": 0.9}]
     result = aggregate_sentiment(scores)
@@ -102,7 +102,7 @@ def test_aggregate_mixed_with_unknown_label():
     result = aggregate_sentiment(scores)
     assert result["counts"]["positive"] == 1
     assert result["counts"]["negative"] == 1
-    assert result["counts"]["neutral"] == 1   # GARBAGE → neutral
+    assert result["counts"]["neutral"] == 1  # GARBAGE → neutral
     assert set(result["counts"].keys()) == {"positive", "negative", "neutral"}
 
 
@@ -116,6 +116,7 @@ def test_aggregate_uppercase_labels_normalised():
 # ---------------------------------------------------------------------------
 # net_score bounds
 # ---------------------------------------------------------------------------
+
 
 def test_net_score_single_positive():
     result = aggregate_sentiment([{"label": "positive", "score": 0.9}])

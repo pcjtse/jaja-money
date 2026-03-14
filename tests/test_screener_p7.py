@@ -5,6 +5,7 @@ Covers:
 - P7.2 OR-logic filter groups (apply_filters, _evaluate_group, _evaluate_filter)
 - P7.3 Screen templates (save/load/delete), CSV export, sentiment warning
 """
+
 from screener import (
     apply_filters,
     load_sp500,
@@ -21,6 +22,7 @@ from screener import (
 # ---------------------------------------------------------------------------
 # P7.1: Universe loaders
 # ---------------------------------------------------------------------------
+
 
 def test_load_sp500_returns_list():
     tickers = load_sp500()
@@ -78,12 +80,20 @@ def test_load_sp500_contains_known_ticker():
 # ---------------------------------------------------------------------------
 
 RESULT_HIGH = {
-    "factor_score": 80, "risk_score": 25, "pe_ratio": 20.0,
-    "rsi": 55.0, "trend": "uptrend", "market_cap_b": 500.0,
+    "factor_score": 80,
+    "risk_score": 25,
+    "pe_ratio": 20.0,
+    "rsi": 55.0,
+    "trend": "uptrend",
+    "market_cap_b": 500.0,
 }
 RESULT_LOW = {
-    "factor_score": 30, "risk_score": 75, "pe_ratio": 80.0,
-    "rsi": 28.0, "trend": "downtrend", "market_cap_b": 1.0,
+    "factor_score": 30,
+    "risk_score": 75,
+    "pe_ratio": 80.0,
+    "rsi": 28.0,
+    "trend": "downtrend",
+    "market_cap_b": 1.0,
 }
 
 
@@ -113,7 +123,11 @@ def test_apply_filters_multiple_and_all_pass():
 def test_apply_filters_multiple_and_one_fails():
     filters = [
         {"dimension": "factor_score", "operator": ">=", "value": 60},
-        {"dimension": "risk_score", "operator": "<=", "value": 20},  # risk=25 > 20 → fail
+        {
+            "dimension": "risk_score",
+            "operator": "<=",
+            "value": 20,
+        },  # risk=25 > 20 → fail
     ]
     assert apply_filters(RESULT_HIGH, filters) is False
 
@@ -155,13 +169,22 @@ def test_apply_filters_none_value_fails():
 # P7.2: OR-logic filter groups
 # ---------------------------------------------------------------------------
 
+
 def test_apply_filters_or_group_one_passes():
     """OR group where only one sub-filter passes → overall passes."""
     or_group = {
         "connector": "OR",
         "filters": [
-            {"dimension": "factor_score", "operator": ">=", "value": 75},   # RESULT_HIGH passes
-            {"dimension": "risk_score", "operator": "<=", "value": 10},     # fails (risk=25)
+            {
+                "dimension": "factor_score",
+                "operator": ">=",
+                "value": 75,
+            },  # RESULT_HIGH passes
+            {
+                "dimension": "risk_score",
+                "operator": "<=",
+                "value": 10,
+            },  # fails (risk=25)
         ],
     }
     assert apply_filters(RESULT_HIGH, [or_group]) is True
@@ -172,8 +195,16 @@ def test_apply_filters_or_group_none_passes():
     or_group = {
         "connector": "OR",
         "filters": [
-            {"dimension": "factor_score", "operator": ">=", "value": 90},   # fails (80 < 90)
-            {"dimension": "risk_score", "operator": "<=", "value": 10},     # fails (25 > 10)
+            {
+                "dimension": "factor_score",
+                "operator": ">=",
+                "value": 90,
+            },  # fails (80 < 90)
+            {
+                "dimension": "risk_score",
+                "operator": "<=",
+                "value": 10,
+            },  # fails (25 > 10)
         ],
     }
     assert apply_filters(RESULT_HIGH, [or_group]) is False
@@ -206,7 +237,11 @@ def test_apply_filters_mixed_and_or():
 
 def test_apply_filters_and_or_combo_fails_on_and():
     """AND filter fails → overall result fails even if OR group passes."""
-    and_filter = {"dimension": "factor_score", "operator": ">=", "value": 90}  # 80 < 90 → fail
+    and_filter = {
+        "dimension": "factor_score",
+        "operator": ">=",
+        "value": 90,
+    }  # 80 < 90 → fail
     or_group = {
         "connector": "OR",
         "filters": [
@@ -226,10 +261,18 @@ def test_apply_filters_empty_or_group_passes():
 # P7.3: Screen templates
 # ---------------------------------------------------------------------------
 
+
 def test_save_and_load_template(tmp_path, monkeypatch):
     """Save a template and retrieve it."""
     monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
-    filters = [{"dimension": "factor_score", "operator": ">=", "value": 70, "label": "High factor"}]
+    filters = [
+        {
+            "dimension": "factor_score",
+            "operator": ">=",
+            "value": 70,
+            "label": "High factor",
+        }
+    ]
     save_screen_template("my_screen", filters)
     templates = load_screen_templates()
     assert "my_screen" in templates
@@ -258,8 +301,12 @@ def test_delete_nonexistent_template_no_crash(tmp_path, monkeypatch):
 
 def test_save_multiple_templates(tmp_path, monkeypatch):
     monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
-    save_screen_template("screen_a", [{"dimension": "factor_score", "operator": ">=", "value": 60}])
-    save_screen_template("screen_b", [{"dimension": "risk_score", "operator": "<=", "value": 50}])
+    save_screen_template(
+        "screen_a", [{"dimension": "factor_score", "operator": ">=", "value": 60}]
+    )
+    save_screen_template(
+        "screen_b", [{"dimension": "risk_score", "operator": "<=", "value": 50}]
+    )
     templates = load_screen_templates()
     assert "screen_a" in templates
     assert "screen_b" in templates
@@ -267,8 +314,12 @@ def test_save_multiple_templates(tmp_path, monkeypatch):
 
 def test_overwrite_existing_template(tmp_path, monkeypatch):
     monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
-    save_screen_template("screen", [{"dimension": "factor_score", "operator": ">=", "value": 60}])
-    save_screen_template("screen", [{"dimension": "factor_score", "operator": ">=", "value": 80}])
+    save_screen_template(
+        "screen", [{"dimension": "factor_score", "operator": ">=", "value": 60}]
+    )
+    save_screen_template(
+        "screen", [{"dimension": "factor_score", "operator": ">=", "value": 80}]
+    )
     templates = load_screen_templates()
     assert templates["screen"][0]["value"] == 80
 
@@ -277,27 +328,52 @@ def test_overwrite_existing_template(tmp_path, monkeypatch):
 # P7.3: CSV export
 # ---------------------------------------------------------------------------
 
+
 def test_results_to_csv_empty():
     assert results_to_csv([]) == ""
 
 
 def test_results_to_csv_header_present():
-    results = [{"symbol": "AAPL", "name": "Apple Inc.", "sector": "Technology",
-                "price": 150.0, "factor_score": 75, "composite_label": "Buy",
-                "risk_score": 30, "risk_level": "Moderate",
-                "pe_ratio": 28.5, "market_cap_b": 2500.0, "rsi": 54.0,
-                "trend": "uptrend", "flag_count": 1}]
+    results = [
+        {
+            "symbol": "AAPL",
+            "name": "Apple Inc.",
+            "sector": "Technology",
+            "price": 150.0,
+            "factor_score": 75,
+            "composite_label": "Buy",
+            "risk_score": 30,
+            "risk_level": "Moderate",
+            "pe_ratio": 28.5,
+            "market_cap_b": 2500.0,
+            "rsi": 54.0,
+            "trend": "uptrend",
+            "flag_count": 1,
+        }
+    ]
     csv = results_to_csv(results)
     assert "symbol" in csv
     assert "factor_score" in csv
 
 
 def test_results_to_csv_data_row():
-    results = [{"symbol": "MSFT", "name": "Microsoft", "sector": "Technology",
-                "price": 380.0, "factor_score": 80, "composite_label": "Strong Buy",
-                "risk_score": 25, "risk_level": "Low",
-                "pe_ratio": 35.0, "market_cap_b": 2800.0, "rsi": 58.0,
-                "trend": "uptrend", "flag_count": 0}]
+    results = [
+        {
+            "symbol": "MSFT",
+            "name": "Microsoft",
+            "sector": "Technology",
+            "price": 380.0,
+            "factor_score": 80,
+            "composite_label": "Strong Buy",
+            "risk_score": 25,
+            "risk_level": "Low",
+            "pe_ratio": 35.0,
+            "market_cap_b": 2800.0,
+            "rsi": 58.0,
+            "trend": "uptrend",
+            "flag_count": 0,
+        }
+    ]
     csv = results_to_csv(results)
     assert "MSFT" in csv
     assert "80" in csv
@@ -305,14 +381,36 @@ def test_results_to_csv_data_row():
 
 def test_results_to_csv_multiple_rows():
     results = [
-        {"symbol": "AAPL", "name": "Apple", "sector": "Tech", "price": 150.0,
-         "factor_score": 75, "composite_label": "Buy", "risk_score": 30,
-         "risk_level": "Moderate", "pe_ratio": 28.0, "market_cap_b": 2500.0,
-         "rsi": 55.0, "trend": "uptrend", "flag_count": 0},
-        {"symbol": "NVDA", "name": "NVIDIA", "sector": "Tech", "price": 800.0,
-         "factor_score": 85, "composite_label": "Strong Buy", "risk_score": 40,
-         "risk_level": "Elevated", "pe_ratio": 60.0, "market_cap_b": 2000.0,
-         "rsi": 68.0, "trend": "uptrend", "flag_count": 1},
+        {
+            "symbol": "AAPL",
+            "name": "Apple",
+            "sector": "Tech",
+            "price": 150.0,
+            "factor_score": 75,
+            "composite_label": "Buy",
+            "risk_score": 30,
+            "risk_level": "Moderate",
+            "pe_ratio": 28.0,
+            "market_cap_b": 2500.0,
+            "rsi": 55.0,
+            "trend": "uptrend",
+            "flag_count": 0,
+        },
+        {
+            "symbol": "NVDA",
+            "name": "NVIDIA",
+            "sector": "Tech",
+            "price": 800.0,
+            "factor_score": 85,
+            "composite_label": "Strong Buy",
+            "risk_score": 40,
+            "risk_level": "Elevated",
+            "pe_ratio": 60.0,
+            "market_cap_b": 2000.0,
+            "rsi": 68.0,
+            "trend": "uptrend",
+            "flag_count": 1,
+        },
     ]
     csv = results_to_csv(results)
     assert "AAPL" in csv
@@ -320,10 +418,23 @@ def test_results_to_csv_multiple_rows():
 
 
 def test_results_to_csv_newlines():
-    results = [{"symbol": "TEST", "name": "Test Co", "sector": "Other",
-                "price": 50.0, "factor_score": 60, "composite_label": "Neutral",
-                "risk_score": 45, "risk_level": "Elevated", "pe_ratio": 15.0,
-                "market_cap_b": 5.0, "rsi": 50.0, "trend": "sideways", "flag_count": 0}]
+    results = [
+        {
+            "symbol": "TEST",
+            "name": "Test Co",
+            "sector": "Other",
+            "price": 50.0,
+            "factor_score": 60,
+            "composite_label": "Neutral",
+            "risk_score": 45,
+            "risk_level": "Elevated",
+            "pe_ratio": 15.0,
+            "market_cap_b": 5.0,
+            "rsi": 50.0,
+            "trend": "sideways",
+            "flag_count": 0,
+        }
+    ]
     csv = results_to_csv(results)
     lines = csv.strip().split("\n")
     assert len(lines) == 2  # header + 1 data row
@@ -332,6 +443,7 @@ def test_results_to_csv_newlines():
 # ---------------------------------------------------------------------------
 # P7.3: Sentiment warning
 # ---------------------------------------------------------------------------
+
 
 def test_sentiment_warning_returns_string():
     msg = sentiment_skipped_warning()
