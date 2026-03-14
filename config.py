@@ -4,6 +4,7 @@ Loads config.yaml from the project root, resolves ~ paths, and exposes
 a singleton Config object. Falls back to built-in defaults if the YAML
 file is missing or malformed.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,8 +50,16 @@ _DEFAULTS: dict[str, Any] = {
     },
     "screener": {
         "default_universe": [
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
-            "META", "TSLA", "JPM", "JNJ", "V",
+            "AAPL",
+            "MSFT",
+            "GOOGL",
+            "AMZN",
+            "NVDA",
+            "META",
+            "TSLA",
+            "JPM",
+            "JNJ",
+            "V",
         ]
     },
     "sectors": {
@@ -94,6 +103,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def _load_yaml() -> dict:
     try:
         import yaml  # optional dep
+
         with open(_CONFIG_FILE, "r") as f:
             data = yaml.safe_load(f) or {}
         return data
@@ -134,8 +144,13 @@ class _Config:
 
     @property
     def cache_dir(self) -> Path:
-        return Path(self.get("cache", "disk_cache_dir",
-                             default=str(Path.home() / ".jaja-money" / "cache")))
+        return Path(
+            self.get(
+                "cache",
+                "disk_cache_dir",
+                default=str(Path.home() / ".jaja-money" / "cache"),
+            )
+        )
 
     @property
     def use_disk_cache(self) -> bool:
@@ -147,8 +162,11 @@ class _Config:
 
     @property
     def screener_universe(self) -> list[str]:
-        return self.get("screener", "default_universe",
-                        default=_DEFAULTS["screener"]["default_universe"])
+        return self.get(
+            "screener",
+            "default_universe",
+            default=_DEFAULTS["screener"]["default_universe"],
+        )
 
     @property
     def sector_etfs(self) -> list[dict]:
@@ -173,6 +191,11 @@ class _Config:
     @property
     def log_backup_count(self) -> int:
         return int(self.get("logging", "backup_count", default=3))
+
+    @property
+    def ai_backend(self) -> str:
+        """AI backend to use: 'sdk' (default) or 'cli'."""
+        return str(self.get("ai_backend", default="sdk"))
 
 
 def _build_config() -> _Config:

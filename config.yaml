@@ -102,3 +102,8 @@ cache_backend:
 api_server:
   port: 8080
   api_key: ""  # Set JAJA_API_KEY env var instead for security
+
+# P9.6: AI backend selection
+# "sdk"  — use the anthropic Python SDK (requires ANTHROPIC_API_KEY)
+# "cli"  — use the Claude Code CLI binary (uses your existing claude session/credentials)
+ai_backend: "sdk"

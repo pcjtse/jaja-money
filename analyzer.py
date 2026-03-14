@@ -10,22 +10,142 @@ Enhanced with:
 - Backtest narrative (P9.3)
 - Sector rotation narrative (P9.4)
 - Chat history trimming (P9.5)
+- Claude Code CLI backend — no API key required (P9.6)
 """
+
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
+import shutil
+import subprocess
 from typing import Generator
-import anthropic
 from dotenv import load_dotenv
 
 from cache import get_cache
+from config import cfg
 from log_setup import get_logger
 
 load_dotenv()
 
 log = get_logger(__name__)
 _disk_cache = get_cache()
+
+# ---------------------------------------------------------------------------
+# P9.6: AI backend selection — SDK vs Claude Code CLI
+# ---------------------------------------------------------------------------
+
+_AI_BACKEND = cfg.ai_backend  # "sdk" or "cli"
+
+# Only import anthropic when the SDK backend is active
+if _AI_BACKEND == "sdk":
+    try:
+        import anthropic as _anthropic_module
+    except ImportError:
+        _anthropic_module = None  # type: ignore[assignment]
+else:
+    _anthropic_module = None  # type: ignore[assignment]
+
+
+def _cli_available() -> bool:
+    """Return True if the `claude` CLI binary is on PATH."""
+    return shutil.which("claude") is not None
+
+
+class ClaudeCodeCLIBackend:
+    """Thin wrapper around the `claude` CLI that mimics the anthropic SDK streaming interface.
+
+    Shells out to ``claude --print --output-format stream-json`` and yields text
+    chunks so that all existing streaming generators work without modification.
+    """
+
+    def stream(
+        self,
+        *,
+        model: str,
+        max_tokens: int,
+        messages: list[dict],
+        system: str | None = None,
+        **_kwargs,
+    ) -> "Generator[str, None, None]":
+        """Stream text chunks from the Claude Code CLI.
+
+        Parameters
+        ----------
+        model     : model name (passed to ``--model``)
+        max_tokens: max tokens (passed to ``--max-tokens``)
+        messages  : list of ``{"role": ..., "content": ...}`` dicts;
+                    only the last user message is sent via stdin
+        system    : optional system prompt (passed to ``--system-prompt``)
+        """
+        if not _cli_available():
+            raise RuntimeError(
+                "Claude Code CLI (`claude`) not found on PATH. "
+                "Install it or switch to ai_backend: sdk in config.yaml."
+            )
+
+        # Combine all message content into a single user prompt
+        combined = "\n\n".join(m["content"] for m in messages if m.get("content"))
+
+        cmd = [
+            "claude",
+            "--print",
+            "--output-format",
+            "stream-json",
+            "--model",
+            model,
+            "--max-tokens",
+            str(max_tokens),
+        ]
+        if system:
+            cmd += ["--system-prompt", system]
+
+        log.debug("ClaudeCodeCLIBackend cmd: %s", " ".join(cmd[:6]))
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+
+        stdout, stderr = proc.communicate(input=combined)
+
+        if proc.returncode != 0:
+            err = stderr.strip() if stderr else "unknown error"
+            raise RuntimeError(f"Claude CLI exited with code {proc.returncode}: {err}")
+
+        # Parse stream-json lines and yield text chunks
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                chunk = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            # stream-json emits {"type": "text", "text": "..."} chunks
+            chunk_type = chunk.get("type")
+            if chunk_type == "text":
+                text = chunk.get("text", "")
+                if text:
+                    yield text
+            elif chunk_type == "content_block_delta":
+                delta = chunk.get("delta", {})
+                if delta.get("type") == "text_delta":
+                    text = delta.get("text", "")
+                    if text:
+                        yield text
+            elif chunk_type == "result":
+                # Final result block — extract full text if no incremental chunks
+                result_text = chunk.get("result", "")
+                if result_text:
+                    yield result_text
+
 
 # ---------------------------------------------------------------------------
 # P9.1: Claude response caching helpers
@@ -57,6 +177,7 @@ def _store_cached_response(cache_key: str, text: str) -> None:
 # P9.2: Adaptive system prompts — stock type classification
 # ---------------------------------------------------------------------------
 
+
 def classify_stock_type(
     sector: str | None,
     pe_ratio: float | None,
@@ -79,12 +200,24 @@ def classify_stock_type(
         return "Defensive"
 
     # Cyclical sectors
-    cyclical_sectors = {"energy", "materials", "industrials", "consumer discretionary", "financials"}
+    cyclical_sectors = {
+        "energy",
+        "materials",
+        "industrials",
+        "consumer discretionary",
+        "financials",
+    }
     if any(c in sector_lower for c in cyclical_sectors):
         return "Cyclical"
 
     # Growth (high P/E or tech/biotech sectors)
-    growth_sectors = {"technology", "software", "semiconductor", "biotech", "communication"}
+    growth_sectors = {
+        "technology",
+        "software",
+        "semiconductor",
+        "biotech",
+        "communication",
+    }
     if any(g in sector_lower for g in growth_sectors):
         return "Growth"
     if pe_ratio is not None and pe_ratio > 30:
@@ -201,14 +334,95 @@ Keep the tone professional and the report digestible for a sophisticated \
 but non-specialist reader.\
 """
 
-def _get_client() -> anthropic.Anthropic:
+
+def _get_client():
+    """Return the active AI backend client.
+
+    Returns a ``ClaudeCodeCLIBackend`` when ``ai_backend: cli`` is configured
+    and the ``claude`` binary is available; otherwise returns an
+    ``anthropic.Anthropic`` SDK client (requires ``ANTHROPIC_API_KEY``).
+    """
+    if _AI_BACKEND == "cli":
+        if _cli_available():
+            log.debug("Using Claude Code CLI backend")
+            return ClaudeCodeCLIBackend()
+        log.warning(
+            "ai_backend=cli but `claude` binary not found on PATH; "
+            "falling back to SDK backend"
+        )
+
+    # SDK backend
+    if _anthropic_module is None:
+        raise ImportError(
+            "The `anthropic` package is not installed. "
+            "Run `pip install anthropic` or switch to ai_backend: cli in config.yaml."
+        )
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your_anthropic_api_key_here":
         raise ValueError(
             "ANTHROPIC_API_KEY not set. "
-            "Add your Anthropic API key to .env."
+            "Add your Anthropic API key to .env, "
+            "or set ai_backend: cli in config.yaml to use the Claude Code CLI instead."
         )
-    return anthropic.Anthropic(api_key=api_key)
+    return _anthropic_module.Anthropic(api_key=api_key)
+
+
+def _iter_text_stream(
+    client,
+    *,
+    model: str,
+    max_tokens: int,
+    messages: list[dict],
+    system: str | None = None,
+    **kwargs,
+) -> "Generator[str, None, None]":
+    """Yield text chunks from either the SDK or CLI backend.
+
+    This is the unified streaming entry point for all analysis functions.
+    Extra kwargs (e.g. ``thinking``) are forwarded to the SDK and silently
+    ignored by the CLI backend.
+    """
+    if isinstance(client, ClaudeCodeCLIBackend):
+        yield from client.stream(
+            model=model,
+            max_tokens=max_tokens,
+            messages=messages,
+            system=system,
+        )
+    else:
+        stream_kwargs: dict = dict(
+            model=model, max_tokens=max_tokens, messages=messages, **kwargs
+        )
+        if system is not None:
+            stream_kwargs["system"] = system
+        with client.messages.stream(**stream_kwargs) as stream:
+            for text in stream.text_stream:
+                yield text
+
+
+def _create_text(
+    client,
+    *,
+    model: str,
+    max_tokens: int,
+    messages: list[dict],
+    system: str | None = None,
+    **kwargs,
+) -> str:
+    """Return the full text response from either the SDK or CLI backend (non-streaming)."""
+    if isinstance(client, ClaudeCodeCLIBackend):
+        return "".join(
+            client.stream(
+                model=model, max_tokens=max_tokens, messages=messages, system=system
+            )
+        )
+    create_kwargs: dict = dict(
+        model=model, max_tokens=max_tokens, messages=messages, **kwargs
+    )
+    if system is not None:
+        create_kwargs["system"] = system
+    response = client.messages.create(**create_kwargs)
+    return response.content[0].text
 
 
 def build_data_prompt(
@@ -229,7 +443,9 @@ def build_data_prompt(
     lines.append("### Real-Time Quote")
     lines.append(f"- Current Price: ${quote.get('c', 'N/A')}")
     lines.append(f"- Day Change: {quote.get('d', 'N/A')} ({quote.get('dp', 'N/A')}%)")
-    lines.append(f"- Day High / Low: ${quote.get('h', 'N/A')} / ${quote.get('l', 'N/A')}")
+    lines.append(
+        f"- Day High / Low: ${quote.get('h', 'N/A')} / ${quote.get('l', 'N/A')}"
+    )
     lines.append(f"- Previous Close: ${quote.get('pc', 'N/A')}\n")
 
     # --- Company Profile ---
@@ -350,20 +566,16 @@ def stream_fundamental_analysis(
 
     log.info("Starting fundamental analysis stream (stock_type=%s)", stock_type)
     full_text = ""
-    with client.messages.stream(
+    for chunk in _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=4096,
         thinking={"type": "adaptive"},
         system=system,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                full_text += event.delta.text
-                yield event.delta.text
+    ):
+        full_text += chunk
+        yield chunk
 
     # P9.1: Cache the full response
     if use_cache and full_text:
@@ -420,19 +632,13 @@ def stream_sentiment_themes(
 
     prompt = "\n".join(lines)
     log.info("Starting sentiment themes stream for %s", symbol)
-
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1024,
         system=_SENTIMENT_THEMES_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 _PORTFOLIO_MEMO_SYSTEM = """\
@@ -482,10 +688,16 @@ def stream_portfolio_memo(
         f"{int(sum(f['score'] * f['weight'] for f in factors) / sum(f['weight'] for f in factors)) if factors else 'N/A'}"
         f"/100 ({suggestion.get('action')} signal)",
         f"- Risk score: {risk.get('risk_score')}/100 ({risk.get('risk_level')})",
-        (f"- Annualised volatility (20d): {risk['hv']:.1f}%"
-         if risk.get("hv") is not None else "- Annualised volatility: N/A"),
-        (f"- Drawdown from 52-wk high: {risk['drawdown_pct']:.1f}%"
-         if risk.get("drawdown_pct") is not None else "- Drawdown: N/A"),
+        (
+            f"- Annualised volatility (20d): {risk['hv']:.1f}%"
+            if risk.get("hv") is not None
+            else "- Annualised volatility: N/A"
+        ),
+        (
+            f"- Drawdown from 52-wk high: {risk['drawdown_pct']:.1f}%"
+            if risk.get("drawdown_pct") is not None
+            else "- Drawdown: N/A"
+        ),
         "",
         "### Rule-Based Suggestion",
         f"- Action: {suggestion.get('action')}",
@@ -521,18 +733,13 @@ def stream_portfolio_memo(
         lines.append(f"- {r}")
 
     log.info("Starting portfolio memo stream for %s", symbol)
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1500,
         system=_PORTFOLIO_MEMO_SYSTEM,
         messages=[{"role": "user", "content": "\n".join(lines)}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -566,18 +773,13 @@ def stream_transcript_analysis(symbol: str, transcript_text: str):
 {transcript_text[:8000]}  <!-- truncated to fit context if needed -->
 """
     log.info("Starting transcript analysis stream for %s", symbol)
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=2000,
         system=_TRANSCRIPT_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -613,18 +815,13 @@ forward-looking statements, guidance, and cautionary language:
 {transcript_text[:6000]}
 """
     log.info("Starting forward-looking analysis stream for %s", symbol)
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1500,
         system=_FORWARD_LOOKING_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -663,17 +860,16 @@ def parse_nl_screen(query: str) -> dict:
     Returns dict with 'filters' list and 'description' string.
     Raises ValueError if Claude can't be reached.
     """
-    import json as _json
     client = _get_client()
 
     log.info("Parsing NL screen query: %s", query[:100])
-    response = client.messages.create(
+    text = _create_text(
+        client,
         model="claude-opus-4-6",
         max_tokens=512,
         system=_NL_SCREENER_SYSTEM,
         messages=[{"role": "user", "content": query}],
-    )
-    text = response.content[0].text.strip()
+    ).strip()
 
     # Extract JSON from the response
     start = text.find("{")
@@ -682,8 +878,8 @@ def parse_nl_screen(query: str) -> dict:
         return {"filters": [], "description": query}
 
     try:
-        return _json.loads(text[start:end])
-    except _json.JSONDecodeError:
+        return json.loads(text[start:end])
+    except json.JSONDecodeError:
         return {"filters": [], "description": query}
 
 
@@ -692,9 +888,9 @@ def stream_screener_summary(results: list[dict], query: str):
     client = _get_client()
 
     rows = "\n".join(
-        f"- {r['symbol']}: factor={r.get('factor_score','?')}/100, "
-        f"risk={r.get('risk_score','?')}/100, "
-        f"price=${r.get('price','?')}, sector={r.get('sector','?')}"
+        f"- {r['symbol']}: factor={r.get('factor_score', '?')}/100, "
+        f"risk={r.get('risk_score', '?')}/100, "
+        f"price=${r.get('price', '?')}, sector={r.get('sector', '?')}"
         for r in results[:10]
     )
 
@@ -709,17 +905,12 @@ Briefly explain why these stocks match the criteria and highlight 2-3 of the mos
 compelling candidates with specific reasons. Be concise and actionable."""
 
     log.info("Streaming screener summary for query: %s", query[:60])
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=800,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -757,24 +948,31 @@ def build_chat_system_prompt(
 
     pe = (financials or {}).get("peBasicExclExtraTTM")
     mc = (financials or {}).get("marketCapitalization")
-    mc_str = f"${float(mc)/1000:.1f}B" if mc and float(mc) < 1_000_000 else \
-             f"${float(mc)/1_000_000:.1f}T" if mc else "N/A"
+    mc_str = (
+        f"${float(mc) / 1000:.1f}B"
+        if mc and float(mc) < 1_000_000
+        else f"${float(mc) / 1_000_000:.1f}T"
+        if mc
+        else "N/A"
+    )
 
     factor_lines = "\n".join(
-        f"  - {f['name']}: {f['score']}/100 ({f['label']})"
-        for f in factors
+        f"  - {f['name']}: {f['score']}/100 ({f['label']})" for f in factors
     )
-    flag_lines = "\n".join(
-        f"  - [{fl['severity'].upper()}] {fl['title']}"
-        for fl in risk.get("flags", [])
-    ) or "  - None"
+    flag_lines = (
+        "\n".join(
+            f"  - [{fl['severity'].upper()}] {fl['title']}"
+            for fl in risk.get("flags", [])
+        )
+        or "  - None"
+    )
 
     data_context = f"""
 **Company:** {name} ({symbol}) | Sector: {sector}
 **Price:** ${price:,.2f} ({change_pct:+.2f}% today)
 **Market Cap:** {mc_str} | P/E: {f"{pe:.1f}x" if pe else "N/A"}
 **Composite Factor Score:** {composite_score}/100 — {composite_label}
-**Risk Score:** {risk.get('risk_score')}/100 — {risk.get('risk_level')}
+**Risk Score:** {risk.get("risk_score")}/100 — {risk.get("risk_level")}
 **Factor Breakdown:**
 {factor_lines}
 **Active Risk Flags:**
@@ -799,18 +997,13 @@ def stream_chat_response(
     messages = conversation_history + [{"role": "user", "content": user_message}]
 
     log.info("Chat response stream (turns=%d)", len(messages))
-    with client.messages.stream(
+    yield from _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1024,
         system=system_prompt,
         messages=messages,
-    ) as stream:
-        for event in stream:
-            if (
-                event.type == "content_block_delta"
-                and event.delta.type == "text_delta"
-            ):
-                yield event.delta.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -872,17 +1065,15 @@ Analyze this strategy comprehensively."""
 
     log.info("Starting backtest narrative stream for %s", result.symbol)
     full_text = ""
-    with client.messages.stream(
+    for chunk in _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1200,
         system=_BACKTEST_NARRATIVE_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (event.type == "content_block_delta" and
-                    event.delta.type == "text_delta"):
-                full_text += event.delta.text
-                yield event.delta.text
+    ):
+        full_text += chunk
+        yield chunk
 
     if use_cache and full_text:
         _store_cached_response(_compute_context_hash(prompt), full_text)
@@ -915,7 +1106,7 @@ def stream_sector_rotation_narrative(sector_data: list[dict], use_cache: bool = 
         f"- {d['ticker']} ({d['name']}): score={d.get('score', 'N/A')}, "
         f"phase={d.get('phase', 'N/A')}, "
         f"1M={d['perf_1m']:+.1f}%, 3M={d['perf_3m']:+.1f}%, RSI={d.get('rsi', 'N/A')}"
-        if d.get('perf_1m') is not None and d.get('perf_3m') is not None
+        if d.get("perf_1m") is not None and d.get("perf_3m") is not None
         else f"- {d['ticker']} ({d['name']}): data unavailable"
         for d in sector_data
     )
@@ -936,17 +1127,15 @@ Provide a comprehensive sector rotation analysis with actionable insights."""
 
     log.info("Starting sector rotation narrative stream")
     full_text = ""
-    with client.messages.stream(
+    for chunk in _iter_text_stream(
+        client,
         model="claude-opus-4-6",
         max_tokens=1200,
         system=_SECTOR_ROTATION_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for event in stream:
-            if (event.type == "content_block_delta" and
-                    event.delta.type == "text_delta"):
-                full_text += event.delta.text
-                yield event.delta.text
+    ):
+        full_text += chunk
+        yield chunk
 
     if use_cache and full_text:
         _store_cached_response(_compute_context_hash(prompt), full_text)
@@ -988,9 +1177,10 @@ def trim_chat_history(
 
     # Drop oldest turns (preserve pairs: user+assistant) from front
     trimmed = list(conversation_history)
-    while trimmed and _estimate_tokens(
-        " ".join(m.get("content", "") for m in trimmed)
-    ) > budget:
+    while (
+        trimmed
+        and _estimate_tokens(" ".join(m.get("content", "") for m in trimmed)) > budget
+    ):
         # Drop oldest user+assistant pair
         if len(trimmed) >= 2:
             trimmed = trimmed[2:]
@@ -999,8 +1189,10 @@ def trim_chat_history(
 
     log.info(
         "Chat history trimmed: %d → %d messages (est. tokens: %d → %d)",
-        len(conversation_history), len(trimmed),
-        total_tokens, _estimate_tokens(" ".join(m.get("content", "") for m in trimmed)),
+        len(conversation_history),
+        len(trimmed),
+        total_tokens,
+        _estimate_tokens(" ".join(m.get("content", "") for m in trimmed)),
     )
     return trimmed, True
 
@@ -1027,19 +1219,19 @@ def stream_peer_comparison_narrative(
     peer_tickers = peer_data.get("peer_tickers", [])
 
     context = f"""Stock: {symbol}
-Peer group: {', '.join(peer_tickers) if peer_tickers else 'N/A'}
+Peer group: {", ".join(peer_tickers) if peer_tickers else "N/A"}
 
 Target metrics:
-- P/E Ratio: {target_metrics.get('pe', 'N/A')}
-- ROE: {target_metrics.get('roe', 'N/A')}%
-- Revenue Growth (YoY): {target_metrics.get('revenue_growth', 'N/A')}%
-- Gross Margin: {target_metrics.get('gross_margin', 'N/A')}%
+- P/E Ratio: {target_metrics.get("pe", "N/A")}
+- ROE: {target_metrics.get("roe", "N/A")}%
+- Revenue Growth (YoY): {target_metrics.get("revenue_growth", "N/A")}%
+- Gross Margin: {target_metrics.get("gross_margin", "N/A")}%
 
 Percentile ranks vs. peers (0 = lowest, 100 = highest):
-- P/E: {percentiles.get('pe', 'N/A')}th percentile
-- ROE: {percentiles.get('roe', 'N/A')}th percentile
-- Revenue Growth: {percentiles.get('revenue_growth', 'N/A')}th percentile
-- Gross Margin: {percentiles.get('gross_margin', 'N/A')}th percentile"""
+- P/E: {percentiles.get("pe", "N/A")}th percentile
+- ROE: {percentiles.get("roe", "N/A")}th percentile
+- Revenue Growth: {percentiles.get("revenue_growth", "N/A")}th percentile
+- Gross Margin: {percentiles.get("gross_margin", "N/A")}th percentile"""
 
     cache_key = _compute_context_hash(context)
     if use_cache:
@@ -1062,15 +1254,15 @@ Be specific and data-driven."""
 
     collected = []
     try:
-        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        with client.messages.stream(
+        client = _get_client()
+        for text in _iter_text_stream(
+            client,
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            for text in stream.text_stream:
-                collected.append(text)
-                yield text
+        ):
+            collected.append(text)
+            yield text
     except Exception as exc:
         error_msg = f"\n*Peer narrative error: {exc}*"
         yield error_msg
@@ -1101,7 +1293,8 @@ def compute_earnings_beat_stats(earnings_history: list[dict]) -> dict:
         return {}
 
     valid = [
-        e for e in earnings_history
+        e
+        for e in earnings_history
         if e.get("actual") is not None and e.get("estimate") is not None
     ]
     if not valid:
@@ -1116,8 +1309,12 @@ def compute_earnings_beat_stats(earnings_history: list[dict]) -> dict:
     # Trend: compare last 4 vs prior 4 beat rates
     trend = "flat"
     if len(valid) >= 8:
-        recent_beats = sum(1 for e in valid[:4] if (e.get("actual") or 0) > (e.get("estimate") or 0))
-        prior_beats = sum(1 for e in valid[4:8] if (e.get("actual") or 0) > (e.get("estimate") or 0))
+        recent_beats = sum(
+            1 for e in valid[:4] if (e.get("actual") or 0) > (e.get("estimate") or 0)
+        )
+        prior_beats = sum(
+            1 for e in valid[4:8] if (e.get("actual") or 0) > (e.get("estimate") or 0)
+        )
         if recent_beats > prior_beats:
             trend = "improving"
         elif recent_beats < prior_beats:
@@ -1143,10 +1340,10 @@ def stream_earnings_prediction(
         return
 
     context = f"""Stock: {symbol}
-Historical earnings beat rate: {beat_stats.get('beat_rate', 'N/A')}% ({beat_stats.get('beats', 0)}/{beat_stats.get('total', 0)} quarters)
-Average EPS surprise: {beat_stats.get('avg_surprise_pct', 'N/A')}%
-Beat trend (last 4 vs prior 4): {beat_stats.get('trend', 'N/A')}
-Next earnings date: {next_earnings_date or 'Unknown'}"""
+Historical earnings beat rate: {beat_stats.get("beat_rate", "N/A")}% ({beat_stats.get("beats", 0)}/{beat_stats.get("total", 0)} quarters)
+Average EPS surprise: {beat_stats.get("avg_surprise_pct", "N/A")}%
+Beat trend (last 4 vs prior 4): {beat_stats.get("trend", "N/A")}
+Next earnings date: {next_earnings_date or "Unknown"}"""
 
     prompt = f"""{context}
 
@@ -1158,14 +1355,13 @@ Based on this earnings history, provide:
 Keep it concise (3-4 sentences). Be calibrated — don't guarantee outcomes."""
 
     try:
-        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        with client.messages.stream(
+        client = _get_client()
+        yield from _iter_text_stream(
+            client,
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            for text in stream.text_stream:
-                yield text
+        )
     except Exception as exc:
         yield f"\n*Earnings prediction error: {exc}*"
 
@@ -1224,14 +1420,14 @@ Use the current price and financial metrics provided. Be specific with dollar va
     collected: list[str] = []
     try:
         client = _get_client()
-        with client.messages.stream(
+        for text in _iter_text_stream(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            for text in stream.text_stream:
-                collected.append(text)
-                yield text
+        ):
+            collected.append(text)
+            yield text
     except Exception as exc:
         log.warning("Price target stream error for %s: %s", symbol, exc)
         yield f"\n*Price target error: {exc}*"
@@ -1256,8 +1452,6 @@ def parse_price_targets(text: str, current_price: float) -> dict:
     dict with keys: bull, base, bear, rationale,
     bull_upside_pct, base_upside_pct, bear_downside_pct
     """
-    import re
-
     result: dict = {
         "bull": None,
         "base": None,
@@ -1286,7 +1480,7 @@ def parse_price_targets(text: str, current_price: float) -> dict:
         elif line.upper().startswith("BEAR_TARGET:"):
             result["bear"] = _parse_price(line)
         elif line.upper().startswith("RATIONALE:"):
-            result["rationale"] = line[len("RATIONALE:"):].strip()
+            result["rationale"] = line[len("RATIONALE:") :].strip()
 
     # Compute percentage changes vs. current price
     if current_price and current_price > 0:
@@ -1355,15 +1549,15 @@ def stream_transcript_qa(
     collected: list[str] = []
     try:
         client = _get_client()
-        with client.messages.stream(
+        for text in _iter_text_stream(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=600,
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}],
-        ) as stream:
-            for text in stream.text_stream:
-                collected.append(text)
-                yield text
+        ):
+            collected.append(text)
+            yield text
     except Exception as exc:
         log.warning("Transcript Q&A stream error for %s: %s", symbol, exc)
         yield f"\n*Transcript Q&A error: {exc}*"
@@ -1429,14 +1623,14 @@ Be specific and quote actual names, percentages, or descriptions from the text w
     collected: list[str] = []
     try:
         client = _get_client()
-        with client.messages.stream(
+        for text in _iter_text_stream(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            for text in stream.text_stream:
-                collected.append(text)
-                yield text
+        ):
+            collected.append(text)
+            yield text
     except Exception as exc:
         log.warning("Supply chain stream error for %s: %s", symbol, exc)
         yield f"\n*Supply chain analysis error: {exc}*"
@@ -1568,23 +1762,23 @@ Output only the rated lines, nothing else."""
 
     try:
         client = _get_client()
-        response = client.messages.create(
+        raw = _create_text(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
-        )
-        raw = response.content[0].text.strip()
+        ).strip()
     except Exception as exc:
         log.warning("News impact scoring error: %s", exc)
         return _default_result()
 
     # Parse "index: level" lines
-    import re as _re
-
     ratings: dict[int, str] = {}
     for line in raw.splitlines():
         line = line.strip()
-        match = _re.match(r"^(\d+)\s*:\s*(High|Medium|Low|Negligible)", line, _re.IGNORECASE)
+        match = re.match(
+            r"^(\d+)\s*:\s*(High|Medium|Low|Negligible)", line, re.IGNORECASE
+        )
         if match:
             idx = int(match.group(1))
             level = match.group(2).capitalize()
@@ -1607,5 +1801,9 @@ Output only the rated lines, nothing else."""
         )
 
     _disk_cache.set(f"news_impact:{cache_key}", results, ttl=_NEWS_IMPACT_TTL)
-    log.info("News impact scores cached for %d headlines (key=%s)", len(results), cache_key[:12])
+    log.info(
+        "News impact scores cached for %d headlines (key=%s)",
+        len(results),
+        cache_key[:12],
+    )
     return results
