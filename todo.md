@@ -1214,3 +1214,125 @@ Automatically email a formatted performance summary every Monday morning.
 - [x] Schedule via APScheduler (Monday 07:00 local); reuse SMTP config from `config.yaml`
 
 **Files:** `digest.py`, `history.py`, `config.yaml`
+
+---
+
+## Priority 21 — New Investment Strategies
+
+### 21.1 Pairs Trading / Statistical Arbitrage
+Track the price spread between two correlated stocks (e.g. MSFT/GOOGL). Signal when the z-score diverges beyond ±2σ.
+
+- [x] Compute rolling correlation and spread between two user-selected tickers
+- [x] Calculate z-score of the spread and trigger long/short signals at ±2σ
+- [x] Backtest the strategy over a configurable lookback window
+- [x] Display spread chart with entry/exit markers and P&L curve
+
+**Files:** new `pairs.py`
+
+---
+
+### 21.2 Post-Earnings Announcement Drift (PEAD)
+Buy after large positive earnings surprises, short after large misses. Earnings data is already fetched via `get_earnings()`.
+
+- [x] Flag stocks with surprise % above/below configurable thresholds (e.g. ±5%)
+- [x] Track 1-week, 2-week, and 1-month post-earnings price drift
+- [x] Add PEAD signal as an optional overlay in the backtesting engine
+- [x] Surface top PEAD candidates in the screener
+
+**Files:** new `pead.py`
+
+---
+
+### 21.3 Dividend Growth Screen
+Filter for stocks with yield >2%, 5yr dividend CAGR >7%, payout ratio <60%, and consecutive years of dividend growth.
+
+- [x] Fetch dividend history and compute 5yr CAGR and growth streak
+- [x] Add dividend-specific filter criteria to the screener
+- [x] Score dividend quality as a composite (yield + growth + safety)
+- [x] Add a "Dividend Growth" preset to the screener templates
+
+**Files:** `screener.py` (`DIVIDEND_GROWTH_PRESET`, `is_dividend_growth_candidate`), `factors.py` (`compute_dividend_growth_score`)
+
+---
+
+### 21.4 Graham Number / Deep Value Screen
+Compute `√(22.5 × EPS × BVPS)` and flag stocks trading below intrinsic value. Zero new API calls needed.
+
+- [x] Calculate Graham Number from existing EPS and book value per share data
+- [x] Compute margin of safety as (Graham Number − Price) / Graham Number
+- [x] Add as a screener filter and factor score dimension
+- [x] Display Graham Number vs current price in the analysis view
+
+**Files:** `factors.py` (`compute_graham_number`, `_factor_graham_number`), `screener.py` (`DEEP_VALUE_PRESET`, `compute_graham_filter`)
+
+---
+
+### 21.5 Cross-Sectional Momentum (Relative Strength)
+Rank a universe of stocks by 6-month / 12-month returns, long top decile, avoid bottom decile. Rotate monthly.
+
+- [x] Compute 6M and 12M total return for all screener universe tickers
+- [x] Rank and bucket into deciles; highlight top and bottom performers
+- [x] Integrate relative strength rank into the composite factor score
+- [x] Add a "Momentum Leaders" screener preset
+
+**Files:** `screener.py` (`compute_cross_sectional_momentum`, `momentum_leaders`, `momentum_laggards`, `MOMENTUM_LEADERS_PRESET`)
+
+---
+
+### 21.6 Quality Factor (Piotroski F-Score)
+9-point binary scoring of profitability, leverage, and operating efficiency. High F-Score (≥7) = strong buy candidate.
+
+- [x] Implement the 9 Piotroski binary signals (ROA, CFO, ΔROA, accruals, ΔLeverage, ΔLiquidity, dilution, ΔMargin, ΔTurnover)
+- [x] Add F-Score as a 9th factor in the composite model (or standalone quality dimension)
+- [x] Surface high F-Score stocks (≥7) in the screener
+- [x] Show per-signal breakdown in the analysis view
+
+**Files:** `factors.py` (`compute_piotroski_fscore`, `_factor_piotroski`)
+
+---
+
+### 21.7 Macro Regime Detection (Extended)
+Classify the market into Bull / Bear / Stagflation / Recovery based on SPY trend + VIX + 10Y yield, and dynamically adjust factor weights per regime.
+
+- [x] Extend existing regime detection (20.1) to distinguish Stagflation and Recovery phases
+- [x] Define per-regime factor weight presets (e.g. upweight value in stagflation, growth in bull)
+- [x] Allow users to override regime or set custom weight profiles in `config.yaml`
+- [x] Show active regime and weight adjustments in the dashboard
+
+**Files:** `factors.py` (`compute_market_regime_extended`, `get_regime_factor_weights`, `_REGIME_WEIGHT_DELTAS`)
+
+---
+
+### 21.8 Seasonal / Calendar Pattern Overlay
+Apply well-known seasonal biases (January Effect, "Sell in May", year-end tax-loss harvesting reversal) as a factor score overlay.
+
+- [x] Encode monthly/quarterly seasonal bias multipliers for each calendar period
+- [x] Apply a small seasonal adjustment (±5 pts) to the composite factor score
+- [x] Backtest seasonal strategies in isolation to validate historical edge
+- [x] Display active seasonal context in the dashboard header
+
+**Files:** `factors.py` (`compute_seasonal_bias`, `_MONTHLY_SEASONAL_BIAS`, `_CALENDAR_EVENTS`)
+
+---
+
+### 21.9 Multi-Asset / Risk Parity Rotation
+Rotate across asset classes (SPY, TLT, GLD, DBC, VNQ) using equal risk contribution weighting.
+
+- [x] Track 5 asset-class ETFs alongside the existing sector ETFs
+- [x] Compute equal risk contribution weights based on rolling volatility
+- [x] Generate monthly rebalancing signals and target allocations
+- [x] Add a "Risk Parity" tab to the Portfolio or Sectors page
+
+**Files:** `sectors.py` (`ASSET_CLASS_ETFS`, `get_asset_class_data`, `compute_asset_class_risk_parity_weights`)
+
+---
+
+### 21.10 Short Selling Screen
+Combine high short interest, insider selling signals, declining earnings quality, and weak factor score into a dedicated bearish screener.
+
+- [x] Add short interest % float and days-to-cover as screener filter fields
+- [x] Flag stocks with insider net selling + weak factor score (< 35) + high short interest
+- [x] Create a "Short Candidates" preset in the screener templates
+- [x] Integrate with existing short squeeze preset to show both sides of the signal
+
+**Files:** `screener.py` (`SHORT_SELLING_PRESET`, `is_short_selling_candidate`), `ownership.py` (`compute_short_selling_score`)
