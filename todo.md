@@ -1336,3 +1336,26 @@ Combine high short interest, insider selling signals, declining earnings quality
 - [x] Integrate with existing short squeeze preset to show both sides of the signal
 
 **Files:** `screener.py` (`SHORT_SELLING_PRESET`, `is_short_selling_candidate`), `ownership.py` (`compute_short_selling_score`)
+
+---
+
+## Priority 22 — Forward Testing
+
+### 22.1 Stock Tracking Portfolio (Forward Test)
+Allow users to add AI-recommended stock symbols to a named portfolio for live forward tracking. Validate factor-based signals in real market conditions over time without risking capital.
+
+- [ ] Create `forward_test.py` module with SQLite-backed paper portfolio management (`create_portfolio`, `add_position`, `close_position`, `get_portfolio_summary`)
+- [ ] Extend `history.py` (or add new tables to `history.db`) with `paper_portfolio`, `paper_trades`, and `paper_portfolio_history` tables
+- [ ] Add a "Track" button to the main analysis page (`app.py`) that adds the currently analysed symbol to the user's selected tracking portfolio at the live quote price
+- [ ] Build `pages/7_ForwardTest.py` Streamlit page:
+  - Create / rename / delete tracking portfolios
+  - View open positions (symbol, entry price, current price, unrealised P&L %, days held)
+  - View closed trade history (entry → exit, realised P&L %)
+  - Daily equity curve chart (portfolio value over time)
+  - Summary stats: total return %, annualised return, Sharpe ratio, max drawdown, win rate
+- [ ] Snapshot portfolio valuations daily by re-fetching live quotes for all open positions and writing to `paper_portfolio_history`
+- [ ] Allow user to manually close a position (sell at current market price)
+- [ ] Display average factor score and risk score at time of entry alongside each position for post-hoc signal validation
+- [ ] Add REST endpoint `POST /forward-test/portfolio` and `POST /forward-test/trade` to `server.py` for programmatic access
+
+**Files:** new `forward_test.py`, `pages/7_ForwardTest.py`, `history.py` (schema extension), `app.py` (Track button), `server.py` (new endpoints)
