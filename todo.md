@@ -548,6 +548,20 @@ Prevent long chat sessions from silently hitting the context window limit.
 
 **Files:** `analyzer.py`, `app.py`
 
+### 9.6 Use Claude Code CLI Instead of API Key for AI Analysis
+Replace direct Anthropic API key usage with the Claude Code CLI (`claude` binary) so the app can leverage the user's existing Claude Code session/credentials without requiring a separate `ANTHROPIC_API_KEY` environment variable.
+
+- [ ] Detect at startup whether the `claude` CLI is available on `PATH` (`shutil.which("claude")`) and fall back to the SDK if not
+- [ ] Add a `ClaudeCodeCLIBackend` class in `analyzer.py` that shells out to `claude --print --output-format stream-json` and streams the response in the same interface as the existing `anthropic` SDK calls
+- [ ] Pass the system prompt via `--system-prompt` flag and user message via stdin or `--message` flag
+- [ ] Map streaming JSON chunks from the CLI to the existing `stream_analysis` / `stream_chat_response` generator protocol so all Streamlit UI and API consumers need zero changes
+- [ ] Add a `ai_backend` config key in `config.yaml` with values `"sdk"` (default) | `"cli"` so users can opt in via config rather than environment variables
+- [ ] Update `config.py` to read and expose `ai_backend`
+- [ ] Remove hard dependency on `anthropic` package when CLI backend is selected (gate the import behind the config value)
+- [ ] Update `README` / setup docs to note that users with Claude Code installed can skip the API key setup step
+
+**Files:** `analyzer.py` (new `ClaudeCodeCLIBackend`, backend dispatch), `config.yaml` (`ai_backend`), `config.py`
+
 ---
 
 ---
