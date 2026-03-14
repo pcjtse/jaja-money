@@ -9,6 +9,7 @@ Covers:
 - P8.2 Vol regime flags from _build_flags / compute_risk
 - compute_risk() returns new fields (vol_regime, hv_5d, hv_30d, macro_context)
 """
+
 import pandas as pd
 import numpy as np
 
@@ -18,6 +19,7 @@ from guardrails import _detect_vol_regime, _build_flags, compute_risk
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def flat_close(n=50, price=100.0):
     return pd.Series([float(price)] * n)
@@ -37,9 +39,14 @@ def _default_flags_kwargs(**overrides):
         price=100.0,
         financials={"peBasicExclExtraTTM": 20, "52WeekHigh": 120, "52WeekLow": 80},
         earnings=[{"surprisePercent": 5}] * 4,
-        recommendations=[{"strongBuy": 5, "buy": 5, "hold": 2, "sell": 0, "strongSell": 0}],
-        sentiment_agg={"net_score": 0.3, "signal": "Bullish",
-                       "counts": {"positive": 6, "negative": 2, "neutral": 2}},
+        recommendations=[
+            {"strongBuy": 5, "buy": 5, "hold": 2, "sell": 0, "strongSell": 0}
+        ],
+        sentiment_agg={
+            "net_score": 0.3,
+            "signal": "Bullish",
+            "counts": {"positive": 6, "negative": 2, "neutral": 2},
+        },
         composite_factor_score=60,
         hv=20.0,
         drawdown_pct=5.0,
@@ -51,6 +58,7 @@ def _default_flags_kwargs(**overrides):
 # ---------------------------------------------------------------------------
 # _detect_vol_regime (P8.2)
 # ---------------------------------------------------------------------------
+
 
 def test_vol_regime_returns_tuple():
     regime, hv5, hv30 = _detect_vol_regime(noisy_close())
@@ -100,6 +108,7 @@ def test_vol_regime_hv5_hv30_returned():
 # P5.3: Earnings calendar flags
 # ---------------------------------------------------------------------------
 
+
 def test_earnings_calendar_within_7_days_danger():
     cal = {"days_to_earnings": 3, "next_date": "2026-03-12"}
     flags = _build_flags(**_default_flags_kwargs(earnings_calendar=cal))
@@ -135,23 +144,29 @@ def test_earnings_calendar_none_no_flag():
 # P5.4: Insider transaction flags
 # ---------------------------------------------------------------------------
 
+
 def _make_insider_txns(buys=0, sells=0, buy_shares=1000, sell_shares=1000):
     """Create a minimal list of recent insider transactions."""
     from datetime import date
+
     today = date.today().isoformat()
     txns = []
     for _ in range(buys):
-        txns.append({
-            "transactionCode": "P",
-            "change": buy_shares,
-            "transactionDate": today,
-        })
+        txns.append(
+            {
+                "transactionCode": "P",
+                "change": buy_shares,
+                "transactionDate": today,
+            }
+        )
     for _ in range(sells):
-        txns.append({
-            "transactionCode": "S",
-            "change": -sell_shares,
-            "transactionDate": today,
-        })
+        txns.append(
+            {
+                "transactionCode": "S",
+                "change": -sell_shares,
+                "transactionDate": today,
+            }
+        )
     return txns
 
 
@@ -191,6 +206,7 @@ def test_insider_none_no_flag():
 # ---------------------------------------------------------------------------
 # P5.5: Short interest flags
 # ---------------------------------------------------------------------------
+
 
 def test_short_interest_extreme_danger():
     si = {"available": True, "short_pct_float": 30.0, "days_to_cover": 5.0}
@@ -234,6 +250,7 @@ def test_short_interest_none_no_flag():
 # P5.6: Macro context flags
 # ---------------------------------------------------------------------------
 
+
 def test_macro_high_vix_warning():
     macro = {"vix": 35.0, "spread_2y10y": 0.5}
     flags = _build_flags(**_default_flags_kwargs(macro_context=macro))
@@ -265,6 +282,7 @@ def test_macro_none_no_flag():
 # P8.2: Volatility regime flags from _build_flags
 # ---------------------------------------------------------------------------
 
+
 def test_vol_regime_spike_flag():
     """Spike regime (hv_5d > 2×hv_30d) should produce a warning flag."""
     # Build a close series where recent 5-day vol >> 30-day baseline
@@ -285,6 +303,7 @@ def test_vol_regime_no_crash_none_close():
 # ---------------------------------------------------------------------------
 # compute_risk new return fields
 # ---------------------------------------------------------------------------
+
 
 def test_compute_risk_returns_vol_regime():
     result = compute_risk(
@@ -356,6 +375,7 @@ def test_compute_risk_macro_vix_above_30_increases_score():
 
 def test_compute_risk_all_new_params_no_crash():
     from datetime import date
+
     today = date.today().isoformat()
     cal = {"days_to_earnings": 5, "next_date": today}
     txns = [{"transactionCode": "S", "change": -5000, "transactionDate": today}] * 3
@@ -366,9 +386,14 @@ def test_compute_risk_all_new_params_no_crash():
         financials={"peBasicExclExtraTTM": 25, "52WeekHigh": 120, "52WeekLow": 80},
         close=noisy_close(),
         earnings=[{"surprisePercent": -8}] * 4,
-        recommendations=[{"strongBuy": 0, "buy": 1, "hold": 2, "sell": 3, "strongSell": 2}],
-        sentiment_agg={"net_score": -0.5, "signal": "Bearish",
-                       "counts": {"positive": 2, "negative": 7, "neutral": 1}},
+        recommendations=[
+            {"strongBuy": 0, "buy": 1, "hold": 2, "sell": 3, "strongSell": 2}
+        ],
+        sentiment_agg={
+            "net_score": -0.5,
+            "signal": "Bearish",
+            "counts": {"positive": 2, "negative": 7, "neutral": 1},
+        },
         composite_factor_score=30,
         earnings_calendar=cal,
         insider_transactions=txns,

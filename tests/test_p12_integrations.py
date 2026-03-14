@@ -1,4 +1,5 @@
 """Tests for P12.x: Notifications & Integrations."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -46,7 +47,9 @@ class TestWebhooks:
     def test_send_slack_builds_payload(self):
         with patch("alerts._post_json") as mock_post:
             mock_post.return_value = True
-            result = _send_slack("https://slack.webhook", "Test Alert", "Body text", "#FF0000")
+            result = _send_slack(
+                "https://slack.webhook", "Test Alert", "Body text", "#FF0000"
+            )
             assert result is True
             call_args = mock_post.call_args
             payload = call_args[0][1]
@@ -56,7 +59,9 @@ class TestWebhooks:
     def test_send_discord_builds_payload(self):
         with patch("alerts._post_json") as mock_post:
             mock_post.return_value = True
-            result = _send_discord("https://discord.webhook", "Test Alert", "Body text", "#2196F3")
+            result = _send_discord(
+                "https://discord.webhook", "Test Alert", "Body text", "#2196F3"
+            )
             assert result is True
             call_args = mock_post.call_args
             payload = call_args[0][1]
@@ -149,7 +154,9 @@ class TestBrokerageImport:
         assert result is None
 
     def test_parse_generic_csv(self):
-        csv_data = b"Symbol,Quantity,Cost,Value\nAAPL,100,14000,15000\nMSFT,50,16000,18500\n"
+        csv_data = (
+            b"Symbol,Quantity,Cost,Value\nAAPL,100,14000,15000\nMSFT,50,16000,18500\n"
+        )
         positions = parse_brokerage_csv(csv_data, broker="generic")
 
         assert len(positions) == 2

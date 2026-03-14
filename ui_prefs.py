@@ -6,6 +6,7 @@ Stores UI section visibility preferences and onboarding state in
 Usage:
     from ui_prefs import get_prefs, save_prefs, is_first_run, mark_onboarding_complete
 """
+
 from __future__ import annotations
 
 import json
@@ -53,6 +54,7 @@ _DEFAULT_PREFS = {
 
 def _load() -> dict:
     import copy
+
     try:
         _DATA_DIR.mkdir(parents=True, exist_ok=True)
         if not _PREFS_FILE.exists():
@@ -130,6 +132,7 @@ def mark_onboarding_complete() -> None:
 def reset_to_defaults() -> None:
     """Reset all preferences to defaults."""
     import copy
+
     _save(copy.deepcopy(_DEFAULT_PREFS))
     log.info("UI preferences reset to defaults")
 

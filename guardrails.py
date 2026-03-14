@@ -26,24 +26,28 @@ log = get_logger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _hist_vol(close: pd.Series, window: int = 20) -> float | None:
     """Annualised historical volatility (%) over the last `window` days."""
     if close is None or len(close) < window + 1:
         return None
     ratio = (close / close.shift(1)).dropna()
-    ratio = ratio[ratio > 0]   # guard against zero/negative prices
+    ratio = ratio[ratio > 0]  # guard against zero/negative prices
     if len(ratio) < window:
         return None
     log_returns = ratio.apply(math.log)
     daily_std = float(log_returns.tail(window).std())
-    return daily_std * math.sqrt(252) * 100   # annualised %
+    return daily_std * math.sqrt(252) * 100  # annualised %
 
 
 # ---------------------------------------------------------------------------
 # P8.2: Volatility regime detection helpers
 # ---------------------------------------------------------------------------
 
-def _detect_vol_regime(close: pd.Series | None) -> tuple[str, float | None, float | None]:
+
+def _detect_vol_regime(
+    close: pd.Series | None,
+) -> tuple[str, float | None, float | None]:
     """Detect volatility regime: 'spike', 'sustained', or 'normal'.
 
     Returns (regime, hv_5d, hv_30d).
@@ -86,6 +90,7 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> int:
 # Risk dimension scorers  (each returns an int 0-100, higher = more risk)
 # ---------------------------------------------------------------------------
 
+
 def _dim_volatility(close: pd.Series | None) -> tuple[int, float | None]:
     """0-100 volatility risk + raw annualised HV (%)."""
     hv = _hist_vol(close)
@@ -104,8 +109,9 @@ def _dim_volatility(close: pd.Series | None) -> tuple[int, float | None]:
     return s, hv
 
 
-def _dim_drawdown(price: float | None, financials: dict | None,
-                  close: pd.Series | None) -> tuple[int, float | None]:
+def _dim_drawdown(
+    price: float | None, financials: dict | None, close: pd.Series | None
+) -> tuple[int, float | None]:
     """0-100 drawdown risk + raw drawdown (%)."""
     high52 = (financials or {}).get("52WeekHigh")
 
@@ -117,7 +123,7 @@ def _dim_drawdown(price: float | None, financials: dict | None,
         return 50, None
 
     high52, price = float(high52), float(price)
-    dd = (high52 - price) / high52 * 100   # % below 52-week high
+    dd = (high52 - price) / high52 * 100  # % below 52-week high
 
     if dd < 5:
         s = 5
@@ -140,6 +146,7 @@ def _dim_signal_risk(composite_factor_score: int) -> int:
 # ---------------------------------------------------------------------------
 # Red-flag definitions
 # ---------------------------------------------------------------------------
+
 
 def _build_flags(
     close: pd.Series | None,
@@ -169,75 +176,127 @@ def _build_flags(
     # --- Volatility flags ---
     if hv is not None:
         if hv > 60:
-            flag("danger", "🔥", "Extreme volatility",
-                 f"20-day annualised HV = {hv:.1f}%. Expect very wide intraday swings "
-                 f"and elevated option premiums. Position size accordingly.")
+            flag(
+                "danger",
+                "🔥",
+                "Extreme volatility",
+                f"20-day annualised HV = {hv:.1f}%. Expect very wide intraday swings "
+                f"and elevated option premiums. Position size accordingly.",
+            )
         elif hv > 40:
-            flag("warning", "⚡", "High volatility",
-                 f"20-day annualised HV = {hv:.1f}%. Significantly above the S&P 500 "
-                 f"long-run average (~15-18%). Consider tighter stops.")
+            flag(
+                "warning",
+                "⚡",
+                "High volatility",
+                f"20-day annualised HV = {hv:.1f}%. Significantly above the S&P 500 "
+                f"long-run average (~15-18%). Consider tighter stops.",
+            )
 
     # --- Drawdown flags ---
     if drawdown_pct is not None:
         if drawdown_pct > 40:
-            flag("danger", "📉", "Severe drawdown",
-                 f"Price is {drawdown_pct:.1f}% below the 52-week high. "
-                 f"Indicates sustained selling pressure or a structural breakdown.")
+            flag(
+                "danger",
+                "📉",
+                "Severe drawdown",
+                f"Price is {drawdown_pct:.1f}% below the 52-week high. "
+                f"Indicates sustained selling pressure or a structural breakdown.",
+            )
         elif drawdown_pct > 25:
-            flag("warning", "📉", "Material drawdown",
-                 f"Price is {drawdown_pct:.1f}% off the 52-week high. "
-                 f"Verify whether this reflects fundamental deterioration or market dislocation.")
+            flag(
+                "warning",
+                "📉",
+                "Material drawdown",
+                f"Price is {drawdown_pct:.1f}% off the 52-week high. "
+                f"Verify whether this reflects fundamental deterioration or market dislocation.",
+            )
 
     # --- RSI flags ---
     rsi = _rsi(close)
     if rsi is not None:
         if rsi > 80:
-            flag("danger", "🌡️", "Extremely overbought",
-                 f"RSI-14 = {rsi:.1f}. Historically, readings above 80 precede near-term "
-                 f"pullbacks. Avoid chasing; wait for a reset.")
+            flag(
+                "danger",
+                "🌡️",
+                "Extremely overbought",
+                f"RSI-14 = {rsi:.1f}. Historically, readings above 80 precede near-term "
+                f"pullbacks. Avoid chasing; wait for a reset.",
+            )
         elif rsi > 74:
-            flag("warning", "🌡️", "Overbought territory",
-                 f"RSI-14 = {rsi:.1f}. Momentum may be stretched. Risk/reward skews toward "
-                 f"a short-term pause or reversal.")
+            flag(
+                "warning",
+                "🌡️",
+                "Overbought territory",
+                f"RSI-14 = {rsi:.1f}. Momentum may be stretched. Risk/reward skews toward "
+                f"a short-term pause or reversal.",
+            )
         elif rsi < 20:
-            flag("danger", "🆘", "Deeply oversold / distress",
-                 f"RSI-14 = {rsi:.1f}. Extreme selling — could signal fundamental distress "
-                 f"or a capitulation low. Verify news catalysts before buying.")
+            flag(
+                "danger",
+                "🆘",
+                "Deeply oversold / distress",
+                f"RSI-14 = {rsi:.1f}. Extreme selling — could signal fundamental distress "
+                f"or a capitulation low. Verify news catalysts before buying.",
+            )
         elif rsi < 28:
-            flag("warning", "⬇️", "Oversold",
-                 f"RSI-14 = {rsi:.1f}. Price has fallen sharply. "
-                 f"May offer a bounce, but confirm trend reversal before entering.")
+            flag(
+                "warning",
+                "⬇️",
+                "Oversold",
+                f"RSI-14 = {rsi:.1f}. Price has fallen sharply. "
+                f"May offer a bounce, but confirm trend reversal before entering.",
+            )
 
     # --- Trend flags ---
     if close is not None and price is not None:
-        sma50  = _sma(close, 50)
+        sma50 = _sma(close, 50)
         sma200 = _sma(close, 200)
         if sma50 is not None and sma200 is not None:
             if price < sma50 < sma200:
-                flag("danger", "🐻", "Strong downtrend",
-                     f"Price (${price:.2f}) < SMA-50 (${sma50:.2f}) < SMA-200 (${sma200:.2f}). "
-                     f"All trend signals are bearish. Avoid bottom-fishing without confirmation.")
+                flag(
+                    "danger",
+                    "🐻",
+                    "Strong downtrend",
+                    f"Price (${price:.2f}) < SMA-50 (${sma50:.2f}) < SMA-200 (${sma200:.2f}). "
+                    f"All trend signals are bearish. Avoid bottom-fishing without confirmation.",
+                )
             elif price < sma200 and sma50 < sma200:
-                flag("warning", "⚠️", "Below key moving averages",
-                     "Price and SMA-50 are both below SMA-200. "
-                     "Long-term momentum is negative.")
+                flag(
+                    "warning",
+                    "⚠️",
+                    "Below key moving averages",
+                    "Price and SMA-50 are both below SMA-200. "
+                    "Long-term momentum is negative.",
+                )
 
     # --- Valuation flags ---
     pe = metrics.get("peBasicExclExtraTTM")
     if pe is not None:
         pe = float(pe)
         if pe < 0:
-            flag("warning", "💸", "Negative earnings",
-                 "Trailing P/E is negative (reported EPS loss). "
-                 "The company is not yet profitable on a trailing basis.")
+            flag(
+                "warning",
+                "💸",
+                "Negative earnings",
+                "Trailing P/E is negative (reported EPS loss). "
+                "The company is not yet profitable on a trailing basis.",
+            )
         elif pe > 80:
-            flag("danger", "💰", "Extreme valuation premium",
-                 f"Trailing P/E = {pe:.1f}×. Priced for perfection — any earnings "
-                 f"disappointment could trigger a sharp de-rating.")
+            flag(
+                "danger",
+                "💰",
+                "Extreme valuation premium",
+                f"Trailing P/E = {pe:.1f}×. Priced for perfection — any earnings "
+                f"disappointment could trigger a sharp de-rating.",
+            )
         elif pe > 50:
-            flag("warning", "💰", "Elevated valuation",
-                 f"Trailing P/E = {pe:.1f}×. Well above market median. "
-                 f"Growth expectations are high and already baked in.")
+            flag(
+                "warning",
+                "💰",
+                "Elevated valuation",
+                f"Trailing P/E = {pe:.1f}×. Well above market median. "
+                f"Growth expectations are high and already baked in.",
+            )
 
     # --- Earnings flags ---
     surprises = [
@@ -248,57 +307,89 @@ def _build_flags(
     if surprises:
         miss_count = sum(1 for s in surprises if s < 0)
         if miss_count >= 3:
-            flag("danger", "📊", "Persistent earnings misses",
-                 f"Missed EPS estimates in {miss_count}/{len(surprises)} of the last "
-                 f"{len(surprises)} quarters. Management guidance may lack credibility.")
+            flag(
+                "danger",
+                "📊",
+                "Persistent earnings misses",
+                f"Missed EPS estimates in {miss_count}/{len(surprises)} of the last "
+                f"{len(surprises)} quarters. Management guidance may lack credibility.",
+            )
         elif miss_count == 2 and len(surprises) >= 3:
-            flag("warning", "📊", "Mixed earnings track record",
-                 f"Missed EPS estimates in {miss_count}/{len(surprises)} recent quarters. "
-                 f"Watch the next print closely.")
+            flag(
+                "warning",
+                "📊",
+                "Mixed earnings track record",
+                f"Missed EPS estimates in {miss_count}/{len(surprises)} recent quarters. "
+                f"Watch the next print closely.",
+            )
 
     # --- Analyst consensus flags ---
     if recommendations:
         latest = recommendations[0]
         sb = int(latest.get("strongBuy", 0))
-        b  = int(latest.get("buy", 0))
-        h  = int(latest.get("hold", 0))
-        s  = int(latest.get("sell", 0))
+        b = int(latest.get("buy", 0))
+        h = int(latest.get("hold", 0))
+        s = int(latest.get("sell", 0))
         ss = int(latest.get("strongSell", 0))
         total = sb + b + h + s + ss
         if total > 0:
             bullish_ratio = (sb + b) / total
             if bullish_ratio < 0.20:
-                flag("danger", "🎯", "Weak analyst support",
-                     f"Only {bullish_ratio:.0%} of analysts rate this stock "
-                     f"Buy or Strong Buy ({sb + b}/{total}). Broad analyst pessimism.")
+                flag(
+                    "danger",
+                    "🎯",
+                    "Weak analyst support",
+                    f"Only {bullish_ratio:.0%} of analysts rate this stock "
+                    f"Buy or Strong Buy ({sb + b}/{total}). Broad analyst pessimism.",
+                )
             elif bullish_ratio < 0.35:
-                flag("warning", "🎯", "Below-average analyst consensus",
-                     f"Bullish analyst ratio = {bullish_ratio:.0%} ({sb + b}/{total}). "
-                     f"Consensus leans cautious.")
+                flag(
+                    "warning",
+                    "🎯",
+                    "Below-average analyst consensus",
+                    f"Bullish analyst ratio = {bullish_ratio:.0%} ({sb + b}/{total}). "
+                    f"Consensus leans cautious.",
+                )
 
     # --- Sentiment flags ---
     if sentiment_agg:
         net = float(sentiment_agg.get("net_score", 0))
         if net < -0.6:
-            flag("danger", "📰", "Very negative news sentiment",
-                 f"FinBERT net sentiment score = {net:+.2f}. "
-                 f"Recent headlines are strongly negative — monitor for material developments.")
+            flag(
+                "danger",
+                "📰",
+                "Very negative news sentiment",
+                f"FinBERT net sentiment score = {net:+.2f}. "
+                f"Recent headlines are strongly negative — monitor for material developments.",
+            )
         elif net < -0.3:
-            flag("warning", "📰", "Negative news flow",
-                 f"FinBERT net sentiment score = {net:+.2f}. "
-                 f"More negative than positive recent coverage.")
+            flag(
+                "warning",
+                "📰",
+                "Negative news flow",
+                f"FinBERT net sentiment score = {net:+.2f}. "
+                f"More negative than positive recent coverage.",
+            )
 
     # --- Composite factor score flags ---
     if composite_factor_score < 25:
-        flag("danger", "🚨", "Multi-factor sell signal",
-             f"Composite factor score = {composite_factor_score}/100. "
-             f"The majority of quantitative factors are aligned negatively. "
-             f"Review each factor before considering a position.")
+        flag(
+            "danger",
+            "🚨",
+            "Multi-factor sell signal",
+            f"Composite factor score = {composite_factor_score}/100. "
+            f"The majority of quantitative factors are aligned negatively. "
+            f"Review each factor before considering a position.",
+        )
     elif composite_factor_score > 85:
-        flag("info", "🔔", "Euphoria risk — peak consensus",
-             f"Composite factor score = {composite_factor_score}/100. "
-             f"Almost all factors are maxed out. Historically, extreme bullish consensus "
-             f"can precede mean-reversion. Manage position sizing.")
+        flag(
+            "info",
+            "🔔",
+            "Euphoria risk — peak consensus",
+            f"Composite factor score = {composite_factor_score}/100. "
+            f"Almost all factors are maxed out. Historically, extreme bullish consensus "
+            f"can precede mean-reversion. Manage position sizing.",
+        )
 
     # --- P5.3: Earnings calendar flags ---
     if earnings_calendar:
@@ -306,22 +397,30 @@ def _build_flags(
         next_date = earnings_calendar.get("next_date")
         if days_to_earn is not None and next_date:
             if 0 <= days_to_earn <= 7:
-                flag("danger", "📅", "Earnings this week",
-                     f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
-                     f"Expect elevated implied volatility and potential sharp price moves. "
-                     f"Avoid opening positions immediately before earnings unless as a trade.")
+                flag(
+                    "danger",
+                    "📅",
+                    "Earnings this week",
+                    f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
+                    f"Expect elevated implied volatility and potential sharp price moves. "
+                    f"Avoid opening positions immediately before earnings unless as a trade.",
+                )
             elif days_to_earn <= 14:
-                flag("warning", "📅", "Earnings within 2 weeks",
-                     f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
-                     f"Event risk is elevated. Consider holding off or sizing down.")
+                flag(
+                    "warning",
+                    "📅",
+                    "Earnings within 2 weeks",
+                    f"Earnings report in {days_to_earn} day(s) (on {next_date}). "
+                    f"Event risk is elevated. Consider holding off or sizing down.",
+                )
 
     # --- P5.4: Insider trading flags ---
     if insider_transactions:
         from datetime import date, timedelta
+
         cutoff = (date.today() - timedelta(days=90)).isoformat()
         recent_txns = [
-            t for t in insider_transactions
-            if t.get("transactionDate", "") >= cutoff
+            t for t in insider_transactions if t.get("transactionDate", "") >= cutoff
         ]
         buys = [t for t in recent_txns if t.get("transactionCode") == "P"]
         sells = [t for t in recent_txns if t.get("transactionCode") == "S"]
@@ -329,19 +428,31 @@ def _build_flags(
         sell_shares = sum(abs(t.get("change", 0) or 0) for t in sells)
 
         if sells and sell_shares > buy_shares * 3 and len(sells) >= 3:
-            flag("danger", "🔴", "Significant insider selling",
-                 f"{len(sells)} insider sale(s) in the last 90 days totalling "
-                 f"~{sell_shares:,.0f} shares. Heavy insider selling often precedes "
-                 f"fundamental deterioration.")
+            flag(
+                "danger",
+                "🔴",
+                "Significant insider selling",
+                f"{len(sells)} insider sale(s) in the last 90 days totalling "
+                f"~{sell_shares:,.0f} shares. Heavy insider selling often precedes "
+                f"fundamental deterioration.",
+            )
         elif sells and sell_shares > buy_shares * 2 and len(sells) >= 2:
-            flag("warning", "🔴", "Insider selling cluster",
-                 f"{len(sells)} insider sale(s) in the last 90 days. "
-                 f"Monitor for further selling pressure.")
+            flag(
+                "warning",
+                "🔴",
+                "Insider selling cluster",
+                f"{len(sells)} insider sale(s) in the last 90 days. "
+                f"Monitor for further selling pressure.",
+            )
         elif buys and buy_shares > sell_shares * 2 and len(buys) >= 2:
-            flag("info", "🟢", "Insider buying cluster",
-                 f"{len(buys)} insider purchase(s) in the last 90 days totalling "
-                 f"~{buy_shares:,.0f} shares. Cluster buying is often a positive signal, "
-                 f"especially after a drawdown.")
+            flag(
+                "info",
+                "🟢",
+                "Insider buying cluster",
+                f"{len(buys)} insider purchase(s) in the last 90 days totalling "
+                f"~{buy_shares:,.0f} shares. Cluster buying is often a positive signal, "
+                f"especially after a drawdown.",
+            )
 
     # --- P5.5: Short interest flags ---
     if short_interest and short_interest.get("available"):
@@ -349,33 +460,54 @@ def _build_flags(
         days_cover = short_interest.get("days_to_cover")
         if short_pct is not None:
             if short_pct > 25:
-                flag("danger", "📊", "Extreme short interest",
-                     f"Short interest = {short_pct:.1f}% of float. "
-                     f"Extremely high short interest can signal fundamental concerns "
-                     f"but also creates squeeze potential if sentiment reverses.")
+                flag(
+                    "danger",
+                    "📊",
+                    "Extreme short interest",
+                    f"Short interest = {short_pct:.1f}% of float. "
+                    f"Extremely high short interest can signal fundamental concerns "
+                    f"but also creates squeeze potential if sentiment reverses.",
+                )
             elif short_pct > 15:
-                flag("warning", "📊", "Elevated short interest",
-                     f"Short interest = {short_pct:.1f}% of float"
-                     + (f" ({days_cover:.1f} days to cover)" if days_cover else "")
-                     + ". Significant bearish positioning from institutional traders.")
+                flag(
+                    "warning",
+                    "📊",
+                    "Elevated short interest",
+                    f"Short interest = {short_pct:.1f}% of float"
+                    + (f" ({days_cover:.1f} days to cover)" if days_cover else "")
+                    + ". Significant bearish positioning from institutional traders.",
+                )
 
     # --- P5.6: Macroeconomic context flags ---
     if macro_context:
         vix = macro_context.get("vix")
         spread = macro_context.get("spread_2y10y")
         if vix is not None and vix > 30:
-            flag("warning", "🌐", "Elevated market fear (VIX)",
-                 f"VIX = {vix:.1f} — above 30 signals elevated market-wide fear. "
-                 f"Individual stock risk scores may understate tail risk. "
-                 f"Consider smaller position sizes across all holdings.")
+            flag(
+                "warning",
+                "🌐",
+                "Elevated market fear (VIX)",
+                f"VIX = {vix:.1f} — above 30 signals elevated market-wide fear. "
+                f"Individual stock risk scores may understate tail risk. "
+                f"Consider smaller position sizes across all holdings.",
+            )
         if spread is not None and spread < 0:
-            flag("warning", "🌐", "Inverted yield curve",
-                 f"2Y/10Y spread = {spread:.2f}% (inverted). "
-                 f"Yield curve inversion historically precedes recessions. "
-                 f"Favor defensive sectors and reduce cyclical exposure.")
+            flag(
+                "warning",
+                "🌐",
+                "Inverted yield curve",
+                f"2Y/10Y spread = {spread:.2f}% (inverted). "
+                f"Yield curve inversion historically precedes recessions. "
+                f"Favor defensive sectors and reduce cyclical exposure.",
+            )
 
     # --- P8.1: Liquidity risk flag ---
-    if close is not None and price is not None and account_size is not None and account_size > 0:
+    if (
+        close is not None
+        and price is not None
+        and account_size is not None
+        and account_size > 0
+    ):
         if len(close) >= 20:
             # Use 20-day average volume from close series length as a basic proxy
             # We'd need volume data — skip if not available
@@ -388,14 +520,22 @@ def _build_flags(
     # --- P8.2: Volatility regime detection ---
     vol_regime, hv_5d, hv_30d = _detect_vol_regime(close)
     if vol_regime == "spike" and hv_5d is not None and hv_30d is not None:
-        flag("warning", "⚡", "Volatility spike — may be transient",
-             f"5-day vol = {hv_5d:.1f}% vs 30-day vol = {hv_30d:.1f}%. "
-             f"Recent vol is >2× the 30-day average — likely reflects a specific event. "
-             f"May normalize quickly; avoid panic selling.")
+        flag(
+            "warning",
+            "⚡",
+            "Volatility spike — may be transient",
+            f"5-day vol = {hv_5d:.1f}% vs 30-day vol = {hv_30d:.1f}%. "
+            f"Recent vol is >2× the 30-day average — likely reflects a specific event. "
+            f"May normalize quickly; avoid panic selling.",
+        )
     elif vol_regime == "sustained" and hv_5d is not None and hv_30d is not None:
-        flag("danger", "🔥", "Sustained elevated volatility",
-             f"5-day vol = {hv_5d:.1f}% and 30-day vol = {hv_30d:.1f}% are both elevated. "
-             f"Structural volatility trend — requires tighter risk management.")
+        flag(
+            "danger",
+            "🔥",
+            "Sustained elevated volatility",
+            f"5-day vol = {hv_5d:.1f}% and 30-day vol = {hv_30d:.1f}% are both elevated. "
+            f"Structural volatility trend — requires tighter risk management.",
+        )
 
     return flags
 
@@ -403,6 +543,7 @@ def _build_flags(
 # ---------------------------------------------------------------------------
 # P20.1: Market regime integration
 # ---------------------------------------------------------------------------
+
 
 def apply_regime_adjustment(risk_result: dict, regime_info: dict) -> dict:
     """Integrate market regime context into a compute_risk() result.
@@ -461,11 +602,11 @@ def apply_regime_adjustment(risk_result: dict, regime_info: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 RISK_LEVELS = [
-    (80, "Extreme",  "#cf2929"),
-    (65, "High",     "#e05252"),
+    (80, "Extreme", "#cf2929"),
+    (65, "High", "#e05252"),
     (45, "Elevated", "#f0b429"),
     (25, "Moderate", "#4CAF50"),
-    ( 0, "Low",      "#2da44e"),
+    (0, "Low", "#2da44e"),
 ]
 
 
@@ -480,6 +621,7 @@ def risk_level_color(risk_score: int) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_risk(
     quote: dict,
@@ -510,9 +652,9 @@ def compute_risk(
     """
     price = float(quote.get("c", 0) or 0) or None
 
-    vol_dim,  hv         = _dim_volatility(close)
-    dd_dim,   drawdown   = _dim_drawdown(price, financials, close)
-    sig_dim              = _dim_signal_risk(composite_factor_score)
+    vol_dim, hv = _dim_volatility(close)
+    dd_dim, drawdown = _dim_drawdown(price, financials, close)
+    sig_dim = _dim_signal_risk(composite_factor_score)
 
     vol_regime, hv_5d, hv_30d = _detect_vol_regime(close)
 
@@ -539,10 +681,7 @@ def compute_risk(
 
     # Weighted composite risk score
     base_risk = _clamp(
-        vol_dim  * 0.25
-        + dd_dim * 0.25
-        + sig_dim * 0.25
-        + flag_dim * 0.25
+        vol_dim * 0.25 + dd_dim * 0.25 + sig_dim * 0.25 + flag_dim * 0.25
     )
 
     # P5.6 & P8.2: Apply macro multiplier and volatility regime adjustments

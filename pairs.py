@@ -6,6 +6,7 @@ the z-score of the log-ratio spread diverges beyond ±2σ (mean reversion).
 Usage:
     from pairs import compute_spread, compute_zscore, pairs_signal, backtest_pairs
 """
+
 from __future__ import annotations
 
 import math
@@ -27,11 +28,12 @@ DEFAULT_LOOKBACK_WINDOW = 60
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PairsTrade:
     entry_date: str
     exit_date: str
-    direction: str        # "long_A_short_B" | "long_B_short_A"
+    direction: str  # "long_A_short_B" | "long_B_short_A"
     entry_zscore: float
     exit_zscore: float
     pnl_pct: float
@@ -64,6 +66,7 @@ class PairsBacktestResult:
 # Core analytics
 # ---------------------------------------------------------------------------
 
+
 def compute_spread(close_a: pd.Series, close_b: pd.Series) -> pd.Series:
     """Compute the log-price-ratio spread between two stocks.
 
@@ -78,7 +81,9 @@ def compute_spread(close_a: pd.Series, close_b: pd.Series) -> pd.Series:
     return ratio.apply(math.log)
 
 
-def compute_zscore(spread: pd.Series, window: int = DEFAULT_LOOKBACK_WINDOW) -> pd.Series:
+def compute_zscore(
+    spread: pd.Series, window: int = DEFAULT_LOOKBACK_WINDOW
+) -> pd.Series:
     """Compute rolling z-score of the spread.
 
     z = (spread - rolling_mean) / rolling_std
@@ -132,6 +137,7 @@ def pairs_signal(
 # ---------------------------------------------------------------------------
 # Backtester
 # ---------------------------------------------------------------------------
+
 
 def backtest_pairs(
     df_a: pd.DataFrame,
@@ -224,16 +230,18 @@ def backtest_pairs(
                 z_change = abs(entry_z) - abs(z)
                 pnl_pct = z_change * 2.0  # simplified proxy
                 is_win = pnl_pct > 0
-                eq_val *= (1 + pnl_pct / 100)
-                trades.append(PairsTrade(
-                    entry_date=entry_date,
-                    exit_date=dates[i],
-                    direction=position_dir,
-                    entry_zscore=round(entry_z, 3),
-                    exit_zscore=round(z, 3),
-                    pnl_pct=round(pnl_pct, 2),
-                    is_win=is_win,
-                ))
+                eq_val *= 1 + pnl_pct / 100
+                trades.append(
+                    PairsTrade(
+                        entry_date=entry_date,
+                        exit_date=dates[i],
+                        direction=position_dir,
+                        entry_zscore=round(entry_z, 3),
+                        exit_zscore=round(z, 3),
+                        pnl_pct=round(pnl_pct, 2),
+                        is_win=is_win,
+                    )
+                )
                 in_position = False
                 position_dir = ""
 
@@ -249,7 +257,9 @@ def backtest_pairs(
         eq_s = pd.Series(equity)
         daily_rets = eq_s.pct_change().dropna()
         if len(daily_rets) > 1 and daily_rets.std() > 0:
-            sharpe = round(float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)), 2)
+            sharpe = round(
+                float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)), 2
+            )
 
     peak = 1.0
     max_dd = 0.0
@@ -262,7 +272,10 @@ def backtest_pairs(
 
     log.info(
         "Pairs backtest %s/%s: %d trades, return=%.1f%%, sharpe=%s",
-        symbol_a, symbol_b, len(trades), total_return_pct,
+        symbol_a,
+        symbol_b,
+        len(trades),
+        total_return_pct,
         f"{sharpe:.2f}" if sharpe else "N/A",
     )
 

@@ -40,9 +40,13 @@ if len(tickers) < 2:
 
 # Weight inputs
 st.subheader("Weights")
-st.caption("Set portfolio weights (must sum to 100%). Equal weights applied by default.")
+st.caption(
+    "Set portfolio weights (must sum to 100%). Equal weights applied by default."
+)
 
-weight_mode = st.radio("Weight mode", ["Equal weights", "Custom weights"], horizontal=True)
+weight_mode = st.radio(
+    "Weight mode", ["Equal weights", "Custom weights"], horizontal=True
+)
 
 if weight_mode == "Equal weights":
     eq_w = round(100 / len(tickers), 1)
@@ -56,13 +60,20 @@ else:
     weights_pct = []
     for i, t in enumerate(tickers):
         col = cols[i % 5]
-        w = col.number_input(f"{t} %", min_value=0.0, max_value=100.0,
-                             value=round(100/len(tickers), 1), key=f"w_{t}")
+        w = col.number_input(
+            f"{t} %",
+            min_value=0.0,
+            max_value=100.0,
+            value=round(100 / len(tickers), 1),
+            key=f"w_{t}",
+        )
         weights_pct.append(w)
 
 total_w = sum(weights_pct)
 if abs(total_w - 100) > 0.5:
-    st.warning(f"Weights sum to {total_w:.1f}% (should be 100%). They will be normalized.")
+    st.warning(
+        f"Weights sum to {total_w:.1f}% (should be 100%). They will be normalized."
+    )
 
 # Normalize
 weights = [w / total_w for w in weights_pct]
@@ -112,15 +123,20 @@ if st.button("Analyze Portfolio", type="primary"):
         x = corr.columns.tolist()
         y = corr.index.tolist()
 
-        fig_heatmap = go.Figure(go.Heatmap(
-            z=z, x=x, y=y,
-            colorscale="RdYlGn",
-            zmin=-1, zmax=1,
-            text=[[f"{v:.2f}" for v in row] for row in z],
-            texttemplate="%{text}",
-            textfont={"size": 12},
-            colorbar=dict(title="Correlation"),
-        ))
+        fig_heatmap = go.Figure(
+            go.Heatmap(
+                z=z,
+                x=x,
+                y=y,
+                colorscale="RdYlGn",
+                zmin=-1,
+                zmax=1,
+                text=[[f"{v:.2f}" for v in row] for row in z],
+                texttemplate="%{text}",
+                textfont={"size": 12},
+                colorbar=dict(title="Correlation"),
+            )
+        )
         fig_heatmap.update_layout(
             height=400,
             margin=dict(t=10, b=10),
@@ -143,23 +159,33 @@ if st.button("Analyze Portfolio", type="primary"):
         vol_tickers = list(ind_vols.keys())
         vol_values = list(ind_vols.values())
 
-        colors_bar = ["#2da44e" if v < stats.get("portfolio_vol_pct", 50) else "#e05252"
-                      for v in vol_values]
-        fig_vol.add_trace(go.Bar(
-            x=vol_tickers, y=vol_values,
-            marker_color=colors_bar, name="Individual Volatility",
-            text=[f"{v:.1f}%" for v in vol_values],
-            textposition="outside",
-        ))
+        colors_bar = [
+            "#2da44e" if v < stats.get("portfolio_vol_pct", 50) else "#e05252"
+            for v in vol_values
+        ]
+        fig_vol.add_trace(
+            go.Bar(
+                x=vol_tickers,
+                y=vol_values,
+                marker_color=colors_bar,
+                name="Individual Volatility",
+                text=[f"{v:.1f}%" for v in vol_values],
+                textposition="outside",
+            )
+        )
         port_vol = stats.get("portfolio_vol_pct", 0)
         fig_vol.add_hline(
-            y=port_vol, line_dash="dash", line_color="#333",
+            y=port_vol,
+            line_dash="dash",
+            line_color="#333",
             annotation_text=f"Portfolio Vol: {port_vol:.1f}%",
             annotation_position="right",
         )
         fig_vol.update_layout(
-            height=350, yaxis_title="Ann. Volatility %",
-            margin=dict(t=10), showlegend=False,
+            height=350,
+            yaxis_title="Ann. Volatility %",
+            margin=dict(t=10),
+            showlegend=False,
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -174,13 +200,15 @@ if st.button("Analyze Portfolio", type="primary"):
         for i, (ticker, close_s) in enumerate(closes.items()):
             if close_s is None or len(close_s) < 2:
                 continue
-            normalized = (close_s / close_s.iloc[0] * 100)
-            fig_prices.add_trace(go.Scatter(
-                x=close_s.index,
-                y=normalized.values,
-                name=ticker,
-                line=dict(color=colors_line[i % len(colors_line)], width=2),
-            ))
+            normalized = close_s / close_s.iloc[0] * 100
+            fig_prices.add_trace(
+                go.Scatter(
+                    x=close_s.index,
+                    y=normalized.values,
+                    name=ticker,
+                    line=dict(color=colors_line[i % len(colors_line)], width=2),
+                )
+            )
         fig_prices.add_hline(y=100, line_dash="dot", line_color="#888", opacity=0.5)
         fig_prices.update_layout(
             height=400,
@@ -195,11 +223,11 @@ if st.button("Analyze Portfolio", type="primary"):
     st.subheader("AI Portfolio Commentary")
     if st.button("Generate Portfolio Commentary with Claude"):
         from analyzer import _get_client
+
         client = _get_client()
 
         portfolio_desc = "\n".join(
-            f"- {t}: {w*100:.1f}% weight"
-            for t, w in zip(tickers, weights)
+            f"- {t}: {w * 100:.1f}% weight" for t, w in zip(tickers, weights)
         )
 
         prompt = f"""## Portfolio Analysis Request
@@ -208,12 +236,12 @@ if st.button("Analyze Portfolio", type="primary"):
 {portfolio_desc}
 
 **Portfolio Statistics:**
-- Estimated annual return: {stats.get('portfolio_return_pct', 'N/A')}%
-- Annual volatility: {stats.get('portfolio_vol_pct', 'N/A')}%
-- Sharpe ratio: {stats.get('sharpe', 'N/A')}
+- Estimated annual return: {stats.get("portfolio_return_pct", "N/A")}%
+- Annual volatility: {stats.get("portfolio_vol_pct", "N/A")}%
+- Sharpe ratio: {stats.get("sharpe", "N/A")}
 - Portfolio beta vs SPY: {beta}
-- Diversification ratio: {stats.get('diversification_ratio', 'N/A')}
-- Effective number of positions: {stats.get('effective_n', 'N/A')}
+- Diversification ratio: {stats.get("diversification_ratio", "N/A")}
+- Effective number of positions: {stats.get("effective_n", "N/A")}
 
 Please provide:
 1. **Portfolio Assessment** — overall quality and balance
@@ -231,8 +259,10 @@ Please provide:
                 messages=[{"role": "user", "content": prompt}],
             ) as stream:
                 for event in stream:
-                    if (event.type == "content_block_delta" and
-                            event.delta.type == "text_delta"):
+                    if (
+                        event.type == "content_block_delta"
+                        and event.delta.type == "text_delta"
+                    ):
                         text += event.delta.text
                         placeholder.markdown(text)
 
@@ -241,7 +271,9 @@ Please provide:
     # -------------------------------------------------------------------------
     st.divider()
     st.subheader("Risk Parity Weights (P17.1)")
-    st.caption("Inverse-volatility weighting — allocates more to lower-volatility assets.")
+    st.caption(
+        "Inverse-volatility weighting — allocates more to lower-volatility assets."
+    )
     returns_df = result.get("returns_df")
     if returns_df is not None and not returns_df.empty:
         try:
@@ -250,7 +282,9 @@ Please provide:
             for i, t in enumerate(tickers):
                 rp_w = rp_weights.get(t, 0)
                 rp_cols[i].metric(t, f"{rp_w * 100:.1f}%")
-            st.caption("Compare to your current weights above. Higher allocation = lower volatility stock.")
+            st.caption(
+                "Compare to your current weights above. Higher allocation = lower volatility stock."
+            )
         except Exception as _e:
             st.caption(f"Risk parity weights unavailable: {_e}")
     else:
@@ -262,20 +296,29 @@ Please provide:
     st.divider()
     st.subheader("Historical Stress Tests (P17.2)")
     st.caption("Simulates portfolio loss in major historical market crashes.")
-    _positions = [{"symbol": t, "weight": w, "sector": "Unknown"} for t, w in zip(tickers, weights)]
-    _total_value = st.number_input("Portfolio Value ($)", value=100000, step=10000, key="port_val")
+    _positions = [
+        {"symbol": t, "weight": w, "sector": "Unknown"}
+        for t, w in zip(tickers, weights)
+    ]
+    _total_value = st.number_input(
+        "Portfolio Value ($)", value=100000, step=10000, key="port_val"
+    )
     try:
         _stress_results = run_stress_tests(_positions, _total_value)
         if _stress_results:
             stress_rows = []
             for _sr in _stress_results:
-                stress_rows.append({
-                    "Scenario": _sr["scenario"],
-                    "Est. Loss": f"${_sr['estimated_loss']:,.0f}",
-                    "Loss %": f"{_sr['loss_pct']:.1f}%",
-                    "Severity": _sr["severity"],
-                })
-            st.dataframe(pd.DataFrame(stress_rows), use_container_width=True, hide_index=True)
+                stress_rows.append(
+                    {
+                        "Scenario": _sr["scenario"],
+                        "Est. Loss": f"${_sr['estimated_loss']:,.0f}",
+                        "Loss %": f"{_sr['loss_pct']:.1f}%",
+                        "Severity": _sr["severity"],
+                    }
+                )
+            st.dataframe(
+                pd.DataFrame(stress_rows), use_container_width=True, hide_index=True
+            )
     except Exception as _e:
         st.caption(f"Stress tests unavailable: {_e}")
 
@@ -306,8 +349,12 @@ Please provide:
     # -------------------------------------------------------------------------
     st.divider()
     st.subheader("Portfolio Drift Alerts (P17.5)")
-    st.caption("Compares current weights to targets and flags positions that have drifted >5%.")
-    _target_weights = {t: 1 / len(tickers) for t in tickers}  # equal-weight target by default
+    st.caption(
+        "Compares current weights to targets and flags positions that have drifted >5%."
+    )
+    _target_weights = {
+        t: 1 / len(tickers) for t in tickers
+    }  # equal-weight target by default
     try:
         _drift_results = compute_portfolio_drift(
             [{**p, "current_weight": w} for p, w in zip(_positions, weights)],
@@ -321,6 +368,8 @@ Please provide:
                     f"({_dr['target_weight'] * 100:.1f}% → {_dr['current_weight'] * 100:.1f}%)"
                 )
         else:
-            st.success("Portfolio is within 5% of target weights — no rebalancing needed.")
+            st.success(
+                "Portfolio is within 5% of target weights — no rebalancing needed."
+            )
     except Exception as _e:
         st.caption(f"Drift analysis unavailable: {_e}")

@@ -1,4 +1,5 @@
 """Tests for backtest.py (P3.2)."""
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -14,26 +15,32 @@ def _make_df(n=300, trend="up"):
         prices = [200 - i * 0.2 + np.random.normal(0, 0.5) for i in range(n)]
     else:
         prices = [100 + np.random.normal(0, 2) for _ in range(n)]
-    return pd.DataFrame({
-        "Date": dates,
-        "Open": prices,
-        "High": [p * 1.01 for p in prices],
-        "Low": [p * 0.99 for p in prices],
-        "Close": prices,
-        "Volume": [1_000_000] * n,
-    })
+    return pd.DataFrame(
+        {
+            "Date": dates,
+            "Open": prices,
+            "High": [p * 1.01 for p in prices],
+            "Low": [p * 0.99 for p in prices],
+            "Close": prices,
+            "Volume": [1_000_000] * n,
+        }
+    )
 
 
 def test_basic_backtest_runs():
     from backtest import run_backtest
+
     df = _make_df(300, "up")
-    result = run_backtest(df, "TEST", entry_threshold=60, exit_threshold=40, lookback_years=1)
+    result = run_backtest(
+        df, "TEST", entry_threshold=60, exit_threshold=40, lookback_years=1
+    )
     assert result is not None
     assert result.symbol == "TEST"
 
 
 def test_backtest_returns_result_structure():
     from backtest import run_backtest, BacktestResult
+
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)
     assert isinstance(result, BacktestResult)
@@ -46,6 +53,7 @@ def test_backtest_returns_result_structure():
 
 def test_backtest_requires_minimum_data():
     from backtest import run_backtest
+
     df = _make_df(30)  # Too little data
     with pytest.raises(ValueError, match="Insufficient"):
         run_backtest(df, "TEST")
@@ -53,6 +61,7 @@ def test_backtest_requires_minimum_data():
 
 def test_equity_curve_starts_at_one():
     from backtest import run_backtest
+
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)
     assert result.equity_curve[0] == pytest.approx(1.0)
@@ -60,8 +69,11 @@ def test_equity_curve_starts_at_one():
 
 def test_trades_are_coherent():
     from backtest import run_backtest
+
     df = _make_df(400, "up")
-    result = run_backtest(df, "TEST", entry_threshold=55, exit_threshold=45, lookback_years=1)
+    result = run_backtest(
+        df, "TEST", entry_threshold=55, exit_threshold=45, lookback_years=1
+    )
     for trade in result.trades:
         assert trade.entry_price > 0
         assert trade.exit_price > 0
@@ -74,6 +86,7 @@ def test_trades_are_coherent():
 
 def test_win_rate_matches_trades():
     from backtest import run_backtest
+
     df = _make_df(400)
     result = run_backtest(df, "TEST", lookback_years=1)
     if result.total_trades > 0:
@@ -84,6 +97,7 @@ def test_win_rate_matches_trades():
 
 def test_sharpe_is_numeric_or_none():
     from backtest import run_backtest
+
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)
     assert result.sharpe_ratio is None or isinstance(result.sharpe_ratio, float)

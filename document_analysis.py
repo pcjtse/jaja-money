@@ -6,6 +6,7 @@ and streams Claude financial analysis including key numbers, risks, and red flag
 Usage:
     from document_analysis import extract_pdf_text, stream_document_analysis
 """
+
 from __future__ import annotations
 
 import io
@@ -127,11 +128,11 @@ def stream_document_analysis(
         metrics = market_data
         market_context = f"""
 **Live Market Data for {symbol}:**
-- Current Price: ${metrics.get('price', 'N/A')}
-- P/E Ratio: {metrics.get('pe', 'N/A')}
-- EPS (TTM): {metrics.get('eps', 'N/A')}
-- Revenue Growth: {metrics.get('revenue_growth', 'N/A')}%
-- Gross Margin: {metrics.get('gross_margin', 'N/A')}%
+- Current Price: ${metrics.get("price", "N/A")}
+- P/E Ratio: {metrics.get("pe", "N/A")}
+- EPS (TTM): {metrics.get("eps", "N/A")}
+- Revenue Growth: {metrics.get("revenue_growth", "N/A")}%
+- Gross Margin: {metrics.get("gross_margin", "N/A")}%
 
 Cross-reference the document's claims against this live data where relevant."""
 

@@ -1,4 +1,5 @@
 """Reddit and StockTwits social sentiment aggregation (P16.1)."""
+
 from __future__ import annotations
 
 from log_setup import get_logger
@@ -46,13 +47,15 @@ def fetch_reddit_mentions(symbol: str, limit: int = 25) -> list[dict]:
         posts = []
         for child in children:
             post_data = child.get("data", {})
-            posts.append({
-                "title": post_data.get("title", ""),
-                "score": int(post_data.get("score", 0) or 0),
-                "num_comments": int(post_data.get("num_comments", 0) or 0),
-                "created_utc": float(post_data.get("created_utc", 0) or 0),
-                "subreddit": post_data.get("subreddit", ""),
-            })
+            posts.append(
+                {
+                    "title": post_data.get("title", ""),
+                    "score": int(post_data.get("score", 0) or 0),
+                    "num_comments": int(post_data.get("num_comments", 0) or 0),
+                    "created_utc": float(post_data.get("created_utc", 0) or 0),
+                    "subreddit": post_data.get("subreddit", ""),
+                }
+            )
         log.debug("Reddit: fetched %d posts for %s", len(posts), symbol)
         return posts
     except Exception as exc:
@@ -101,11 +104,13 @@ def fetch_stocktwits_messages(symbol: str, limit: int = 30) -> list[dict]:
                 basic = sentiment_data.get("basic", "")
                 if basic:
                     sentiment = basic.lower()  # "bullish" or "bearish"
-            messages.append({
-                "body": msg.get("body", ""),
-                "sentiment": sentiment,
-                "created_at": msg.get("created_at", ""),
-            })
+            messages.append(
+                {
+                    "body": msg.get("body", ""),
+                    "sentiment": sentiment,
+                    "created_at": msg.get("created_at", ""),
+                }
+            )
         log.debug("StockTwits: fetched %d messages for %s", len(messages), symbol)
         return messages
     except Exception as exc:

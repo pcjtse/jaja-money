@@ -3,6 +3,7 @@
 Provides a function to run full analysis on multiple tickers
 and return a side-by-side comparison dict.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -40,11 +41,17 @@ def analyze_ticker(symbol: str, api) -> dict | None:
 
         try:
             daily = api.get_daily(symbol, years=1)
-            df = pd.DataFrame({
-                "Date": pd.to_datetime(daily["t"], unit="s"),
-                "Close": daily["c"],
-                "Volume": daily["v"],
-            }).sort_values("Date").reset_index(drop=True)
+            df = (
+                pd.DataFrame(
+                    {
+                        "Date": pd.to_datetime(daily["t"], unit="s"),
+                        "Close": daily["c"],
+                        "Volume": daily["v"],
+                    }
+                )
+                .sort_values("Date")
+                .reset_index(drop=True)
+            )
             close = df["Close"]
         except Exception:
             close = None
@@ -138,26 +145,34 @@ def comparison_dataframe(results: list[dict]) -> pd.DataFrame:
     for r in results:
         mc = r.get("mc_m")
         if mc is not None:
-            mc_str = f"${mc/1000:.1f}B" if mc < 1_000_000 else f"${mc/1_000_000:.1f}T"
+            mc_str = (
+                f"${mc / 1000:.1f}B" if mc < 1_000_000 else f"${mc / 1_000_000:.1f}T"
+            )
         else:
             mc_str = "N/A"
 
-        rows.append({
-            "Symbol": r["symbol"],
-            "Name": r["name"][:25],
-            "Sector": r["sector"],
-            "Price": f"${r['price']:,.2f}" if r["price"] else "N/A",
-            "Day %": f"{r['change_pct']:+.2f}%" if r.get("change_pct") is not None else "N/A",
-            "Factor Score": r["factor_score"],
-            "Signal": r["composite_label"],
-            "Risk Score": r["risk_score"],
-            "Risk Level": r["risk_level"],
-            "P/E": f"{r['pe']:.1f}×" if r.get("pe") else "N/A",
-            "Market Cap": mc_str,
-            "Flags": r["flag_count"],
-            "Volatility": f"{r['hv']:.1f}%" if r.get("hv") is not None else "N/A",
-            "Drawdown": f"{r['drawdown_pct']:.1f}%" if r.get("drawdown_pct") is not None else "N/A",
-        })
+        rows.append(
+            {
+                "Symbol": r["symbol"],
+                "Name": r["name"][:25],
+                "Sector": r["sector"],
+                "Price": f"${r['price']:,.2f}" if r["price"] else "N/A",
+                "Day %": f"{r['change_pct']:+.2f}%"
+                if r.get("change_pct") is not None
+                else "N/A",
+                "Factor Score": r["factor_score"],
+                "Signal": r["composite_label"],
+                "Risk Score": r["risk_score"],
+                "Risk Level": r["risk_level"],
+                "P/E": f"{r['pe']:.1f}×" if r.get("pe") else "N/A",
+                "Market Cap": mc_str,
+                "Flags": r["flag_count"],
+                "Volatility": f"{r['hv']:.1f}%" if r.get("hv") is not None else "N/A",
+                "Drawdown": f"{r['drawdown_pct']:.1f}%"
+                if r.get("drawdown_pct") is not None
+                else "N/A",
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -179,6 +194,7 @@ def fetch_peer_metrics(symbol: str, api) -> dict:
     dict with: target_metrics, peers (list), percentile_ranks, peer_tickers
     """
     from log_setup import get_logger
+
     log = get_logger(__name__)
 
     peer_tickers = []
@@ -242,16 +258,18 @@ def fetch_peer_metrics(symbol: str, api) -> dict:
     peer_table = []
     for ticker in all_tickers:
         m = metrics_by_ticker.get(ticker, {})
-        peer_table.append({
-            "ticker": ticker,
-            "name": m.get("name", ticker),
-            "pe": m.get("pe"),
-            "roe": m.get("roe"),
-            "revenue_growth": m.get("revenue_growth"),
-            "gross_margin": m.get("gross_margin"),
-            "market_cap": m.get("market_cap"),
-            "is_target": ticker == symbol,
-        })
+        peer_table.append(
+            {
+                "ticker": ticker,
+                "name": m.get("name", ticker),
+                "pe": m.get("pe"),
+                "roe": m.get("roe"),
+                "revenue_growth": m.get("revenue_growth"),
+                "gross_margin": m.get("gross_margin"),
+                "market_cap": m.get("market_cap"),
+                "is_target": ticker == symbol,
+            }
+        )
 
     return {
         "target": symbol,

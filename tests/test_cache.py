@@ -1,4 +1,5 @@
 """Tests for cache.py (P1.5)."""
+
 import time
 import pytest
 
@@ -6,6 +7,7 @@ import pytest
 @pytest.fixture
 def dc(tmp_path):
     from cache import DiskCache
+
     return DiskCache(cache_dir=tmp_path)
 
 

@@ -7,6 +7,7 @@ provider silently degrades to the next available source.
 
 Alpha Vantage requires ALPHA_VANTAGE_API_KEY in the environment.
 """
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ log = get_logger(__name__)
 # Optional yfinance
 try:
     import yfinance as yf
+
     _HAS_YFINANCE = True
 except ImportError:
     _HAS_YFINANCE = False
@@ -28,6 +30,7 @@ except ImportError:
 # Optional requests (for Alpha Vantage REST calls)
 try:
     import requests as _requests
+
     _HAS_REQUESTS = True
 except ImportError:
     _HAS_REQUESTS = False
@@ -38,6 +41,7 @@ _AV_BASE = "https://www.alphavantage.co/query"
 # ---------------------------------------------------------------------------
 # yfinance helpers
 # ---------------------------------------------------------------------------
+
 
 def _yf_quote(symbol: str) -> dict:
     t = yf.Ticker(symbol)
@@ -102,13 +106,15 @@ def _yf_news(symbol: str, days: int = 7) -> list:
         ts = item.get("providerPublishTime") or item.get("publishTime") or 0
         if ts < cutoff:
             continue
-        result.append({
-            "headline": item.get("title") or item.get("headline", ""),
-            "summary": item.get("summary", ""),
-            "source": item.get("publisher") or item.get("source", ""),
-            "url": item.get("link") or item.get("url", ""),
-            "datetime": ts,
-        })
+        result.append(
+            {
+                "headline": item.get("title") or item.get("headline", ""),
+                "summary": item.get("summary", ""),
+                "source": item.get("publisher") or item.get("source", ""),
+                "url": item.get("link") or item.get("url", ""),
+                "datetime": ts,
+            }
+        )
     return result
 
 
@@ -120,14 +126,16 @@ def _yf_recommendations(symbol: str) -> list:
     # yfinance returns a DataFrame; convert to Finnhub format
     try:
         latest = recs.iloc[-1]
-        return [{
-            "period": str(recs.index[-1])[:10],
-            "strongBuy": int(latest.get("strongBuy", 0)),
-            "buy": int(latest.get("buy", 0)),
-            "hold": int(latest.get("hold", 0)),
-            "sell": int(latest.get("sell", 0)),
-            "strongSell": int(latest.get("strongSell", 0)),
-        }]
+        return [
+            {
+                "period": str(recs.index[-1])[:10],
+                "strongBuy": int(latest.get("strongBuy", 0)),
+                "buy": int(latest.get("buy", 0)),
+                "hold": int(latest.get("hold", 0)),
+                "sell": int(latest.get("sell", 0)),
+                "strongSell": int(latest.get("strongSell", 0)),
+            }
+        ]
     except Exception:
         return []
 
@@ -145,12 +153,14 @@ def _yf_earnings(symbol: str, limit: int = 4) -> list:
             surprise_pct = None
             if actual is not None and estimate and estimate != 0:
                 surprise_pct = (actual - estimate) / abs(estimate) * 100
-            result.append({
-                "period": str(idx)[:10] if hasattr(idx, "__str__") else "",
-                "actual": actual,
-                "estimate": estimate,
-                "surprisePercent": surprise_pct,
-            })
+            result.append(
+                {
+                    "period": str(idx)[:10] if hasattr(idx, "__str__") else "",
+                    "actual": actual,
+                    "estimate": estimate,
+                    "surprisePercent": surprise_pct,
+                }
+            )
         return result
     except Exception:
         return []
@@ -164,6 +174,7 @@ def _yf_peers(symbol: str) -> list:
 # ---------------------------------------------------------------------------
 # P3.5: Alpha Vantage helpers (fundamentals fallback)
 # ---------------------------------------------------------------------------
+
 
 def _av_financials(symbol: str) -> dict:
     """Fetch fundamental data from Alpha Vantage OVERVIEW endpoint.
@@ -201,7 +212,9 @@ def _av_financials(symbol: str) -> dict:
     div_yield_pct = div_yield_raw * 100 if div_yield_raw else None
 
     return {
-        "peBasicExclExtraTTM": _safe_float(data.get("TrailingPE") or data.get("PERatio")),
+        "peBasicExclExtraTTM": _safe_float(
+            data.get("TrailingPE") or data.get("PERatio")
+        ),
         "epsBasicExclExtraItemsTTM": _safe_float(data.get("EPS")),
         "marketCapitalization": mc_m,
         "dividendYieldIndicatedAnnual": div_yield_pct,
@@ -221,6 +234,7 @@ def _av_financials(symbol: str) -> dict:
 # Public provider class
 # ---------------------------------------------------------------------------
 
+
 class DataProvider:
     """Unified data provider: Finnhub first, yfinance fallback."""
 
@@ -233,6 +247,7 @@ class DataProvider:
 
         # Lazy import to avoid circular dep
         from api import FinnhubAPI
+
         try:
             self._finnhub = FinnhubAPI()
             self._has_finnhub = True
@@ -264,7 +279,11 @@ class DataProvider:
                 self._source_used = "finnhub"
                 return result
             except Exception as exc:
-                log.warning("Finnhub %s failed (%s); falling back to yfinance", finnhub_method, exc)
+                log.warning(
+                    "Finnhub %s failed (%s); falling back to yfinance",
+                    finnhub_method,
+                    exc,
+                )
 
         # Fallback to yfinance
         if _HAS_YFINANCE:
@@ -284,13 +303,19 @@ class DataProvider:
             return self._call("get_financials", _yf_financials, symbol)
         except Exception as exc:
             # Try Alpha Vantage as a third-tier fallback for fundamentals
-            log.warning("Primary/yfinance financials failed for %s (%s); trying Alpha Vantage", symbol, exc)
+            log.warning(
+                "Primary/yfinance financials failed for %s (%s); trying Alpha Vantage",
+                symbol,
+                exc,
+            )
             try:
                 result = _av_financials(symbol)
                 self._source_used = "alpha_vantage"
                 return result
             except Exception as av_exc:
-                log.warning("Alpha Vantage financials also failed for %s: %s", symbol, av_exc)
+                log.warning(
+                    "Alpha Vantage financials also failed for %s: %s", symbol, av_exc
+                )
                 raise exc
 
     def get_daily(self, symbol: str, years: int = 2) -> dict:

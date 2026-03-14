@@ -8,6 +8,7 @@ Usage:
     for chunk in run_research_agent("AAPL", api, question="What is the bull case?"):
         print(chunk, end="")
 """
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,11 @@ _TOOLS = [
             "type": "object",
             "properties": {
                 "symbol": {"type": "string"},
-                "days": {"type": "integer", "description": "Days of news to fetch", "default": 7},
+                "days": {
+                    "type": "integer",
+                    "description": "Days of news to fetch",
+                    "default": 7,
+                },
             },
             "required": ["symbol"],
         },
@@ -127,7 +132,10 @@ def _execute_tool(tool_name: str, tool_input: dict, api) -> str:
             days = tool_input.get("days", 7)
             news = api.get_news(symbol, days=days)
             result = [
-                {"headline": a.get("headline", ""), "summary": a.get("summary", "")[:200]}
+                {
+                    "headline": a.get("headline", ""),
+                    "summary": a.get("summary", "")[:200],
+                }
                 for a in news[:10]
             ]
         elif tool_name == "get_earnings":

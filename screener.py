@@ -12,6 +12,7 @@ Enhancements:
 Usage:
     from screener import run_screen, apply_filters, load_universe
 """
+
 from __future__ import annotations
 
 import json
@@ -40,6 +41,7 @@ SHORT_SQUEEZE_PRESET: dict = {
 # ---------------------------------------------------------------------------
 # P7.1: Universe loaders
 # ---------------------------------------------------------------------------
+
 
 def load_sp500() -> list[str]:
     """Load S&P 500 tickers from data/sp500.csv."""
@@ -103,8 +105,8 @@ def load_universe(name: str = "default", sector_filter: str | None = None) -> li
 # ---------------------------------------------------------------------------
 
 _OP_MAP = {
-    ">":  lambda v, t: v is not None and v > t,
-    "<":  lambda v, t: v is not None and v < t,
+    ">": lambda v, t: v is not None and v > t,
+    "<": lambda v, t: v is not None and v < t,
     ">=": lambda v, t: v is not None and v >= t,
     "<=": lambda v, t: v is not None and v <= t,
     "==": lambda v, t: v is not None and v == t,
@@ -201,6 +203,7 @@ def delete_screen_template(name: str) -> None:
 # Single-ticker quick analysis (lightweight version for bulk screening)
 # ---------------------------------------------------------------------------
 
+
 def _quick_analyze(symbol: str) -> dict | None:
     """Fetch minimal data and compute factor + risk score for one ticker.
 
@@ -226,11 +229,17 @@ def _quick_analyze(symbol: str) -> dict | None:
 
         try:
             daily = api.get_daily(symbol, years=1)
-            df = pd.DataFrame({
-                "Close": daily["c"],
-                "Volume": daily["v"],
-                "Date": pd.to_datetime(daily["t"], unit="s"),
-            }).sort_values("Date").reset_index(drop=True)
+            df = (
+                pd.DataFrame(
+                    {
+                        "Close": daily["c"],
+                        "Volume": daily["v"],
+                        "Date": pd.to_datetime(daily["t"], unit="s"),
+                    }
+                )
+                .sort_values("Date")
+                .reset_index(drop=True)
+            )
             close = df["Close"]
         except Exception:
             close = None
@@ -281,13 +290,14 @@ def _quick_analyze(symbol: str) -> dict | None:
         rsi = None
         if close is not None and len(close) >= 15:
             import math
+
             delta = close.diff()
             gain = delta.clip(lower=0)
             loss = -delta.clip(upper=0)
-            avg_gain = gain.ewm(alpha=1/14, min_periods=14).mean()
-            avg_loss = loss.ewm(alpha=1/14, min_periods=14).mean()
+            avg_gain = gain.ewm(alpha=1 / 14, min_periods=14).mean()
+            avg_loss = loss.ewm(alpha=1 / 14, min_periods=14).mean()
             rs = avg_gain / avg_loss
-            rsi_val = float((100 - 100/(1+rs)).iloc[-1])
+            rsi_val = float((100 - 100 / (1 + rs)).iloc[-1])
             rsi = None if math.isnan(rsi_val) else rsi_val
 
         return {
@@ -327,6 +337,7 @@ def _classify_trend(factors: list[dict]) -> str:
 # Bulk screening
 # ---------------------------------------------------------------------------
 
+
 def run_screen(
     tickers: list[str],
     filters: list[dict] | None = None,
@@ -341,8 +352,9 @@ def run_screen(
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results = []
-    log.info("Starting screen: %d tickers, %d filters",
-             len(tickers), len(filters or []))
+    log.info(
+        "Starting screen: %d tickers, %d filters", len(tickers), len(filters or [])
+    )
 
     def _worker(sym):
         time.sleep(delay_between)
@@ -399,7 +411,9 @@ def is_short_squeeze_candidate(short_data: dict, factor_score: int) -> bool:
     return meets_short and meets_cover and meets_momentum
 
 
-def apply_esg_filter(results: list[dict], min_esg_score: float | None = None) -> list[dict]:
+def apply_esg_filter(
+    results: list[dict], min_esg_score: float | None = None
+) -> list[dict]:
     """Filter screener results by minimum ESG score (P19.3).
 
     Tickers without ESG data (esg_score key absent or None) are kept, since
@@ -430,12 +444,16 @@ def apply_esg_filter(results: list[dict], min_esg_score: float | None = None) ->
         else:
             log.debug(
                 "ESG filter: excluded %s (esg_score=%.1f < min=%.1f)",
-                r.get("symbol", "?"), esg, min_esg_score,
+                r.get("symbol", "?"),
+                esg,
+                min_esg_score,
             )
 
     log.info(
         "ESG filter (min=%.1f): %d/%d results passed",
-        min_esg_score, len(filtered), len(results),
+        min_esg_score,
+        len(filtered),
+        len(results),
     )
     return filtered
 
@@ -444,11 +462,24 @@ def results_to_csv(results: list[dict]) -> str:
     """Convert screener results to CSV string for download (P7.3)."""
     import io
     import csv
+
     if not results:
         return ""
-    fieldnames = ["symbol", "name", "sector", "price", "factor_score",
-                  "composite_label", "risk_score", "risk_level",
-                  "pe_ratio", "market_cap_b", "rsi", "trend", "flag_count"]
+    fieldnames = [
+        "symbol",
+        "name",
+        "sector",
+        "price",
+        "factor_score",
+        "composite_label",
+        "risk_score",
+        "risk_level",
+        "pe_ratio",
+        "market_cap_b",
+        "rsi",
+        "trend",
+        "flag_count",
+    ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
@@ -472,7 +503,7 @@ def sentiment_skipped_warning() -> str:
 DIVIDEND_GROWTH_PRESET: dict = {
     "min_yield_pct": 2.0,
     "max_payout_ratio": 75.0,
-    "min_div_growth_rate_5y": 5.0,   # % CAGR
+    "min_div_growth_rate_5y": 5.0,  # % CAGR
     "max_risk_score": 55,
     "min_factor_score": 45,
 }
@@ -515,7 +546,7 @@ def is_dividend_growth_candidate(
 # ---------------------------------------------------------------------------
 
 DEEP_VALUE_PRESET: dict = {
-    "min_margin_of_safety": 0.10,   # 10% minimum
+    "min_margin_of_safety": 0.10,  # 10% minimum
     "max_pe_ratio": 22.0,
     "max_risk_score": 60,
 }
@@ -530,9 +561,8 @@ def compute_graham_filter(result: dict, financials: dict | None = None) -> dict:
 
     metrics = financials or {}
     eps = metrics.get("epsTTM") or metrics.get("epsBasicExclExtraItemsTTM")
-    bvps = (
-        metrics.get("bookValuePerShareAnnual")
-        or metrics.get("bookValuePerShareQuarterly")
+    bvps = metrics.get("bookValuePerShareAnnual") or metrics.get(
+        "bookValuePerShareQuarterly"
     )
     price = result.get("price")
 
@@ -547,7 +577,10 @@ def compute_graham_filter(result: dict, financials: dict | None = None) -> dict:
     p = DEEP_VALUE_PRESET
     is_deep = (
         margin >= p["min_margin_of_safety"]
-        and (result.get("pe_ratio") is None or float(result["pe_ratio"]) <= p["max_pe_ratio"])
+        and (
+            result.get("pe_ratio") is None
+            or float(result["pe_ratio"]) <= p["max_pe_ratio"]
+        )
         and result.get("risk_score", 100) <= p["max_risk_score"]
     )
 
@@ -596,13 +629,29 @@ def compute_cross_sectional_momentum(
             ret_6m = ret_12m = None
             if n >= p["lookback_6m_days"] + 1:
                 ret_6m = round(
-                    (float(close.iloc[-1]) / float(close.iloc[-p["lookback_6m_days"]]) - 1) * 100, 2
+                    (
+                        float(close.iloc[-1])
+                        / float(close.iloc[-p["lookback_6m_days"]])
+                        - 1
+                    )
+                    * 100,
+                    2,
                 )
             if n >= p["lookback_12m_days"] + 1:
                 ret_12m = round(
-                    (float(close.iloc[-1]) / float(close.iloc[-p["lookback_12m_days"]]) - 1) * 100, 2
+                    (
+                        float(close.iloc[-1])
+                        / float(close.iloc[-p["lookback_12m_days"]])
+                        - 1
+                    )
+                    * 100,
+                    2,
                 )
-            return {"symbol": symbol, "return_6m_pct": ret_6m, "return_12m_pct": ret_12m}
+            return {
+                "symbol": symbol,
+                "return_6m_pct": ret_6m,
+                "return_12m_pct": ret_12m,
+            }
         except Exception as exc:
             log.debug("Momentum fetch skipped %s: %s", symbol, exc)
             return None
@@ -612,7 +661,9 @@ def compute_cross_sectional_momentum(
         futures = {pool.submit(_fetch_returns, t): t for t in tickers}
         for fut in as_completed(futures):
             r = fut.result()
-            if r and (r["return_6m_pct"] is not None or r["return_12m_pct"] is not None):
+            if r and (
+                r["return_6m_pct"] is not None or r["return_12m_pct"] is not None
+            ):
                 results.append(r)
 
     if not results:
@@ -653,10 +704,10 @@ def momentum_laggards(results: list[dict], bottom_pct: float = 0.10) -> list[dic
 # ---------------------------------------------------------------------------
 
 SHORT_SELLING_PRESET: dict = {
-    "min_short_pct_float": 10.0,   # % of float sold short
+    "min_short_pct_float": 10.0,  # % of float sold short
     "min_days_to_cover": 3.0,
-    "max_factor_score": 38,        # weak fundamentals required
-    "insider_signal": "Selling",   # insider selling activity
+    "max_factor_score": 38,  # weak fundamentals required
+    "insider_signal": "Selling",  # insider selling activity
     "max_earnings_beat_rate": 0.40,  # < 40% beat rate
 }
 
@@ -692,8 +743,12 @@ def is_short_selling_candidate(
     if short_data:
         short_pct = short_data.get("short_pct_float")
         days_cover = short_data.get("days_to_cover")
-        if (short_pct is not None and float(short_pct) >= p["min_short_pct_float"]
-                and days_cover is not None and float(days_cover) >= p["min_days_to_cover"]):
+        if (
+            short_pct is not None
+            and float(short_pct) >= p["min_short_pct_float"]
+            and days_cover is not None
+            and float(days_cover) >= p["min_days_to_cover"]
+        ):
             signals_met += 1
 
     # Signal 3: Insider selling

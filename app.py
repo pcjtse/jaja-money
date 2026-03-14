@@ -52,31 +52,68 @@ from analyzer import (
     score_news_impact,
 )
 from sentiment import (
-    score_articles, aggregate_sentiment, SENTIMENT_COLOR, SENTIMENT_EMOJI,
+    score_articles,
+    aggregate_sentiment,
+    SENTIMENT_COLOR,
+    SENTIMENT_EMOJI,
     compute_impact_weighted_sentiment,
 )
 from factors import (
-    compute_factors, composite_score, composite_label_color,
-    calc_bollinger_bands, calc_obv, calc_vwap, calc_fibonacci_levels,
-    compute_factors_timeframe, compute_beat_consistency, compute_market_regime,
+    compute_factors,
+    composite_score,
+    composite_label_color,
+    calc_bollinger_bands,
+    calc_obv,
+    calc_vwap,
+    calc_fibonacci_levels,
+    compute_factors_timeframe,
+    compute_beat_consistency,
+    compute_market_regime,
 )
 from guardrails import compute_risk, apply_regime_adjustment
 from portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
 from watchlist import (
-    get_watchlist, add_to_watchlist, remove_from_watchlist, is_in_watchlist,
+    get_watchlist,
+    add_to_watchlist,
+    remove_from_watchlist,
+    is_in_watchlist,
 )
-from history import save_analysis, get_score_trend, get_latest_two_snapshots, get_last_n_snapshots
+from history import (
+    save_analysis,
+    get_score_trend,
+    get_latest_two_snapshots,
+    get_last_n_snapshots,
+)
 from alerts import (
-    get_alerts, add_alert, check_alerts, delete_alert,
-    CONDITION_TYPES, start_alert_scheduler, stop_alert_scheduler, is_scheduler_running,
+    get_alerts,
+    add_alert,
+    check_alerts,
+    delete_alert,
+    CONDITION_TYPES,
+    start_alert_scheduler,
+    stop_alert_scheduler,
+    is_scheduler_running,
     check_signal_changes,
 )
-from export import factors_to_csv, price_history_to_csv, analysis_to_html, analysis_to_pdf
+from export import (
+    factors_to_csv,
+    price_history_to_csv,
+    analysis_to_html,
+    analysis_to_pdf,
+)
 from cache import get_cache
 from log_setup import get_logger
 from ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
-from options_analysis import build_iv_surface, compute_options_metrics, compute_hedge_suggestions
-from social import fetch_reddit_mentions, fetch_stocktwits_messages, compute_social_sentiment
+from options_analysis import (
+    build_iv_surface,
+    compute_options_metrics,
+    compute_hedge_suggestions,
+)
+from social import (
+    fetch_reddit_mentions,
+    fetch_stocktwits_messages,
+    compute_social_sentiment,
+)
 from ownership import fetch_institutional_ownership, fetch_insider_summary
 
 log = get_logger(__name__)
@@ -95,6 +132,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Local technical indicator helpers
 # ---------------------------------------------------------------------------
+
 
 def calc_sma(series: pd.Series, length: int):
     if len(series) < length:
@@ -131,81 +169,101 @@ def calc_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
 # Cached data fetchers (Streamlit session cache + disk cache)
 # ---------------------------------------------------------------------------
 
+
 @st.cache_data(ttl=300)
 def fetch_quote(symbol: str) -> dict:
     return FinnhubAPI().get_quote(symbol)
+
 
 @st.cache_data(ttl=300)
 def fetch_profile(symbol: str) -> dict:
     return FinnhubAPI().get_profile(symbol)
 
+
 @st.cache_data(ttl=300)
 def fetch_financials(symbol: str) -> dict:
     return FinnhubAPI().get_financials(symbol)
+
 
 @st.cache_data(ttl=300)
 def fetch_daily(symbol: str) -> dict:
     return FinnhubAPI().get_daily(symbol)
 
+
 @st.cache_data(ttl=900)
 def fetch_news(symbol: str) -> list:
     return FinnhubAPI().get_news(symbol)
+
 
 @st.cache_data(ttl=300)
 def fetch_recommendations(symbol: str) -> list:
     return FinnhubAPI().get_recommendations(symbol)
 
+
 @st.cache_data(ttl=300)
 def fetch_earnings(symbol: str) -> list:
     return FinnhubAPI().get_earnings(symbol)
+
 
 @st.cache_data(ttl=300)
 def fetch_peers(symbol: str) -> list:
     return FinnhubAPI().get_peers(symbol)
 
+
 @st.cache_data(ttl=600)
 def fetch_option_metrics(symbol: str) -> dict:
     return FinnhubAPI().get_option_metrics(symbol)
+
 
 @st.cache_data(ttl=86400)
 def fetch_transcripts_list(symbol: str) -> list:
     return FinnhubAPI().get_transcripts_list(symbol)
 
+
 @st.cache_data(ttl=86400 * 7)
 def fetch_transcript(tid: str) -> dict:
     return FinnhubAPI().get_transcript(tid)
+
 
 @st.cache_data(ttl=3600 * 6)
 def fetch_earnings_calendar(symbol: str) -> dict:
     return FinnhubAPI().get_earnings_calendar(symbol)
 
+
 @st.cache_data(ttl=3600 * 12)
 def fetch_insider_transactions(symbol: str) -> list:
     return FinnhubAPI().get_insider_transactions(symbol)
+
 
 @st.cache_data(ttl=3600 * 6)
 def fetch_short_interest(symbol: str) -> dict:
     return FinnhubAPI().get_short_interest(symbol)
 
+
 @st.cache_data(ttl=3600 * 24)
 def fetch_macro_context() -> dict:
     return FinnhubAPI().get_macro_context()
+
 
 @st.cache_data(ttl=3600 * 12)
 def fetch_estimate_revisions(symbol: str) -> dict:
     return FinnhubAPI().get_estimate_revisions(symbol)
 
+
 @st.cache_data(ttl=3600)
 def fetch_weekly(symbol: str) -> dict:
     return FinnhubAPI().get_weekly(symbol)
+
 
 @st.cache_data(ttl=86400)
 def fetch_monthly(symbol: str) -> dict:
     return FinnhubAPI().get_monthly(symbol)
 
+
 @st.cache_data(ttl=86400)
 def fetch_analyst_price_targets(symbol: str) -> dict:
     return FinnhubAPI().get_analyst_price_targets(symbol)
+
 
 @st.cache_data(ttl=86400)
 def fetch_earnings_history(symbol: str) -> list:
@@ -222,10 +280,7 @@ with st.sidebar:
     symbol = st.text_input("Stock Symbol", placeholder="e.g. AAPL").strip().upper()
     analyze = st.button("Analyze", type="primary", use_container_width=True)
 
-    st.caption(
-        "Finnhub free tier: 60 req/min. "
-        "Results cached 5 min (memory) + disk."
-    )
+    st.caption("Finnhub free tier: 60 req/min. Results cached 5 min (memory) + disk.")
     st.divider()
 
     # Watchlist quick view
@@ -236,8 +291,9 @@ with st.sidebar:
             col1, col2 = st.columns([3, 1])
             fs = entry.get("factor_score")
             col1.write(f"**{entry['symbol']}** {f'· {fs}/100' if fs else ''}")
-            if col2.button("▶", key=f"wl_load_{entry['symbol']}",
-                           help=f"Load {entry['symbol']}"):
+            if col2.button(
+                "▶", key=f"wl_load_{entry['symbol']}", help=f"Load {entry['symbol']}"
+            ):
                 st.session_state["symbol_override"] = entry["symbol"]
                 st.rerun()
     else:
@@ -281,6 +337,7 @@ with st.sidebar:
     # P4.5: Factor weight settings
     with st.expander("⚙️ Factor Weights"):
         from config import cfg
+
         current_weights = dict(cfg.factor_weights)
         weight_keys = [
             ("valuation", "Valuation (P/E)", 0.15),
@@ -296,7 +353,11 @@ with st.sidebar:
         for key, label, default in weight_keys:
             val = current_weights.get(key, default)
             new_weights[key] = st.slider(
-                label, 0.0, 0.50, float(val), 0.05,
+                label,
+                0.0,
+                0.50,
+                float(val),
+                0.05,
                 key=f"wt_{key}",
             )
         # Normalize weights to sum to 1.0 and update cfg for this run
@@ -320,7 +381,9 @@ with st.sidebar:
         if ac2.button("Stop", disabled=not running, key="stop_sched"):
             stop_alert_scheduler()
             st.rerun()
-        st.caption("Checks cached quotes every 5 min. Sends desktop notification via plyer.")
+        st.caption(
+            "Checks cached quotes every 5 min. Sends desktop notification via plyer."
+        )
 
 # Handle watchlist quick-load
 if "symbol_override" in st.session_state:
@@ -391,8 +454,11 @@ try:
     if _spread is not None and _spread < 0:
         _macro_warnings.append(f"Yield curve inverted (spread={_spread:.2f}%)")
     if _macro_warnings:
-        st.warning("🌐 **Macro Risk Alert:** " + " · ".join(_macro_warnings) +
-                   " — Individual stock risk scores may understate tail risk.")
+        st.warning(
+            "🌐 **Macro Risk Alert:** "
+            + " · ".join(_macro_warnings)
+            + " — Individual stock risk scores may understate tail risk."
+        )
     _macro_caption_parts = []
     if _vix is not None:
         _macro_caption_parts.append(f"VIX: {_vix:.1f}")
@@ -401,8 +467,11 @@ try:
     if _macro.get("tbill_3m"):
         _macro_caption_parts.append(f"3M T-Bill: {_macro['tbill_3m']:.2f}%")
     if _macro_caption_parts:
-        st.caption("Macro context: " + "  |  ".join(_macro_caption_parts) +
-                   f"  |  Risk-free rate used: {_rfr*100:.2f}%")
+        st.caption(
+            "Macro context: "
+            + "  |  ".join(_macro_caption_parts)
+            + f"  |  Risk-free rate used: {_rfr * 100:.2f}%"
+        )
 except Exception:
     pass
 
@@ -437,9 +506,13 @@ if profile:
 
     if market_cap is not None:
         mc = float(market_cap)
-        mc_str = (f"${mc / 1_000_000:,.2f}T" if mc >= 1_000_000 else
-                  f"${mc / 1_000:,.2f}B" if mc >= 1_000 else
-                  f"${mc:,.2f}M")
+        mc_str = (
+            f"${mc / 1_000_000:,.2f}T"
+            if mc >= 1_000_000
+            else f"${mc / 1_000:,.2f}B"
+            if mc >= 1_000
+            else f"${mc:,.2f}M"
+        )
     else:
         mc_str = "N/A"
     col2.metric("Market Cap", mc_str)
@@ -447,7 +520,9 @@ if profile:
     col4.metric("EPS", f"${eps:.2f}" if eps is not None else "N/A")
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Dividend Yield", f"{div_yield:.2f}%" if div_yield is not None else "N/A")
+    col1.metric(
+        "Dividend Yield", f"{div_yield:.2f}%" if div_yield is not None else "N/A"
+    )
     col2.metric(
         "52-Week Range",
         f"${low_52:,.2f} – ${high_52:,.2f}" if (high_52 and low_52) else "N/A",
@@ -460,8 +535,11 @@ if profile:
         _days_to_earn = _earn_cal.get("days_to_earnings")
         _next_earn = _earn_cal.get("next_date")
         if _next_earn:
-            _earn_badge = (f"🔴 In {_days_to_earn}d" if _days_to_earn is not None and _days_to_earn <= 14
-                           else f"{_next_earn}")
+            _earn_badge = (
+                f"🔴 In {_days_to_earn}d"
+                if _days_to_earn is not None and _days_to_earn <= 14
+                else f"{_next_earn}"
+            )
             col3.metric("Next Earnings", _earn_badge)
         else:
             col3.metric("Next Earnings", "N/A")
@@ -474,7 +552,9 @@ if profile:
         pe_ratio=pe,
         div_yield=div_yield,
     )
-    st.caption(f"**Stock type (auto-detected):** {_stock_type} — Claude will use an adaptive analysis lens.")
+    st.caption(
+        f"**Stock type (auto-detected):** {_stock_type} — Claude will use an adaptive analysis lens."
+    )
 
     # Watchlist button
     in_wl = is_in_watchlist(symbol)
@@ -503,14 +583,16 @@ except Exception as e:
     st.error(f"Could not load price data: {e}")
 
 if daily:
-    df = pd.DataFrame({
-        "Date": pd.to_datetime(daily["t"], unit="s"),
-        "Open": daily["o"],
-        "High": daily["h"],
-        "Low": daily["l"],
-        "Close": daily["c"],
-        "Volume": daily["v"],
-    })
+    df = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(daily["t"], unit="s"),
+            "Open": daily["o"],
+            "High": daily["h"],
+            "Low": daily["l"],
+            "Close": daily["c"],
+            "Volume": daily["v"],
+        }
+    )
     df = df.sort_values("Date").reset_index(drop=True)
 
 # --- Technical Indicators (computed locally) ---
@@ -529,8 +611,13 @@ if df is not None and len(df) > 0:
 
     rsi_val = calc_rsi(close)
     if rsi_val is not None:
-        rsi_label = ("Overbought" if rsi_val >= 70 else
-                     "Oversold" if rsi_val <= 30 else "Neutral")
+        rsi_label = (
+            "Overbought"
+            if rsi_val >= 70
+            else "Oversold"
+            if rsi_val <= 30
+            else "Neutral"
+        )
         tech_cols[2].metric("RSI(14)", f"{rsi_val:.2f}", rsi_label)
     else:
         tech_cols[2].metric("RSI(14)", "N/A")
@@ -547,8 +634,13 @@ if df is not None and len(df) > 0:
     # P1.4: Bollinger Bands
     bb = calc_bollinger_bands(close, window=20, num_std=2.0)
     if bb:
-        bb_label = ("Above upper" if price > bb["upper"] else
-                    "Below lower" if price < bb["lower"] else "Inside bands")
+        bb_label = (
+            "Above upper"
+            if price > bb["upper"]
+            else "Below lower"
+            if price < bb["lower"]
+            else "Inside bands"
+        )
         tech_cols[5].metric("BB %B", f"{bb['pct_b']:.2f}", bb_label)
     else:
         tech_cols[5].metric("BB %B", "N/A")
@@ -584,21 +676,26 @@ if df is not None and len(df) > 0:
         n_subplots += 1
 
     fig = make_subplots(
-        rows=n_subplots, cols=1,
+        rows=n_subplots,
+        cols=1,
         shared_xaxes=True,
         vertical_spacing=0.03,
         row_heights=row_heights,
     )
 
     # Candlestick
-    fig.add_trace(go.Candlestick(
-        x=chart_df["Date"],
-        open=chart_df["Open"],
-        high=chart_df["High"],
-        low=chart_df["Low"],
-        close=chart_df["Close"],
-        name="Price",
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Candlestick(
+            x=chart_df["Date"],
+            open=chart_df["Open"],
+            high=chart_df["High"],
+            low=chart_df["Low"],
+            close=chart_df["Close"],
+            name="Price",
+        ),
+        row=1,
+        col=1,
+    )
 
     # SMAs
     if show_smas:
@@ -609,15 +706,27 @@ if df is not None and len(df) > 0:
         sma50_chart = sma50_s.tail(100)
         sma200_chart = sma200_s.tail(100)
         if sma50_chart.notna().any():
-            fig.add_trace(go.Scatter(
-                x=chart_df["Date"], y=sma50_chart.values,
-                name="SMA(50)", line=dict(color="#f0b429", width=1.5, dash="dot"),
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Date"],
+                    y=sma50_chart.values,
+                    name="SMA(50)",
+                    line=dict(color="#f0b429", width=1.5, dash="dot"),
+                ),
+                row=1,
+                col=1,
+            )
         if sma200_chart.notna().any():
-            fig.add_trace(go.Scatter(
-                x=chart_df["Date"], y=sma200_chart.values,
-                name="SMA(200)", line=dict(color="#e05252", width=1.5, dash="dash"),
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Date"],
+                    y=sma200_chart.values,
+                    name="SMA(200)",
+                    line=dict(color="#e05252", width=1.5, dash="dash"),
+                ),
+                row=1,
+                col=1,
+            )
 
     # Bollinger Bands
     if show_bb and bb:
@@ -626,26 +735,50 @@ if df is not None and len(df) > 0:
             upper_s = bb_full["upper_series"].tail(100)
             lower_s = bb_full["lower_series"].tail(100)
             mid_s = bb_full["middle_series"].tail(100)
-            fig.add_trace(go.Scatter(
-                x=chart_df["Date"], y=upper_s.values,
-                name="BB Upper", line=dict(color="rgba(99,110,250,0.5)", width=1),
-            ), row=1, col=1)
-            fig.add_trace(go.Scatter(
-                x=chart_df["Date"], y=lower_s.values,
-                name="BB Lower", line=dict(color="rgba(99,110,250,0.5)", width=1),
-                fill="tonexty", fillcolor="rgba(99,110,250,0.05)",
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Date"],
+                    y=upper_s.values,
+                    name="BB Upper",
+                    line=dict(color="rgba(99,110,250,0.5)", width=1),
+                ),
+                row=1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Date"],
+                    y=lower_s.values,
+                    name="BB Lower",
+                    line=dict(color="rgba(99,110,250,0.5)", width=1),
+                    fill="tonexty",
+                    fillcolor="rgba(99,110,250,0.05)",
+                ),
+                row=1,
+                col=1,
+            )
 
     current_row = 2
 
     # Volume subplot
     if show_vol:
-        colors = ["#2da44e" if chart_df["Close"].iloc[i] >= chart_df["Open"].iloc[i]
-                  else "#e05252" for i in range(len(chart_df))]
-        fig.add_trace(go.Bar(
-            x=chart_df["Date"], y=chart_df["Volume"],
-            name="Volume", marker_color=colors, showlegend=True,
-        ), row=current_row, col=1)
+        colors = [
+            "#2da44e"
+            if chart_df["Close"].iloc[i] >= chart_df["Open"].iloc[i]
+            else "#e05252"
+            for i in range(len(chart_df))
+        ]
+        fig.add_trace(
+            go.Bar(
+                x=chart_df["Date"],
+                y=chart_df["Volume"],
+                name="Volume",
+                marker_color=colors,
+                showlegend=True,
+            ),
+            row=current_row,
+            col=1,
+        )
         fig.update_yaxes(title_text="Volume", row=current_row, col=1)
         current_row += 1
 
@@ -654,10 +787,16 @@ if df is not None and len(df) > 0:
         obv_series = calc_obv(df["Close"], df["Volume"])
         if obv_series is not None:
             obv_chart = obv_series.tail(100)
-            fig.add_trace(go.Scatter(
-                x=chart_df["Date"], y=obv_chart.values,
-                name="OBV", line=dict(color="#6c63ff", width=1.5),
-            ), row=current_row, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["Date"],
+                    y=obv_chart.values,
+                    name="OBV",
+                    line=dict(color="#6c63ff", width=1.5),
+                ),
+                row=current_row,
+                col=1,
+            )
             fig.update_yaxes(title_text="OBV", row=current_row, col=1)
 
     # P1.4: Fibonacci retracement levels overlay
@@ -666,12 +805,12 @@ if df is not None and len(df) > 0:
         if fib_data:
             fib_colors = {
                 "100.0%": "#888888",
-                "78.6%":  "#e05252",
-                "61.8%":  "#f0b429",
-                "50.0%":  "#2da44e",
-                "38.2%":  "#f0b429",
-                "23.6%":  "#e05252",
-                "0.0%":   "#888888",
+                "78.6%": "#e05252",
+                "61.8%": "#f0b429",
+                "50.0%": "#2da44e",
+                "38.2%": "#f0b429",
+                "23.6%": "#e05252",
+                "0.0%": "#888888",
             }
             for label, level_price in fib_data["levels"].items():
                 fig.add_hline(
@@ -682,7 +821,8 @@ if df is not None and len(df) > 0:
                     annotation_text=f"Fib {label} ${level_price:,.2f}",
                     annotation_position="right",
                     annotation_font_size=9,
-                    row=1, col=1,
+                    row=1,
+                    col=1,
                 )
 
     fig.update_layout(
@@ -750,14 +890,18 @@ if recs:
     rec_cols[3].metric("Sell", sell)
     rec_cols[4].metric("Strong Sell", strong_sell)
 
-    fig_rec = go.Figure(go.Bar(
-        x=["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"],
-        y=[strong_buy, buy, hold, sell, strong_sell],
-        marker_color=["#1a7f37", "#2da44e", "#f0b429", "#e05252", "#cf2929"],
-    ))
+    fig_rec = go.Figure(
+        go.Bar(
+            x=["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"],
+            y=[strong_buy, buy, hold, sell, strong_sell],
+            marker_color=["#1a7f37", "#2da44e", "#f0b429", "#e05252", "#cf2929"],
+        )
+    )
     fig_rec.update_layout(
-        xaxis_title="Rating", yaxis_title="Number of Analysts",
-        height=300, margin=dict(t=20),
+        xaxis_title="Rating",
+        yaxis_title="Number of Analysts",
+        height=300,
+        margin=dict(t=20),
     )
     st.plotly_chart(fig_rec, use_container_width=True)
 
@@ -775,12 +919,14 @@ if earnings:
         actual = e.get("actual")
         estimate = e.get("estimate")
         surprise = e.get("surprisePercent")
-        rows.append({
-            "Period": e.get("period", ""),
-            "Actual EPS": f"${actual:.2f}" if actual is not None else "N/A",
-            "Estimated EPS": f"${estimate:.2f}" if estimate is not None else "N/A",
-            "Surprise %": f"{surprise:+.2f}%" if surprise is not None else "N/A",
-        })
+        rows.append(
+            {
+                "Period": e.get("period", ""),
+                "Actual EPS": f"${actual:.2f}" if actual is not None else "N/A",
+                "Estimated EPS": f"${estimate:.2f}" if estimate is not None else "N/A",
+                "Surprise %": f"{surprise:+.2f}%" if surprise is not None else "N/A",
+            }
+        )
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 # P19.4: Earnings history beat consistency
@@ -791,7 +937,9 @@ try:
         bc1, bc2, bc3 = st.columns(3)
         bc1.metric("Beat Rate", f"{_beat.get('consistency_score', 0):.0f}/100")
         bc2.metric("Beat Streak", str(_beat.get("streak", 0)) + " qtrs")
-        bc3.metric("Beat Count", f"{_beat.get('beat_count', 0)} / {_beat.get('total', 0)}")
+        bc3.metric(
+            "Beat Count", f"{_beat.get('beat_count', 0)} / {_beat.get('total', 0)}"
+        )
 except Exception:
     pass
 
@@ -813,7 +961,9 @@ with st.expander("Institutional Ownership & Insider Summary (P16.2)", expanded=F
         _inst_own = fetch_institutional_ownership(symbol)
         if _inst_own.get("available"):
             io1, io2, io3 = st.columns(3)
-            io1.metric("Institutional Hold %", f"{_inst_own.get('institutional_pct', 0):.1f}%")
+            io1.metric(
+                "Institutional Hold %", f"{_inst_own.get('institutional_pct', 0):.1f}%"
+            )
             io2.metric("Top Holders", str(_inst_own.get("holder_count", "N/A")))
             _top_holders = _inst_own.get("top_holders", [])
             if _top_holders:
@@ -821,7 +971,8 @@ with st.expander("Institutional Ownership & Insider Summary (P16.2)", expanded=F
             if _top_holders:
                 st.dataframe(
                     pd.DataFrame(_top_holders[:5]),
-                    use_container_width=True, hide_index=True,
+                    use_container_width=True,
+                    hide_index=True,
                 )
         else:
             st.caption("Institutional ownership data not available.")
@@ -861,6 +1012,7 @@ try:
         # P2.6: IV-based expected move (30-day horizon)
         if iv and price:
             import math as _math
+
             expected_move = price * (iv / 100) * _math.sqrt(30 / 365)
             opt_cols[4].metric(
                 "Expected Move (30d)",
@@ -870,30 +1022,40 @@ try:
             em_upper = price + expected_move
             em_lower = price - expected_move
             fig_em = go.Figure()
-            fig_em.add_trace(go.Scatter(
-                x=["Lower bound", "Current price", "Upper bound"],
-                y=[em_lower, price, em_upper],
-                mode="markers+lines",
-                marker=dict(size=[12, 16, 12],
-                            color=["#e05252", "#2da44e", "#2da44e"]),
-                line=dict(color="#888", width=1, dash="dot"),
-                showlegend=False,
-            ))
+            fig_em.add_trace(
+                go.Scatter(
+                    x=["Lower bound", "Current price", "Upper bound"],
+                    y=[em_lower, price, em_upper],
+                    mode="markers+lines",
+                    marker=dict(
+                        size=[12, 16, 12], color=["#e05252", "#2da44e", "#2da44e"]
+                    ),
+                    line=dict(color="#888", width=1, dash="dot"),
+                    showlegend=False,
+                )
+            )
             fig_em.update_layout(
-                height=180, margin=dict(t=10, b=10, l=10, r=10),
+                height=180,
+                margin=dict(t=10, b=10, l=10, r=10),
                 yaxis_title="Price (USD)",
                 xaxis=dict(tickfont=dict(size=11)),
             )
             st.plotly_chart(fig_em, use_container_width=True)
     else:
-        st.caption("Options data unavailable for this symbol (may require Finnhub premium tier).")
+        st.caption(
+            "Options data unavailable for this symbol (may require Finnhub premium tier)."
+        )
 except Exception as e:
     st.caption(f"Options data could not be fetched: {e}")
 
 # P16.3: Options IV Surface & advanced metrics
 with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False):
     try:
-        _opt_raw = FinnhubAPI().get_option_chain(symbol) if hasattr(FinnhubAPI(), "get_option_chain") else {}
+        _opt_raw = (
+            FinnhubAPI().get_option_chain(symbol)
+            if hasattr(FinnhubAPI(), "get_option_chain")
+            else {}
+        )
         if _opt_raw and price:
             _iv_surface = build_iv_surface(_opt_raw, price)
             _opt_metrics = compute_options_metrics(_opt_raw, price)
@@ -902,20 +1064,28 @@ with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False
             if _opt_metrics.get("max_pain"):
                 oc1, oc2, oc3, oc4 = st.columns(4)
                 oc1.metric("Max Pain", f"${_opt_metrics['max_pain']:,.2f}")
-                oc2.metric("ATM Straddle", f"${_opt_metrics.get('atm_straddle_cost', 0):,.2f}")
-                oc3.metric("Implied Move", f"±{_opt_metrics.get('implied_move_pct', 0):.1f}%")
-                oc4.metric("Unusual Flows", str(_opt_metrics.get("unusual_flow_count", 0)))
+                oc2.metric(
+                    "ATM Straddle", f"${_opt_metrics.get('atm_straddle_cost', 0):,.2f}"
+                )
+                oc3.metric(
+                    "Implied Move", f"±{_opt_metrics.get('implied_move_pct', 0):.1f}%"
+                )
+                oc4.metric(
+                    "Unusual Flows", str(_opt_metrics.get("unusual_flow_count", 0))
+                )
 
             if _iv_surface.get("strikes") and _iv_surface.get("expiries"):
                 _z = _iv_surface.get("iv_matrix", [])
                 if _z:
-                    fig_iv = go.Figure(go.Surface(
-                        z=_z,
-                        x=_iv_surface["expiries"],
-                        y=_iv_surface["strikes"],
-                        colorscale="Viridis",
-                        showscale=True,
-                    ))
+                    fig_iv = go.Figure(
+                        go.Surface(
+                            z=_z,
+                            x=_iv_surface["expiries"],
+                            y=_iv_surface["strikes"],
+                            colorscale="Viridis",
+                            showscale=True,
+                        )
+                    )
                     fig_iv.update_layout(
                         title="Implied Volatility Surface",
                         scene=dict(
@@ -929,8 +1099,10 @@ with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False
                     st.plotly_chart(fig_iv, use_container_width=True)
 
             if _hedge.get("protective_put"):
-                st.caption(f"Hedge suggestions — Protective put: ${_hedge['protective_put'].get('cost', 0):,.2f} | "
-                           f"Collar: ${_hedge.get('collar', {}).get('net_cost', 0):,.2f}")
+                st.caption(
+                    f"Hedge suggestions — Protective put: ${_hedge['protective_put'].get('cost', 0):,.2f} | "
+                    f"Collar: ${_hedge.get('collar', {}).get('net_cost', 0):,.2f}"
+                )
         else:
             st.caption("Full options chain data not available for IV surface.")
     except Exception as _e:
@@ -963,17 +1135,20 @@ if news:
     with agg_col1:
         st.metric("Overall Signal", signal, f"Net score: {net:+.2f}")
     with agg_col2:
-        fig_donut = go.Figure(go.Pie(
-            labels=["Positive", "Negative", "Neutral"],
-            values=[counts["positive"], counts["negative"], counts["neutral"]],
-            hole=0.6,
-            marker_colors=[
-                SENTIMENT_COLOR["positive"],
-                SENTIMENT_COLOR["negative"],
-                SENTIMENT_COLOR["neutral"],
-            ],
-            textinfo="label+percent", showlegend=False,
-        ))
+        fig_donut = go.Figure(
+            go.Pie(
+                labels=["Positive", "Negative", "Neutral"],
+                values=[counts["positive"], counts["negative"], counts["neutral"]],
+                hole=0.6,
+                marker_colors=[
+                    SENTIMENT_COLOR["positive"],
+                    SENTIMENT_COLOR["negative"],
+                    SENTIMENT_COLOR["neutral"],
+                ],
+                textinfo="label+percent",
+                showlegend=False,
+            )
+        )
         fig_donut.update_layout(height=200, margin=dict(t=10, b=10, l=10, r=10))
         st.plotly_chart(fig_donut, use_container_width=True)
 
@@ -1003,8 +1178,12 @@ if news:
 
     # P20.2: Impact-weighted sentiment
     try:
-        _impact_scores_raw = score_news_impact([a.get("headline", "") for a in displayed])
-        _impact_weighted = compute_impact_weighted_sentiment(displayed, scores, _impact_scores_raw)
+        _impact_scores_raw = score_news_impact(
+            [a.get("headline", "") for a in displayed]
+        )
+        _impact_weighted = compute_impact_weighted_sentiment(
+            displayed, scores, _impact_scores_raw
+        )
         _iw_net = _impact_weighted.get("weighted_net_score", 0)
         _iw_signal = _impact_weighted.get("weighted_signal", "Mixed / Neutral")
         _iw_dist = _impact_weighted.get("impact_distribution", {})
@@ -1034,6 +1213,7 @@ with st.expander("Social Sentiment — Reddit & StockTwits (P16.1)", expanded=Fa
         with st.spinner("Fetching Reddit & StockTwits data..."):
             try:
                 from sentiment import _load_finbert
+
                 _reddit = fetch_reddit_mentions(symbol, limit=25)
                 _stwits = fetch_stocktwits_messages(symbol, limit=25)
                 _finbert_pipe = _load_finbert()
@@ -1059,7 +1239,9 @@ try:
     transcripts = fetch_transcripts_list(symbol)
     if transcripts:
         t_options = {
-            f"{t.get('year', '')} Q{t.get('quarter', '')} — {t.get('id', '')}": t.get("id")
+            f"{t.get('year', '')} Q{t.get('quarter', '')} — {t.get('id', '')}": t.get(
+                "id"
+            )
             for t in transcripts[:5]
         }
         selected_t = st.selectbox("Select Transcript", list(t_options.keys()))
@@ -1092,12 +1274,16 @@ try:
                     placeholder="What did management say about margins?",
                     key="transcript_qa_input",
                 )
-                if _qa_question and st.button("Ask Claude about Transcript", key="transcript_qa_btn"):
+                if _qa_question and st.button(
+                    "Ask Claude about Transcript", key="transcript_qa_btn"
+                ):
                     _qa_placeholder = st.empty()
                     _qa_text = ""
                     try:
                         with st.spinner("Claude is answering your question..."):
-                            for _chunk in stream_transcript_qa(_qa_question, content, symbol):
+                            for _chunk in stream_transcript_qa(
+                                _qa_question, content, symbol
+                            ):
                                 _qa_text += _chunk
                                 _qa_placeholder.markdown(_qa_text)
                     except Exception as _e:
@@ -1109,7 +1295,9 @@ try:
                     fl_text = ""
                     try:
                         with st.spinner("Extracting forward-looking statements..."):
-                            for chunk in stream_forward_looking_analysis(symbol, content):
+                            for chunk in stream_forward_looking_analysis(
+                                symbol, content
+                            ):
                                 fl_text += chunk
                                 fl_placeholder.markdown(fl_text)
                     except Exception as e:
@@ -1182,68 +1370,93 @@ _label, _color = composite_label_color(_composite)
 gauge_col, radar_col = st.columns([1, 1])
 
 with gauge_col:
-    fig_gauge = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=_composite,
-        number={"suffix": " / 100", "font": {"size": 28}},
-        title={"text": f"<b>{_label}</b>", "font": {"size": 20, "color": _color}},
-        gauge={
-            "axis": {"range": [0, 100], "tickwidth": 1},
-            "bar": {"color": _color, "thickness": 0.3},
-            "bgcolor": "white",
-            "steps": [
-                {"range": [0,  30], "color": "#fde8e8"},
-                {"range": [30, 45], "color": "#fef3cd"},
-                {"range": [45, 55], "color": "#ebebeb"},
-                {"range": [55, 70], "color": "#d4edda"},
-                {"range": [70, 100], "color": "#c3e6cb"},
-            ],
-            "threshold": {
-                "line": {"color": _color, "width": 4},
-                "thickness": 0.75,
-                "value": _composite,
+    fig_gauge = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=_composite,
+            number={"suffix": " / 100", "font": {"size": 28}},
+            title={"text": f"<b>{_label}</b>", "font": {"size": 20, "color": _color}},
+            gauge={
+                "axis": {"range": [0, 100], "tickwidth": 1},
+                "bar": {"color": _color, "thickness": 0.3},
+                "bgcolor": "white",
+                "steps": [
+                    {"range": [0, 30], "color": "#fde8e8"},
+                    {"range": [30, 45], "color": "#fef3cd"},
+                    {"range": [45, 55], "color": "#ebebeb"},
+                    {"range": [55, 70], "color": "#d4edda"},
+                    {"range": [70, 100], "color": "#c3e6cb"},
+                ],
+                "threshold": {
+                    "line": {"color": _color, "width": 4},
+                    "thickness": 0.75,
+                    "value": _composite,
+                },
             },
-        },
-    ))
+        )
+    )
     fig_gauge.update_layout(height=280, margin=dict(t=40, b=10, l=20, r=20))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
 with radar_col:
-    _names  = [f["name"] for f in _factors]
+    _names = [f["name"] for f in _factors]
     _scores = [f["score"] for f in _factors]
-    _names_closed  = _names + [_names[0]]
+    _names_closed = _names + [_names[0]]
     _scores_closed = _scores + [_scores[0]]
-    fig_radar = go.Figure(go.Scatterpolar(
-        r=_scores_closed, theta=_names_closed,
-        fill="toself", fillcolor="rgba(45,164,78,0.15)",
-        line=dict(color="#2da44e", width=2), name="Factor Scores",
-    ))
+    fig_radar = go.Figure(
+        go.Scatterpolar(
+            r=_scores_closed,
+            theta=_names_closed,
+            fill="toself",
+            fillcolor="rgba(45,164,78,0.15)",
+            line=dict(color="#2da44e", width=2),
+            name="Factor Scores",
+        )
+    )
     fig_radar.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=9)),
             angularaxis=dict(tickfont=dict(size=10)),
         ),
-        showlegend=False, height=280, margin=dict(t=20, b=20, l=40, r=40),
+        showlegend=False,
+        height=280,
+        margin=dict(t=20, b=20, l=40, r=40),
     )
     st.plotly_chart(fig_radar, use_container_width=True)
 
 _rows = []
 for f in _factors:
     score = f["score"]
-    bar = ("🟢🟢🟢🟢" if score >= 70 else
-           "🟢🟢🟢⚪" if score >= 55 else
-           "🟡🟡⚪⚪" if score >= 45 else
-           "🔴🔴⚪⚪" if score >= 30 else "🔴🔴🔴🔴")
-    _rows.append({
-        "Factor": f["name"], "Score": score,
-        "Signal": bar, "Label": f["label"],
-        "Detail": f["detail"], "Weight": f"{f['weight']:.0%}",
-    })
+    bar = (
+        "🟢🟢🟢🟢"
+        if score >= 70
+        else "🟢🟢🟢⚪"
+        if score >= 55
+        else "🟡🟡⚪⚪"
+        if score >= 45
+        else "🔴🔴⚪⚪"
+        if score >= 30
+        else "🔴🔴🔴🔴"
+    )
+    _rows.append(
+        {
+            "Factor": f["name"],
+            "Score": score,
+            "Signal": bar,
+            "Label": f["label"],
+            "Detail": f["detail"],
+            "Weight": f"{f['weight']:.0%}",
+        }
+    )
 
 st.dataframe(
-    pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+    pd.DataFrame(_rows),
+    use_container_width=True,
+    hide_index=True,
     column_config={
-        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d"),
+        "Score": st.column_config.ProgressColumn(
+            "Score", min_value=0, max_value=100, format="%d"
+        ),
         "Signal": st.column_config.TextColumn("Signal", width="small"),
     },
 )
@@ -1253,10 +1466,16 @@ if _close_weekly is not None or _close_monthly is not None:
     with st.expander("Multi-Timeframe Factor Alignment (P15.3)", expanded=False):
         try:
             _mtf = compute_factors_timeframe(
-                quote=quote, financials=financials,
-                close_daily=_close, close_weekly=_close_weekly, close_monthly=_close_monthly,
-                earnings=_earnings_for_factors, recommendations=_recs_for_factors,
-                sentiment_agg=agg, sector=_sector, revisions=_revisions if _revisions else None,
+                quote=quote,
+                financials=financials,
+                close_daily=_close,
+                close_weekly=_close_weekly,
+                close_monthly=_close_monthly,
+                earnings=_earnings_for_factors,
+                recommendations=_recs_for_factors,
+                sentiment_agg=agg,
+                sector=_sector,
+                revisions=_revisions if _revisions else None,
             )
             tf_cols = st.columns(4)
             for _tf, _col in zip(["daily", "weekly", "monthly"], tf_cols[:3]):
@@ -1285,14 +1504,16 @@ try:
             _market_regime = compute_market_regime(_spy_close, _vix_val, _yield_spread)
             _regime_label = _market_regime.get("regime", "Unknown")
             _regime_adj = _market_regime.get("score_adjustment", 0)
-            _regime_color = {"Bull": "#2da44e", "Bear": "#e05252", "Neutral": "#f0b429"}.get(
-                _regime_label.split()[0], "#888"
-            )
+            _regime_color = {
+                "Bull": "#2da44e",
+                "Bear": "#e05252",
+                "Neutral": "#f0b429",
+            }.get(_regime_label.split()[0], "#888")
             st.markdown(
                 f'<div style="border-left:4px solid {_regime_color};padding:6px 12px;'
                 f'border-radius:4px;margin:8px 0">'
-                f'<b>Market Regime:</b> {_regime_label} &nbsp;|&nbsp; '
-                f'Score adjustment: {_regime_adj:+d} pts</div>',
+                f"<b>Market Regime:</b> {_regime_label} &nbsp;|&nbsp; "
+                f"Score adjustment: {_regime_adj:+d} pts</div>",
                 unsafe_allow_html=True,
             )
 except Exception:
@@ -1307,9 +1528,13 @@ st.caption(
 )
 
 _risk = compute_risk(
-    quote=quote, financials=financials, close=_close,
-    earnings=_earnings_for_factors, recommendations=_recs_for_factors,
-    sentiment_agg=agg, composite_factor_score=_composite,
+    quote=quote,
+    financials=financials,
+    close=_close,
+    earnings=_earnings_for_factors,
+    recommendations=_recs_for_factors,
+    sentiment_agg=agg,
+    composite_factor_score=_composite,
     earnings_calendar=_earn_cal,
     insider_transactions=_insider_txns if _insider_txns else None,
     short_interest=_short_int if _short_int else None,
@@ -1322,7 +1547,9 @@ if _market_regime:
 # P20.3: Signal change detection
 try:
     _signal_changes = check_signal_changes(
-        symbol, _composite, _risk.get("risk_level", "N/A"),
+        symbol,
+        _composite,
+        _risk.get("risk_level", "N/A"),
         history_fn=lambda s: get_last_n_snapshots(s, 2),
     )
     for _sc in _signal_changes:
@@ -1336,25 +1563,34 @@ with risk_gauge_col:
     _rlabel = _risk["risk_level"]
     _rcolor = _risk["risk_color"]
     _rscore = _risk["risk_score"]
-    fig_risk_gauge = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=_rscore,
-        number={"suffix": " / 100", "font": {"size": 28}},
-        title={"text": f"<b>Risk: {_rlabel}</b>", "font": {"size": 18, "color": _rcolor}},
-        gauge={
-            "axis": {"range": [0, 100]},
-            "bar": {"color": _rcolor, "thickness": 0.3},
-            "bgcolor": "white",
-            "steps": [
-                {"range": [0,  25], "color": "#c3e6cb"},
-                {"range": [25, 45], "color": "#d4edda"},
-                {"range": [45, 65], "color": "#fef3cd"},
-                {"range": [65, 80], "color": "#fde8e8"},
-                {"range": [80, 100], "color": "#f5c6cb"},
-            ],
-            "threshold": {"line": {"color": _rcolor, "width": 4}, "thickness": 0.75, "value": _rscore},
-        },
-    ))
+    fig_risk_gauge = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=_rscore,
+            number={"suffix": " / 100", "font": {"size": 28}},
+            title={
+                "text": f"<b>Risk: {_rlabel}</b>",
+                "font": {"size": 18, "color": _rcolor},
+            },
+            gauge={
+                "axis": {"range": [0, 100]},
+                "bar": {"color": _rcolor, "thickness": 0.3},
+                "bgcolor": "white",
+                "steps": [
+                    {"range": [0, 25], "color": "#c3e6cb"},
+                    {"range": [25, 45], "color": "#d4edda"},
+                    {"range": [45, 65], "color": "#fef3cd"},
+                    {"range": [65, 80], "color": "#fde8e8"},
+                    {"range": [80, 100], "color": "#f5c6cb"},
+                ],
+                "threshold": {
+                    "line": {"color": _rcolor, "width": 4},
+                    "thickness": 0.75,
+                    "value": _rscore,
+                },
+            },
+        )
+    )
     fig_risk_gauge.update_layout(height=260, margin=dict(t=40, b=10, l=20, r=20))
     st.plotly_chart(fig_risk_gauge, use_container_width=True)
 
@@ -1363,7 +1599,9 @@ with risk_meta_col:
     _dd = _risk.get("drawdown_pct")
     _vol_regime = _risk.get("vol_regime", "normal")
     m1, m2, m3 = st.columns(3)
-    m1.metric("Annualised Volatility (20d)", f"{_hv:.1f}%" if _hv is not None else "N/A")
+    m1.metric(
+        "Annualised Volatility (20d)", f"{_hv:.1f}%" if _hv is not None else "N/A"
+    )
     m2.metric("Drawdown from 52-Wk High", f"{_dd:.1f}%" if _dd is not None else "N/A")
     m3.metric("Vol Regime", _vol_regime.capitalize())
     m1.metric("Active Risk Flags", len(_risk["flags"]))
@@ -1380,12 +1618,17 @@ with risk_meta_col:
     # P5.4: Insider activity summary
     if _insider_txns:
         from datetime import date, timedelta
+
         _cutoff = (date.today() - timedelta(days=90)).isoformat()
-        _recent_ins = [t for t in _insider_txns if t.get("transactionDate", "") >= _cutoff]
+        _recent_ins = [
+            t for t in _insider_txns if t.get("transactionDate", "") >= _cutoff
+        ]
         _ins_buys = sum(1 for t in _recent_ins if t.get("transactionCode") == "P")
         _ins_sells = sum(1 for t in _recent_ins if t.get("transactionCode") == "S")
         if _ins_buys > 0 or _ins_sells > 0:
-            st.caption(f"Insider activity (90d): {_ins_buys} purchase(s) · {_ins_sells} sale(s)")
+            st.caption(
+                f"Insider activity (90d): {_ins_buys} purchase(s) · {_ins_sells} sale(s)"
+            )
 
 _flags = _risk["flags"]
 if not _flags:
@@ -1416,16 +1659,25 @@ save_analysis(
 trend = get_score_trend(symbol, limit=30)
 if len(trend["dates"]) > 1:
     fig_trend = go.Figure()
-    fig_trend.add_trace(go.Scatter(
-        x=trend["dates"], y=trend["factor_scores"],
-        name="Factor Score", line=dict(color="#2da44e", width=2),
-    ))
-    fig_trend.add_trace(go.Scatter(
-        x=trend["dates"], y=trend["risk_scores"],
-        name="Risk Score", line=dict(color="#e05252", width=2, dash="dot"),
-    ))
+    fig_trend.add_trace(
+        go.Scatter(
+            x=trend["dates"],
+            y=trend["factor_scores"],
+            name="Factor Score",
+            line=dict(color="#2da44e", width=2),
+        )
+    )
+    fig_trend.add_trace(
+        go.Scatter(
+            x=trend["dates"],
+            y=trend["risk_scores"],
+            name="Risk Score",
+            line=dict(color="#e05252", width=2, dash="dot"),
+        )
+    )
     fig_trend.update_layout(
-        height=200, margin=dict(t=10, b=10, l=10, r=10),
+        height=200,
+        margin=dict(t=10, b=10, l=10, r=10),
         yaxis=dict(range=[0, 100]),
         legend=dict(orientation="h"),
     )
@@ -1441,16 +1693,24 @@ if len(_snapshots) == 2:
         dc1, dc2, dc3 = st.columns(3)
         _fs_delta = _curr["factor_score"] - _prev["factor_score"]
         _rs_delta = _curr["risk_score"] - _prev["risk_score"]
-        dc1.metric("Factor Score",
-                   f"{_curr['factor_score']}/100 ({_curr['composite_label']})",
-                   f"{_fs_delta:+d} vs {_prev['date']}")
-        dc2.metric("Risk Score",
-                   f"{_curr['risk_score']}/100 ({_curr['risk_level']})",
-                   f"{_rs_delta:+d} vs {_prev['date']}")
+        dc1.metric(
+            "Factor Score",
+            f"{_curr['factor_score']}/100 ({_curr['composite_label']})",
+            f"{_fs_delta:+d} vs {_prev['date']}",
+        )
+        dc2.metric(
+            "Risk Score",
+            f"{_curr['risk_score']}/100 ({_curr['risk_level']})",
+            f"{_rs_delta:+d} vs {_prev['date']}",
+        )
         dc3.metric("Price", f"${_curr['price']:,.2f}" if _curr.get("price") else "N/A")
 
-        _prev_flags = {f["title"] for f in (json.loads(_prev.get("flags_json") or "[]"))}
-        _curr_flags = {f["title"] for f in (json.loads(_curr.get("flags_json") or "[]"))}
+        _prev_flags = {
+            f["title"] for f in (json.loads(_prev.get("flags_json") or "[]"))
+        }
+        _curr_flags = {
+            f["title"] for f in (json.loads(_curr.get("flags_json") or "[]"))
+        }
         _new_flags = _curr_flags - _prev_flags
         _removed_flags = _prev_flags - _curr_flags
         if _new_flags:
@@ -1476,8 +1736,10 @@ with st.expander("Configure Price Alert"):
         st.caption("Existing alerts:")
         for a in sym_alerts:
             col_a, col_b = st.columns([4, 1])
-            col_a.write(f"{'🟢' if a['status'] == 'active' else '🔔'} "
-                        f"{a['condition']} {a['threshold']}  ·  {a['note']}")
+            col_a.write(
+                f"{'🟢' if a['status'] == 'active' else '🔔'} "
+                f"{a['condition']} {a['threshold']}  ·  {a['note']}"
+            )
             if col_b.button("Delete", key=f"del_alert_{a['id']}"):
                 delete_alert(a["id"])
                 st.rerun()
@@ -1485,8 +1747,10 @@ with st.expander("Configure Price Alert"):
 # Check alerts now
 triggered_alerts = check_alerts(symbol, price, _composite, _rscore)
 for ta in triggered_alerts:
-    st.toast(f"Alert triggered: {ta['symbol']} {ta['condition']} {ta['threshold']}",
-             icon="🔔")
+    st.toast(
+        f"Alert triggered: {ta['symbol']} {ta['condition']} {ta['threshold']}",
+        icon="🔔",
+    )
 
 # --- Portfolio Construction ---
 st.divider()
@@ -1509,9 +1773,9 @@ st.markdown(
     f'<div style="background:{_suggestion["action_color"]}22;border-left:4px solid '
     f'{_suggestion["action_color"]};padding:10px 16px;border-radius:4px;margin:8px 0">'
     f'<span style="font-size:1.3rem;font-weight:700;color:{_suggestion["action_color"]}">'
-    f'{_suggestion["action"]}</span>'
+    f"{_suggestion['action']}</span>"
     f'<span style="margin-left:12px;color:#555">{_risk_tolerance} · {_horizon}</span>'
-    f'</div>',
+    f"</div>",
     unsafe_allow_html=True,
 )
 
@@ -1525,14 +1789,20 @@ _c2.metric(
 _c3.metric(
     "Target 1",
     f"${_suggestion['target_1']:,.2f}" if _suggestion["target_1"] else "N/A",
-    (f"+{(_suggestion['target_1'] / quote['c'] - 1) * 100:.1f}%"
-     if _suggestion["target_1"] and quote.get("c") else None),
+    (
+        f"+{(_suggestion['target_1'] / quote['c'] - 1) * 100:.1f}%"
+        if _suggestion["target_1"] and quote.get("c")
+        else None
+    ),
 )
 _c4.metric(
     "Target 2",
     f"${_suggestion['target_2']:,.2f}" if _suggestion["target_2"] else "N/A",
-    (f"+{(_suggestion['target_2'] / quote['c'] - 1) * 100:.1f}%"
-     if _suggestion["target_2"] and quote.get("c") else None),
+    (
+        f"+{(_suggestion['target_2'] / quote['c'] - 1) * 100:.1f}%"
+        if _suggestion["target_2"] and quote.get("c")
+        else None
+    ),
 )
 _c5.metric(
     "Risk / Reward",
@@ -1553,8 +1823,12 @@ if _run_memo:
     try:
         with st.spinner("Claude is writing your portfolio memo..."):
             for _chunk in stream_portfolio_memo(
-                symbol=symbol, suggestion=_suggestion, factors=_factors,
-                risk=_risk, profile=profile, risk_tolerance=_risk_tolerance,
+                symbol=symbol,
+                suggestion=_suggestion,
+                factors=_factors,
+                risk=_risk,
+                profile=profile,
+                risk_tolerance=_risk_tolerance,
                 horizon=_horizon,
             ):
                 _memo_text += _chunk
@@ -1565,16 +1839,23 @@ if _run_memo:
 # P15.2: AI Price Target
 st.divider()
 st.header("AI Price Target (P15.2)")
-st.caption("Claude generates bull/base/bear price targets based on fundamentals and technicals.")
+st.caption(
+    "Claude generates bull/base/bear price targets based on fundamentals and technicals."
+)
 if st.button("Generate AI Price Target", key="price_target_btn"):
     _pt_placeholder = st.empty()
     _pt_text = ""
     try:
         _pt_data_prompt = build_data_prompt(
-            symbol=symbol, quote=quote, profile=profile,
-            financials=financials, technicals={},
-            recommendations=recs, earnings=earnings,
-            peers=peers, news=news,
+            symbol=symbol,
+            quote=quote,
+            profile=profile,
+            financials=financials,
+            technicals={},
+            recommendations=recs,
+            earnings=earnings,
+            peers=peers,
+            news=news,
         )
         with st.spinner("Claude is generating price targets..."):
             for _chunk in stream_price_target(symbol, _pt_data_prompt, _stock_type):
@@ -1585,13 +1866,21 @@ if st.button("Generate AI Price Target", key="price_target_btn"):
             pt_c1, pt_c2, pt_c3 = st.columns(3)
             if _pt_parsed.get("bull"):
                 _upside = (_pt_parsed["bull"] / price - 1) * 100 if price else 0
-                pt_c1.metric("Bull Target", f"${_pt_parsed['bull']:,.2f}", f"+{_upside:.1f}%")
+                pt_c1.metric(
+                    "Bull Target", f"${_pt_parsed['bull']:,.2f}", f"+{_upside:.1f}%"
+                )
             if _pt_parsed.get("base"):
                 _base_upside = (_pt_parsed["base"] / price - 1) * 100 if price else 0
-                pt_c2.metric("Base Target", f"${_pt_parsed['base']:,.2f}", f"{_base_upside:+.1f}%")
+                pt_c2.metric(
+                    "Base Target",
+                    f"${_pt_parsed['base']:,.2f}",
+                    f"{_base_upside:+.1f}%",
+                )
             if _pt_parsed.get("bear"):
                 _downside = (_pt_parsed["bear"] / price - 1) * 100 if price else 0
-                pt_c3.metric("Bear Target", f"${_pt_parsed['bear']:,.2f}", f"{_downside:+.1f}%")
+                pt_c3.metric(
+                    "Bear Target", f"${_pt_parsed['bear']:,.2f}", f"{_downside:+.1f}%"
+                )
     except Exception as _e:
         st.error(f"Price target generation failed: {_e}")
 
@@ -1600,8 +1889,13 @@ try:
     _analyst_targets = fetch_analyst_price_targets(symbol)
     if _analyst_targets and _analyst_targets.get("targetMean"):
         at_c1, at_c2, at_c3, at_c4 = st.columns(4)
-        at_c1.metric("Analyst Mean Target", f"${_analyst_targets['targetMean']:,.2f}",
-                     f"{(_analyst_targets['targetMean'] / price - 1) * 100:+.1f}%" if price else None)
+        at_c1.metric(
+            "Analyst Mean Target",
+            f"${_analyst_targets['targetMean']:,.2f}",
+            f"{(_analyst_targets['targetMean'] / price - 1) * 100:+.1f}%"
+            if price
+            else None,
+        )
         at_c2.metric("High Target", f"${_analyst_targets.get('targetHigh', 0):,.2f}")
         at_c3.metric("Low Target", f"${_analyst_targets.get('targetLow', 0):,.2f}")
         at_c4.metric("# Analysts", str(_analyst_targets.get("numberOfAnalysts", "N/A")))
@@ -1620,7 +1914,9 @@ with st.expander("Supply Chain Analysis (P19.2)", expanded=False):
                     _sc_text += _chunk
                     _sc_placeholder.markdown(_sc_text)
             _sc_structured = extract_supply_chain_structured(_sc_text)
-            if _sc_structured.get("key_suppliers") or _sc_structured.get("key_customers"):
+            if _sc_structured.get("key_suppliers") or _sc_structured.get(
+                "key_customers"
+            ):
                 with st.expander("Structured Supply Chain Data"):
                     st.json(_sc_structured)
         except Exception as _e:
@@ -1629,18 +1925,21 @@ with st.expander("Supply Chain Analysis (P19.2)", expanded=False):
 # --- Fundamental Analyzer ---
 st.divider()
 st.header("Fundamental Analyzer")
-st.caption(f"Powered by Claude Opus 4.6 with adaptive thinking. "
-           f"Using **{_stock_type}** analysis lens.")
+st.caption(
+    f"Powered by Claude Opus 4.6 with adaptive thinking. "
+    f"Using **{_stock_type}** analysis lens."
+)
 
-_use_analysis_cache = st.checkbox("Use cached analysis if available", value=True, key="analysis_cache")
+_use_analysis_cache = st.checkbox(
+    "Use cached analysis if available", value=True, key="analysis_cache"
+)
 _override_stock_type = st.selectbox(
     "Override stock type (P9.2)",
     ["Auto-detect", "Growth", "Value", "Dividend", "Cyclical", "Defensive"],
 )
 _effective_stock_type = (
-    None if _override_stock_type == "Auto-detect"
-    else _override_stock_type
-) or (_stock_type if '_stock_type' in dir() else None)
+    None if _override_stock_type == "Auto-detect" else _override_stock_type
+) or (_stock_type if "_stock_type" in dir() else None)
 
 run_analysis = st.button("Run Fundamental Analysis", type="primary")
 
@@ -1667,16 +1966,23 @@ if run_analysis:
             technicals["bb_pct_b"] = f"{bb_v['pct_b']:.3f}"
 
     data_prompt = build_data_prompt(
-        symbol=symbol, quote=quote, profile=profile,
-        financials=financials, technicals=technicals,
-        recommendations=recs, earnings=earnings,
-        peers=peers, news=news,
+        symbol=symbol,
+        quote=quote,
+        profile=profile,
+        financials=financials,
+        technicals=technicals,
+        recommendations=recs,
+        earnings=earnings,
+        peers=peers,
+        news=news,
     )
 
     report_placeholder = st.empty()
     report_text = ""
     try:
-        with st.spinner(f"Claude is analyzing ({_effective_stock_type or 'default'} lens)..."):
+        with st.spinner(
+            f"Claude is analyzing ({_effective_stock_type or 'default'} lens)..."
+        ):
             for chunk in stream_fundamental_analysis(
                 data_prompt,
                 stock_type=_effective_stock_type,
@@ -1701,9 +2007,14 @@ with exp_col1:
     )
 with exp_col2:
     html_data = analysis_to_html(
-        symbol=symbol, quote=quote, profile=profile,
-        financials=financials, factors=_factors, risk=_risk,
-        composite_score=_composite, composite_label=_label,
+        symbol=symbol,
+        quote=quote,
+        profile=profile,
+        financials=financials,
+        factors=_factors,
+        risk=_risk,
+        composite_score=_composite,
+        composite_label=_label,
     )
     st.download_button(
         "Download HTML Report",
@@ -1717,6 +2028,7 @@ with exp_col3:
     try:
         if _price_chart_fig is not None:
             import plotly.io as _pio
+
             _chart_bytes = _pio.to_image(
                 _price_chart_fig, format="png", width=1200, height=500, engine="kaleido"
             )
@@ -1724,9 +2036,14 @@ with exp_col3:
         pass  # kaleido not installed or export failed
     try:
         pdf_data = analysis_to_pdf(
-            symbol=symbol, quote=quote, profile=profile,
-            financials=financials, factors=_factors, risk=_risk,
-            composite_score=_composite, composite_label=_label,
+            symbol=symbol,
+            quote=quote,
+            profile=profile,
+            financials=financials,
+            factors=_factors,
+            risk=_risk,
+            composite_score=_composite,
+            composite_label=_label,
             chart_image_bytes=_chart_bytes,
         )
         st.download_button(
@@ -1755,9 +2072,14 @@ if st.session_state.chat_symbol != symbol:
 
 # Build system prompt with current analysis context
 _chat_system = build_chat_system_prompt(
-    symbol=symbol, profile=profile, quote=quote,
-    financials=financials, factors=_factors, risk=_risk,
-    composite_score=_composite, composite_label=_label,
+    symbol=symbol,
+    profile=profile,
+    quote=quote,
+    financials=financials,
+    factors=_factors,
+    risk=_risk,
+    composite_score=_composite,
+    composite_label=_label,
 )
 
 # Display history
@@ -1772,7 +2094,9 @@ _trimmed_history, _was_trimmed = trim_chat_history(
 )
 if _was_trimmed:
     st.session_state.chat_history = _trimmed_history
-    st.info("💬 Chat history trimmed to fit context window (kept most recent exchanges).")
+    st.info(
+        "💬 Chat history trimmed to fit context window (kept most recent exchanges)."
+    )
 
 # Chat input
 if user_q := st.chat_input(f"Ask about {symbol}..."):
@@ -1820,6 +2144,7 @@ if os.getenv("DEBUG", "").lower() in ("1", "true", "yes"):
     st.divider()
     with st.expander("🔧 Developer Debug Panel"):
         import pathlib as _pathlib
+
         _log_file = _pathlib.Path.home() / ".jaja-money" / "jaja_money.log"
         if _log_file.exists():
             _log_lines = _log_file.read_text(errors="replace").splitlines()

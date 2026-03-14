@@ -59,17 +59,22 @@ if st.button("Load Sector Data", type="primary"):
     fig_bars = go.Figure()
     for _, row in df.iterrows():
         color = score_color(row.get("score", 50))
-        fig_bars.add_trace(go.Bar(
-            x=[row.get("score", 50)],
-            y=[f"{row['ticker']} — {row['name']}"],
-            orientation="h",
-            marker_color=color,
-            text=[f"{row.get('score', 50)}/100 ({row.get('phase', '')})"
-                  f"  |  1M: {row.get('perf_1m', 'N/A'):+.1f}%"
-                  if row.get('perf_1m') is not None else f"{row.get('score', 50)}/100"],
-            textposition="outside",
-            showlegend=False,
-        ))
+        fig_bars.add_trace(
+            go.Bar(
+                x=[row.get("score", 50)],
+                y=[f"{row['ticker']} — {row['name']}"],
+                orientation="h",
+                marker_color=color,
+                text=[
+                    f"{row.get('score', 50)}/100 ({row.get('phase', '')})"
+                    f"  |  1M: {row.get('perf_1m', 'N/A'):+.1f}%"
+                    if row.get("perf_1m") is not None
+                    else f"{row.get('score', 50)}/100"
+                ],
+                textposition="outside",
+                showlegend=False,
+            )
+        )
 
     fig_bars.update_layout(
         height=450,
@@ -85,19 +90,33 @@ if st.button("Load Sector Data", type="primary"):
     st.subheader("Sector Performance Summary")
     table_rows = []
     for row in data:
-        table_rows.append({
-            "Ticker": row["ticker"],
-            "Sector": row["name"],
-            "Score": row.get("score", 50),
-            "Phase": row.get("phase", "N/A"),
-            "1M %": f"{row['perf_1m']:+.1f}%" if row.get("perf_1m") is not None else "N/A",
-            "3M %": f"{row['perf_3m']:+.1f}%" if row.get("perf_3m") is not None else "N/A",
-            "6M %": f"{row['perf_6m']:+.1f}%" if row.get("perf_6m") is not None else "N/A",
-            "RSI": f"{row['rsi']:.1f}" if row.get("rsi") is not None else "N/A",
-            "Volatility": f"{row['volatility']:.1f}%" if row.get("volatility") is not None else "N/A",
-            "> SMA50": "✅" if row.get("above_sma50") else ("❌" if row.get("above_sma50") is not None else "N/A"),
-            "> SMA200": "✅" if row.get("above_sma200") else ("❌" if row.get("above_sma200") is not None else "N/A"),
-        })
+        table_rows.append(
+            {
+                "Ticker": row["ticker"],
+                "Sector": row["name"],
+                "Score": row.get("score", 50),
+                "Phase": row.get("phase", "N/A"),
+                "1M %": f"{row['perf_1m']:+.1f}%"
+                if row.get("perf_1m") is not None
+                else "N/A",
+                "3M %": f"{row['perf_3m']:+.1f}%"
+                if row.get("perf_3m") is not None
+                else "N/A",
+                "6M %": f"{row['perf_6m']:+.1f}%"
+                if row.get("perf_6m") is not None
+                else "N/A",
+                "RSI": f"{row['rsi']:.1f}" if row.get("rsi") is not None else "N/A",
+                "Volatility": f"{row['volatility']:.1f}%"
+                if row.get("volatility") is not None
+                else "N/A",
+                "> SMA50": "✅"
+                if row.get("above_sma50")
+                else ("❌" if row.get("above_sma50") is not None else "N/A"),
+                "> SMA200": "✅"
+                if row.get("above_sma200")
+                else ("❌" if row.get("above_sma200") is not None else "N/A"),
+            }
+        )
 
     st.dataframe(
         pd.DataFrame(table_rows),
@@ -138,34 +157,41 @@ if st.button("Load Sector Data", type="primary"):
         phase = row.get("phase", "Neutral")
         color = phase_colors.get(phase, "#888")
 
-        fig_quad.add_trace(go.Scatter(
-            x=[perf_3m],
-            y=[perf_1m],
-            mode="markers+text",
-            text=[row["ticker"]],
-            textposition="top center",
-            marker=dict(size=14, color=color, line=dict(width=1, color="white")),
-            showlegend=False,
-            name=phase,
-            hovertemplate=(
-                f"<b>{row['ticker']} — {row['name']}</b><br>"
-                f"1M: {perf_1m:+.1f}%<br>"
-                f"3M: {perf_3m:+.1f}%<br>"
-                f"Phase: {phase}<extra></extra>"
-            ),
-        ))
+        fig_quad.add_trace(
+            go.Scatter(
+                x=[perf_3m],
+                y=[perf_1m],
+                mode="markers+text",
+                text=[row["ticker"]],
+                textposition="top center",
+                marker=dict(size=14, color=color, line=dict(width=1, color="white")),
+                showlegend=False,
+                name=phase,
+                hovertemplate=(
+                    f"<b>{row['ticker']} — {row['name']}</b><br>"
+                    f"1M: {perf_1m:+.1f}%<br>"
+                    f"3M: {perf_3m:+.1f}%<br>"
+                    f"Phase: {phase}<extra></extra>"
+                ),
+            )
+        )
 
     fig_quad.add_hline(y=0, line_dash="dot", line_color="#888", opacity=0.5)
     fig_quad.add_vline(x=0, line_dash="dot", line_color="#888", opacity=0.5)
 
     # Quadrant labels
-    for (x, y, text) in [
-        (5, 5, "Leading"), (-5, 5, "Improving"),
-        (5, -5, "Weakening"), (-5, -5, "Lagging")
+    for x, y, text in [
+        (5, 5, "Leading"),
+        (-5, 5, "Improving"),
+        (5, -5, "Weakening"),
+        (-5, -5, "Lagging"),
     ]:
         fig_quad.add_annotation(
-            x=x, y=y, text=f"<b>{text}</b>",
-            showarrow=False, font=dict(size=11, color="#aaa"),
+            x=x,
+            y=y,
+            text=f"<b>{text}</b>",
+            showarrow=False,
+            font=dict(size=11, color="#aaa"),
         )
 
     fig_quad.update_layout(
@@ -180,13 +206,17 @@ if st.button("Load Sector Data", type="primary"):
     # Claude commentary (P9.4: uses stream_sector_rotation_narrative with caching)
     # -------------------------------------------------------------------------
     st.subheader("AI Sector Rotation Commentary (P9.4)")
-    use_cache = st.checkbox("Use cached sector analysis if available", value=True, key="sec_cache")
+    use_cache = st.checkbox(
+        "Use cached sector analysis if available", value=True, key="sec_cache"
+    )
     if st.button("Generate Sector Analysis with Claude"):
         placeholder = st.empty()
         text = ""
         with st.spinner("Claude is analyzing sectors..."):
             try:
-                for chunk in stream_sector_rotation_narrative(data, use_cache=use_cache):
+                for chunk in stream_sector_rotation_narrative(
+                    data, use_cache=use_cache
+                ):
                     text += chunk
                     placeholder.markdown(text)
             except Exception as e:

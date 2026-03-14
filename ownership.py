@@ -2,6 +2,7 @@
 
 Also provides short interest scoring for the short-selling screen (21.10).
 """
+
 from __future__ import annotations
 
 from log_setup import get_logger
@@ -31,6 +32,7 @@ def fetch_institutional_ownership(symbol: str) -> dict:
     """
     try:
         import yfinance as yf
+
         ticker = yf.Ticker(symbol)
         holders_df = ticker.institutional_holders
 
@@ -49,7 +51,9 @@ def fetch_institutional_ownership(symbol: str) -> dict:
             holder_name = str(row.get("Holder", row.get("holder", "")))
             # yfinance column names may vary across versions
             shares = int(row.get("Shares", row.get("shares", 0)) or 0)
-            pct_held_raw = row.get("% Out", row.get("pctHeld", row.get("pct_held", None)))
+            pct_held_raw = row.get(
+                "% Out", row.get("pctHeld", row.get("pct_held", None))
+            )
             value_raw = row.get("Value", row.get("value", 0))
 
             pct_held = 0.0
@@ -63,12 +67,14 @@ def fetch_institutional_ownership(symbol: str) -> dict:
 
             value = float(value_raw or 0)
 
-            top_holders.append({
-                "holder": holder_name,
-                "shares": shares,
-                "pct_held": round(pct_held, 4),
-                "value": round(value, 2),
-            })
+            top_holders.append(
+                {
+                    "holder": holder_name,
+                    "shares": shares,
+                    "pct_held": round(pct_held, 4),
+                    "value": round(value, 2),
+                }
+            )
 
         # Sort by shares descending
         top_holders.sort(key=lambda h: h["shares"], reverse=True)
@@ -202,6 +208,7 @@ def fetch_insider_summary(insider_txns: list) -> dict:
 # 21.10: Short selling combined signal
 # ---------------------------------------------------------------------------
 
+
 def compute_short_selling_score(
     factor_score: int,
     insider_summary: dict | None,
@@ -234,7 +241,7 @@ def compute_short_selling_score(
     detail_parts = []
 
     # Fundamental weakness: invert the factor score (0-100 → 0-40 contribution)
-    weak_score = max(0, 50 - factor_score)   # 0 when score=50, 50 when score=0
+    weak_score = max(0, 50 - factor_score)  # 0 when score=50, 50 when score=0
     fundamental_sub = int(min(40, weak_score * 0.8))
     detail_parts.append(f"Factor score: {factor_score}/100")
 
@@ -287,7 +294,11 @@ def compute_short_selling_score(
 
     log.debug(
         "Short selling score: %d (fundamental=%d, short_int=%d, insider=%d) — %s",
-        total, fundamental_sub, short_int_sub, insider_sub, label,
+        total,
+        fundamental_sub,
+        short_int_sub,
+        insider_sub,
+        label,
     )
 
     return {

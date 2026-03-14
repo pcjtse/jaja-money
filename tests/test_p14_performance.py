@@ -1,4 +1,5 @@
 """Tests for P14.x: Performance & Scale — Async API, Redis Cache, FastAPI Server."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -20,11 +21,21 @@ class TestConcurrentFetching:
 
         mock_client = MagicMock()
         mock_client.quote.return_value = {"c": 150.0, "dp": 1.0, "pc": 148.0}
-        mock_client.company_profile2.return_value = {"name": "Apple", "finnhubIndustry": "Technology"}
-        mock_client.company_basic_financials.return_value = {"metric": {"peBasicExclExtraTTM": 25.0}}
+        mock_client.company_profile2.return_value = {
+            "name": "Apple",
+            "finnhubIndustry": "Technology",
+        }
+        mock_client.company_basic_financials.return_value = {
+            "metric": {"peBasicExclExtraTTM": 25.0}
+        }
         mock_client.stock_candles.return_value = {
-            "s": "ok", "c": [100, 101, 102], "t": [1000, 2000, 3000],
-            "o": [99, 100, 101], "h": [101, 102, 103], "l": [98, 99, 100], "v": [1e6, 1e6, 1e6]
+            "s": "ok",
+            "c": [100, 101, 102],
+            "t": [1000, 2000, 3000],
+            "o": [99, 100, 101],
+            "h": [101, 102, 103],
+            "l": [98, 99, 100],
+            "v": [1e6, 1e6, 1e6],
         }
         mock_client.company_news.return_value = []
         mock_client.company_insider_transactions.return_value = {"data": []}
@@ -41,6 +52,7 @@ class TestConcurrentFetching:
             # Patch the _cached method to just call the function directly
             def mock_cached(key, fn, ttl=None):
                 return fn()
+
             api._cached = mock_cached
 
             result = api.fetch_all_parallel("AAPL")
@@ -58,6 +70,7 @@ class TestConcurrentFetching:
 
             def mock_cached(key, fn, ttl=None):
                 return {"mock": True}
+
             api._cached = mock_cached
 
             result = api.fetch_all_parallel("AAPL")
@@ -151,6 +164,7 @@ class TestRedisCacheBackend:
         monkeypatch.setenv("CACHE_BACKEND", "disk")
         # Reimport to trigger factory
         import cache as cache_module
+
         new_cache = cache_module._create_cache()
         assert isinstance(new_cache, DiskCache)
 
@@ -160,6 +174,7 @@ class TestRedisCacheBackend:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
         import cache as cache_module
+
         with patch.object(RedisCacheBackend, "_connect", lambda self: None):
             new_cache = cache_module._create_cache()
             assert isinstance(new_cache, RedisCacheBackend)
@@ -175,6 +190,7 @@ class TestFastAPIServer:
         """server.py should import without errors when FastAPI is installed."""
         try:
             import server
+
             assert hasattr(server, "app")
         except ImportError:
             pytest.skip("FastAPI not installed")
@@ -184,6 +200,7 @@ class TestFastAPIServer:
         try:
             from fastapi.testclient import TestClient
             import server
+
             client = TestClient(server.app)
             response = client.get("/health")
             assert response.status_code == 200
@@ -198,6 +215,7 @@ class TestFastAPIServer:
         try:
             from fastapi.testclient import TestClient
             import server
+
             client = TestClient(server.app)
             response = client.get("/health")
             data = response.json()
@@ -211,11 +229,14 @@ class TestFastAPIServer:
         try:
             from fastapi.testclient import TestClient
             import server
+
             client = TestClient(server.app)
 
             with patch("server._get_api") as mock_get_api:
                 mock_api = MagicMock()
-                mock_api.fetch_all_parallel.side_effect = Exception("No data for INVALID")
+                mock_api.fetch_all_parallel.side_effect = Exception(
+                    "No data for INVALID"
+                )
                 mock_get_api.return_value = mock_api
 
                 response = client.post("/analyze", json={"symbol": "INVALID"})
@@ -228,6 +249,7 @@ class TestFastAPIServer:
         try:
             from fastapi.testclient import TestClient
             import server
+
             client = TestClient(server.app)
             response = client.get("/docs")
             assert response.status_code == 200

@@ -6,6 +6,7 @@ and leading/lagging sectors.
 Usage:
     from sectors import get_sector_data, sector_momentum_score
 """
+
 from __future__ import annotations
 
 import math
@@ -24,6 +25,7 @@ SECTOR_ETFS = cfg.sector_etfs
 # ---------------------------------------------------------------------------
 # Momentum helpers
 # ---------------------------------------------------------------------------
+
 
 def _perf_pct(close: pd.Series, days: int) -> float | None:
     """Return percentage price change over the last `days` trading days."""
@@ -49,10 +51,10 @@ def _rsi(close: pd.Series, length: int = 14) -> float | None:
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1/length, min_periods=length).mean()
-    avg_loss = loss.ewm(alpha=1/length, min_periods=length).mean()
+    avg_gain = gain.ewm(alpha=1 / length, min_periods=length).mean()
+    avg_loss = loss.ewm(alpha=1 / length, min_periods=length).mean()
     rs = avg_gain / avg_loss
-    val = float((100 - 100/(1+rs)).iloc[-1])
+    val = float((100 - 100 / (1 + rs)).iloc[-1])
     return None if math.isnan(val) else val
 
 
@@ -64,9 +66,14 @@ def sector_momentum_score(close: pd.Series) -> dict:
     """
     if close is None or len(close) < 20:
         return {
-            "score": 50, "perf_1m": None, "perf_3m": None,
-            "perf_6m": None, "rsi": None, "volatility": None,
-            "above_sma50": None, "above_sma200": None,
+            "score": 50,
+            "perf_1m": None,
+            "perf_3m": None,
+            "perf_6m": None,
+            "rsi": None,
+            "volatility": None,
+            "above_sma50": None,
+            "above_sma200": None,
         }
 
     perf_1m = _perf_pct(close, 21)
@@ -114,9 +121,15 @@ def sector_momentum_score(close: pd.Series) -> dict:
 
     # SMA trend: 10% weight
     if above_sma50 is not None and above_sma200 is not None:
-        st = 80 if (above_sma50 and above_sma200) else \
-             55 if above_sma200 else \
-             40 if above_sma50 else 20
+        st = (
+            80
+            if (above_sma50 and above_sma200)
+            else 55
+            if above_sma200
+            else 40
+            if above_sma50
+            else 20
+        )
         components.append(("trend", st, 0.10))
 
     if components:
@@ -149,42 +162,49 @@ def get_sector_data(api) -> list[dict]:
         try:
             daily = api.get_daily(ticker, years=2)
             import pandas as pd
+
             close = pd.Series(daily["c"])
             quote = api.get_quote(ticker)
             price = float(quote.get("c") or 0)
             change_pct = float(quote.get("dp") or 0)
 
             metrics = sector_momentum_score(close)
-            results.append({
-                "ticker": ticker,
-                "name": name,
-                "price": price,
-                "change_pct": change_pct,
-                **metrics,
-            })
+            results.append(
+                {
+                    "ticker": ticker,
+                    "name": name,
+                    "price": price,
+                    "change_pct": change_pct,
+                    **metrics,
+                }
+            )
             log.debug("Sector ETF %s: score=%d", ticker, metrics["score"])
         except Exception as exc:
             log.warning("Failed to fetch sector ETF %s: %s", ticker, exc)
-            results.append({
-                "ticker": ticker,
-                "name": name,
-                "price": None,
-                "change_pct": None,
-                "score": 50,
-                "perf_1m": None,
-                "perf_3m": None,
-                "perf_6m": None,
-                "rsi": None,
-                "volatility": None,
-                "above_sma50": None,
-                "above_sma200": None,
-            })
+            results.append(
+                {
+                    "ticker": ticker,
+                    "name": name,
+                    "price": None,
+                    "change_pct": None,
+                    "score": 50,
+                    "perf_1m": None,
+                    "perf_3m": None,
+                    "perf_6m": None,
+                    "rsi": None,
+                    "volatility": None,
+                    "above_sma50": None,
+                    "above_sma200": None,
+                }
+            )
 
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
     return results
 
 
-def classify_rotation_phase(score: int, perf_1m: float | None, perf_3m: float | None) -> str:
+def classify_rotation_phase(
+    score: int, perf_1m: float | None, perf_3m: float | None
+) -> str:
     """Classify a sector into a rotation quadrant."""
     if score >= 70:
         if perf_1m is not None and perf_3m is not None:
@@ -206,16 +226,16 @@ def classify_rotation_phase(score: int, perf_1m: float | None, perf_3m: float | 
 # ---------------------------------------------------------------------------
 
 ASSET_CLASS_ETFS: list[dict] = [
-    {"ticker": "SPY",  "name": "US Equities",         "asset_class": "Equities"},
-    {"ticker": "EFA",  "name": "Intl Developed Eq.",  "asset_class": "Equities"},
-    {"ticker": "EEM",  "name": "Emerging Markets Eq.","asset_class": "Equities"},
-    {"ticker": "TLT",  "name": "Long-Term Treasuries", "asset_class": "Bonds"},
-    {"ticker": "IEF",  "name": "Mid-Term Treasuries",  "asset_class": "Bonds"},
-    {"ticker": "LQD",  "name": "Investment Grade Corp","asset_class": "Bonds"},
-    {"ticker": "GLD",  "name": "Gold",                 "asset_class": "Commodities"},
-    {"ticker": "DBC",  "name": "Broad Commodities",    "asset_class": "Commodities"},
-    {"ticker": "VNQ",  "name": "US Real Estate (REIT)","asset_class": "Real Estate"},
-    {"ticker": "BIL",  "name": "Short-Term T-Bills",   "asset_class": "Cash"},
+    {"ticker": "SPY", "name": "US Equities", "asset_class": "Equities"},
+    {"ticker": "EFA", "name": "Intl Developed Eq.", "asset_class": "Equities"},
+    {"ticker": "EEM", "name": "Emerging Markets Eq.", "asset_class": "Equities"},
+    {"ticker": "TLT", "name": "Long-Term Treasuries", "asset_class": "Bonds"},
+    {"ticker": "IEF", "name": "Mid-Term Treasuries", "asset_class": "Bonds"},
+    {"ticker": "LQD", "name": "Investment Grade Corp", "asset_class": "Bonds"},
+    {"ticker": "GLD", "name": "Gold", "asset_class": "Commodities"},
+    {"ticker": "DBC", "name": "Broad Commodities", "asset_class": "Commodities"},
+    {"ticker": "VNQ", "name": "US Real Estate (REIT)", "asset_class": "Real Estate"},
+    {"ticker": "BIL", "name": "Short-Term T-Bills", "asset_class": "Cash"},
 ]
 
 
@@ -239,32 +259,36 @@ def get_asset_class_data(api) -> list[dict]:
             change_pct = float(quote.get("dp") or 0)
 
             metrics = sector_momentum_score(close)
-            results.append({
-                "ticker": ticker,
-                "name": etf["name"],
-                "asset_class": etf["asset_class"],
-                "price": price,
-                "change_pct": change_pct,
-                **metrics,
-            })
+            results.append(
+                {
+                    "ticker": ticker,
+                    "name": etf["name"],
+                    "asset_class": etf["asset_class"],
+                    "price": price,
+                    "change_pct": change_pct,
+                    **metrics,
+                }
+            )
             log.debug("Asset class ETF %s: score=%d", ticker, metrics["score"])
         except Exception as exc:
             log.warning("Failed to fetch asset class ETF %s: %s", ticker, exc)
-            results.append({
-                "ticker": ticker,
-                "name": etf["name"],
-                "asset_class": etf["asset_class"],
-                "price": None,
-                "change_pct": None,
-                "score": 50,
-                "perf_1m": None,
-                "perf_3m": None,
-                "perf_6m": None,
-                "rsi": None,
-                "volatility": None,
-                "above_sma50": None,
-                "above_sma200": None,
-            })
+            results.append(
+                {
+                    "ticker": ticker,
+                    "name": etf["name"],
+                    "asset_class": etf["asset_class"],
+                    "price": None,
+                    "change_pct": None,
+                    "score": 50,
+                    "perf_1m": None,
+                    "perf_3m": None,
+                    "perf_6m": None,
+                    "rsi": None,
+                    "volatility": None,
+                    "above_sma50": None,
+                    "above_sma200": None,
+                }
+            )
 
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
     return results
@@ -283,7 +307,11 @@ def compute_asset_class_risk_parity_weights(asset_data: list[dict]) -> dict[str,
     -------
     dict mapping ticker -> weight (sums to 1.0)
     """
-    valid = [(r["ticker"], r["volatility"]) for r in asset_data if r.get("volatility") and r["volatility"] > 0]
+    valid = [
+        (r["ticker"], r["volatility"])
+        for r in asset_data
+        if r.get("volatility") and r["volatility"] > 0
+    ]
     n_total = len(asset_data)
     n_valid = len(valid)
 

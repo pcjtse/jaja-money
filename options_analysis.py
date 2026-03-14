@@ -1,4 +1,5 @@
 """Options chain analysis, IV surface, unusual flow, and hedging suggestions (P15.1, P16.3, P17.4)."""
+
 from __future__ import annotations
 
 from log_setup import get_logger
@@ -49,12 +50,14 @@ def build_iv_surface(chain_data: dict, current_price: float) -> dict:
                 iv = opt.get("impliedVolatility")
                 if strike is None or iv is None or iv <= 0:
                     continue
-                surface.append({
-                    "strike": float(strike),
-                    "expiry": exp_date,
-                    "iv": round(float(iv) * 100, 2),  # convert to percentage
-                    "type": opt_type,
-                })
+                surface.append(
+                    {
+                        "strike": float(strike),
+                        "expiry": exp_date,
+                        "iv": round(float(iv) * 100, 2),  # convert to percentage
+                        "type": opt_type,
+                    }
+                )
 
     if not surface:
         return {"available": False, "surface": [], "expirations": []}
@@ -193,8 +196,12 @@ def compute_options_metrics(chain_data: dict, current_price: float) -> dict:
                 default=None,
             )
             if atm_call and atm_put:
-                call_ask = float(atm_call.get("ask", 0) or atm_call.get("lastPrice", 0) or 0)
-                put_ask = float(atm_put.get("ask", 0) or atm_put.get("lastPrice", 0) or 0)
+                call_ask = float(
+                    atm_call.get("ask", 0) or atm_call.get("lastPrice", 0) or 0
+                )
+                put_ask = float(
+                    atm_put.get("ask", 0) or atm_put.get("lastPrice", 0) or 0
+                )
                 if call_ask > 0 and put_ask > 0:
                     atm_straddle_cost = round(call_ask + put_ask, 2)
                     implied_move_pct = round(atm_straddle_cost / current_price * 100, 2)
@@ -252,15 +259,17 @@ def compute_options_metrics(chain_data: dict, current_price: float) -> dict:
                 opt_type = opt.get("_type", "")
                 # Determine direction: calls = bullish, puts = bearish
                 direction = "bullish" if opt_type == "CALL" else "bearish"
-                unusual_flows.append({
-                    "strike": float(strike) if strike is not None else None,
-                    "expiry": expiry,
-                    "type": opt_type,
-                    "volume": volume,
-                    "open_interest": oi,
-                    "volume_oi_ratio": ratio,
-                    "direction": direction,
-                })
+                unusual_flows.append(
+                    {
+                        "strike": float(strike) if strike is not None else None,
+                        "expiry": expiry,
+                        "type": opt_type,
+                        "volume": volume,
+                        "open_interest": oi,
+                        "volume_oi_ratio": ratio,
+                        "direction": direction,
+                    }
+                )
         # Sort by ratio descending
         unusual_flows.sort(key=lambda x: x["volume_oi_ratio"], reverse=True)
     except Exception as exc:
@@ -268,7 +277,9 @@ def compute_options_metrics(chain_data: dict, current_price: float) -> dict:
 
     return {
         "available": True,
-        "put_call_ratio": round(put_call_ratio, 3) if put_call_ratio is not None else None,
+        "put_call_ratio": round(put_call_ratio, 3)
+        if put_call_ratio is not None
+        else None,
         "max_pain": max_pain,
         "avg_iv_pct": avg_iv_pct,
         "atm_iv_call": atm_iv_call,
@@ -318,7 +329,9 @@ def compute_hedge_suggestions(
         return empty
 
     # Use the second nearest expiry if available (30-60 days), else nearest
-    target_block = expirations_raw[1] if len(expirations_raw) > 1 else expirations_raw[0]
+    target_block = (
+        expirations_raw[1] if len(expirations_raw) > 1 else expirations_raw[0]
+    )
     exp_date = target_block.get("expirationDate", "")
     options_map = target_block.get("options", {})
     puts = options_map.get("PUT", [])
@@ -329,14 +342,14 @@ def compute_hedge_suggestions(
 
     # Filter to options with valid strikes and prices
     valid_puts = [
-        p for p in puts
-        if p.get("strike") is not None
-        and (p.get("ask") or p.get("lastPrice"))
+        p
+        for p in puts
+        if p.get("strike") is not None and (p.get("ask") or p.get("lastPrice"))
     ]
     valid_calls = [
-        c for c in calls
-        if c.get("strike") is not None
-        and (c.get("ask") or c.get("lastPrice"))
+        c
+        for c in calls
+        if c.get("strike") is not None and (c.get("ask") or c.get("lastPrice"))
     ]
 
     if not valid_puts:
@@ -358,10 +371,12 @@ def compute_hedge_suggestions(
         if put_cost > 0:
             shares = position_value / current_price if current_price > 0 else 0
             total_put_cost = put_cost * shares
-            cost_pct = (total_put_cost / position_value * 100) if position_value > 0 else 0
+            cost_pct = (
+                (total_put_cost / position_value * 100) if position_value > 0 else 0
+            )
             breakeven = current_price - put_cost
             # Max loss: drop to put strike + cost of put
-            max_loss_pct = ((current_price - put_strike + put_cost) / current_price * 100)
+            max_loss_pct = (current_price - put_strike + put_cost) / current_price * 100
 
             protective_put = {
                 "strike": put_strike,

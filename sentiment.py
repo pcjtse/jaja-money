@@ -76,13 +76,13 @@ def aggregate_sentiment(scores: list[dict]) -> dict:
 SENTIMENT_COLOR = {
     "positive": "#2da44e",
     "negative": "#e05252",
-    "neutral":  "#888888",
+    "neutral": "#888888",
 }
 
 SENTIMENT_EMOJI = {
     "positive": "🟢",
     "negative": "🔴",
-    "neutral":  "⚪",
+    "neutral": "⚪",
 }
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,9 @@ def compute_impact_weighted_sentiment(
         impact_distribution  – dict mapping level -> count of articles
     """
     if not sentiment_scores:
-        log.debug("compute_impact_weighted_sentiment: no sentiment scores, returning neutral")
+        log.debug(
+            "compute_impact_weighted_sentiment: no sentiment scores, returning neutral"
+        )
         return {
             "weighted_net_score": 0.0,
             "weighted_signal": "Mixed / Neutral",
@@ -133,10 +135,7 @@ def compute_impact_weighted_sentiment(
         }
 
     # Fall back to equal weights if impact_scores is empty or length mismatch
-    use_equal_weights = (
-        not impact_scores
-        or len(impact_scores) != len(sentiment_scores)
-    )
+    use_equal_weights = not impact_scores or len(impact_scores) != len(sentiment_scores)
 
     if use_equal_weights:
         log.debug(
@@ -150,7 +149,10 @@ def compute_impact_weighted_sentiment(
         }
 
     impact_distribution: dict[str, int] = {
-        "High": 0, "Medium": 0, "Low": 0, "Negligible": 0
+        "High": 0,
+        "Medium": 0,
+        "Low": 0,
+        "Negligible": 0,
     }
     weighted_positive = 0.0
     weighted_negative = 0.0
@@ -188,7 +190,9 @@ def compute_impact_weighted_sentiment(
 
     log.debug(
         "Impact-weighted sentiment: net=%.3f signal=%s (total_weight=%.1f)",
-        weighted_net, signal, total_weight,
+        weighted_net,
+        signal,
+        total_weight,
     )
 
     return {

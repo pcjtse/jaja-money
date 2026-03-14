@@ -1,4 +1,5 @@
 """Tests for P11.x: Portfolio Intelligence — Monte Carlo, Kelly, Factor Attribution, Peer Comparison."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -34,7 +35,7 @@ def sample_returns():
 
 @pytest.fixture
 def equal_weights():
-    return {"AAPL": 1/3, "MSFT": 1/3, "GOOGL": 1/3}
+    return {"AAPL": 1 / 3, "MSFT": 1 / 3, "GOOGL": 1 / 3}
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +113,7 @@ class TestMonteCarlo:
 class TestKellySizing:
     def test_basic_kelly(self, sample_returns):
         factor_scores = {"AAPL": 70.0, "MSFT": 60.0, "GOOGL": 55.0}
-        result = kelly_sizing(
-            factor_scores, sample_returns, account_size=100_000
-        )
+        result = kelly_sizing(factor_scores, sample_returns, account_size=100_000)
 
         assert "AAPL" in result
         assert "MSFT" in result
@@ -135,17 +134,13 @@ class TestKellySizing:
 
     def test_kelly_respects_max_position(self, sample_returns):
         factor_scores = {"AAPL": 99.0}
-        result = kelly_sizing(
-            factor_scores, sample_returns, max_position_pct=10.0
-        )
+        result = kelly_sizing(factor_scores, sample_returns, max_position_pct=10.0)
         # Full Kelly should be capped at 10%
         assert result["AAPL"]["full_kelly_pct"] <= 10.0
 
     def test_kelly_dollar_amounts(self, sample_returns):
         factor_scores = {"AAPL": 70.0}
-        result = kelly_sizing(
-            factor_scores, sample_returns, account_size=200_000
-        )
+        result = kelly_sizing(factor_scores, sample_returns, account_size=200_000)
         # Dollar amounts should be proportional to account size
         kelly_100 = result["AAPL"]["100%_kelly"]
         # Dollar amounts should be approximately proportional to account size
@@ -190,10 +185,26 @@ class TestFactorAttribution:
 
     def test_factor_shares_sum_100(self):
         factor_details = {
-            "AAPL": {"valuation": 80, "trend": 70, "rsi": 60, "macd": 50,
-                     "sentiment": 65, "earnings": 75, "analyst": 55, "range": 60},
-            "MSFT": {"valuation": 60, "trend": 65, "rsi": 70, "macd": 55,
-                     "sentiment": 70, "earnings": 65, "analyst": 60, "range": 50},
+            "AAPL": {
+                "valuation": 80,
+                "trend": 70,
+                "rsi": 60,
+                "macd": 50,
+                "sentiment": 65,
+                "earnings": 75,
+                "analyst": 55,
+                "range": 60,
+            },
+            "MSFT": {
+                "valuation": 60,
+                "trend": 65,
+                "rsi": 70,
+                "macd": 55,
+                "sentiment": 70,
+                "earnings": 65,
+                "analyst": 60,
+                "range": 50,
+            },
         }
         weights = {"AAPL": 0.5, "MSFT": 0.5}
 
@@ -204,8 +215,16 @@ class TestFactorAttribution:
     def test_concentration_warning(self):
         # All weight on one factor
         factor_details = {
-            "AAPL": {"valuation": 0, "trend": 100, "rsi": 0, "macd": 0,
-                     "sentiment": 0, "earnings": 0, "analyst": 0, "range": 0},
+            "AAPL": {
+                "valuation": 0,
+                "trend": 100,
+                "rsi": 0,
+                "macd": 0,
+                "sentiment": 0,
+                "earnings": 0,
+                "analyst": 0,
+                "range": 0,
+            },
         }
         weights = {"AAPL": 1.0}
 
@@ -257,11 +276,16 @@ class TestPeerComparison:
         mock_api = MagicMock()
         mock_api.get_peers.return_value = []
         mock_api.get_financials.return_value = {
-            "peBasicExclExtraTTM": 25.0, "roeTTM": 15.0,
-            "revenueGrowthTTMYoy": 8.0, "grossMarginTTM": 40.0,
+            "peBasicExclExtraTTM": 25.0,
+            "roeTTM": 15.0,
+            "revenueGrowthTTMYoy": 8.0,
+            "grossMarginTTM": 40.0,
         }
         mock_api.get_quote.return_value = {"c": 150.0}
-        mock_api.get_profile.return_value = {"name": "Apple Inc.", "finnhubIndustry": "Technology"}
+        mock_api.get_profile.return_value = {
+            "name": "Apple Inc.",
+            "finnhubIndustry": "Technology",
+        }
 
         result = fetch_peer_metrics("AAPL", mock_api)
 
@@ -274,11 +298,16 @@ class TestPeerComparison:
         mock_api = MagicMock()
         mock_api.get_peers.return_value = ["MSFT", "GOOGL"]
         mock_api.get_financials.return_value = {
-            "peBasicExclExtraTTM": 25.0, "roeTTM": 15.0,
-            "revenueGrowthTTMYoy": 8.0, "grossMarginTTM": 40.0,
+            "peBasicExclExtraTTM": 25.0,
+            "roeTTM": 15.0,
+            "revenueGrowthTTMYoy": 8.0,
+            "grossMarginTTM": 40.0,
         }
         mock_api.get_quote.return_value = {"c": 150.0}
-        mock_api.get_profile.return_value = {"name": "Apple Inc.", "finnhubIndustry": "Technology"}
+        mock_api.get_profile.return_value = {
+            "name": "Apple Inc.",
+            "finnhubIndustry": "Technology",
+        }
 
         result = fetch_peer_metrics("AAPL", mock_api)
 
@@ -295,16 +324,39 @@ class TestPeerComparison:
 
         def get_fin(sym):
             data = {
-                "AAPL": {"peBasicExclExtraTTM": 25.0, "roeTTM": 15.0, "revenueGrowthTTMYoy": 8.0, "grossMarginTTM": 40.0},
-                "MSFT": {"peBasicExclExtraTTM": 30.0, "roeTTM": 40.0, "revenueGrowthTTMYoy": 12.0, "grossMarginTTM": 70.0},
-                "GOOGL": {"peBasicExclExtraTTM": 20.0, "roeTTM": 20.0, "revenueGrowthTTMYoy": 5.0, "grossMarginTTM": 55.0},
-                "META": {"peBasicExclExtraTTM": 22.0, "roeTTM": 25.0, "revenueGrowthTTMYoy": 15.0, "grossMarginTTM": 80.0},
+                "AAPL": {
+                    "peBasicExclExtraTTM": 25.0,
+                    "roeTTM": 15.0,
+                    "revenueGrowthTTMYoy": 8.0,
+                    "grossMarginTTM": 40.0,
+                },
+                "MSFT": {
+                    "peBasicExclExtraTTM": 30.0,
+                    "roeTTM": 40.0,
+                    "revenueGrowthTTMYoy": 12.0,
+                    "grossMarginTTM": 70.0,
+                },
+                "GOOGL": {
+                    "peBasicExclExtraTTM": 20.0,
+                    "roeTTM": 20.0,
+                    "revenueGrowthTTMYoy": 5.0,
+                    "grossMarginTTM": 55.0,
+                },
+                "META": {
+                    "peBasicExclExtraTTM": 22.0,
+                    "roeTTM": 25.0,
+                    "revenueGrowthTTMYoy": 15.0,
+                    "grossMarginTTM": 80.0,
+                },
             }
             return data.get(sym, {})
 
         mock_api.get_financials.side_effect = get_fin
         mock_api.get_quote.return_value = {"c": 150.0}
-        mock_api.get_profile.return_value = {"name": "Apple", "finnhubIndustry": "Technology"}
+        mock_api.get_profile.return_value = {
+            "name": "Apple",
+            "finnhubIndustry": "Technology",
+        }
 
         result = fetch_peer_metrics("AAPL", mock_api)
 

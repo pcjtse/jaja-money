@@ -11,6 +11,7 @@ Background polling (P2.5):
   is_scheduler_running()  — check scheduler status
 Desktop notifications use plyer (optional).
 """
+
 from __future__ import annotations
 
 import json
@@ -28,6 +29,7 @@ _ALERTS_FILE = _DATA_DIR / "alerts.json"
 # Optional APScheduler
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
+
     _HAS_APSCHEDULER = True
 except ImportError:
     _HAS_APSCHEDULER = False
@@ -35,6 +37,7 @@ except ImportError:
 # Optional plyer desktop notifications
 try:
     from plyer import notification as _plyer_notification
+
     _HAS_PLYER = True
 except ImportError:
     _HAS_PLYER = False
@@ -91,16 +94,18 @@ def add_alert(
 ) -> None:
     """Add a new alert."""
     alerts = _load()
-    alerts.append({
-        "id": int(time.time() * 1000),
-        "symbol": symbol.upper(),
-        "condition": condition,
-        "threshold": threshold,
-        "note": note,
-        "status": "active",
-        "created_at": int(time.time()),
-        "triggered_at": None,
-    })
+    alerts.append(
+        {
+            "id": int(time.time() * 1000),
+            "symbol": symbol.upper(),
+            "condition": condition,
+            "threshold": threshold,
+            "note": note,
+            "status": "active",
+            "created_at": int(time.time()),
+            "triggered_at": None,
+        }
+    )
     _save(alerts)
     log.info("Alert added: %s %s %.2f", symbol, condition, threshold)
 
@@ -135,11 +140,23 @@ def check_alerts(
             hit = True
         elif cond == "Price Below" and price is not None and price < thresh:
             hit = True
-        elif cond == "Factor Score Above" and factor_score is not None and factor_score > thresh:
+        elif (
+            cond == "Factor Score Above"
+            and factor_score is not None
+            and factor_score > thresh
+        ):
             hit = True
-        elif cond == "Factor Score Below" and factor_score is not None and factor_score < thresh:
+        elif (
+            cond == "Factor Score Below"
+            and factor_score is not None
+            and factor_score < thresh
+        ):
             hit = True
-        elif cond == "Risk Score Above" and risk_score is not None and risk_score > thresh:
+        elif (
+            cond == "Risk Score Above"
+            and risk_score is not None
+            and risk_score > thresh
+        ):
             hit = True
 
         if hit:
@@ -169,6 +186,7 @@ def reset_alert(alert_id: int) -> None:
 # P2.5: Background polling with APScheduler + desktop notifications
 # ---------------------------------------------------------------------------
 
+
 def _send_desktop_notification(title: str, message: str) -> None:
     """Send a desktop notification via plyer (if available)."""
     if _HAS_PLYER:
@@ -189,6 +207,7 @@ def _poll_all_alerts() -> None:
     """Background job: evaluate active alerts using cached quote data."""
     try:
         from cache import get_cache
+
         cache = get_cache()
     except Exception:
         return
@@ -264,6 +283,7 @@ import json as _json  # noqa: E402
 
 try:
     import urllib.request as _urllib_request  # noqa: F401
+
     _HAS_URLLIB = True
 except ImportError:
     _HAS_URLLIB = False
@@ -323,8 +343,7 @@ def send_webhook_notification(
     current_str = f"{current_value:.2f}" if current_value is not None else "N/A"
     title = f"{emoji} Alert Triggered: {symbol}"
     body = (
-        f"**{condition}** threshold {threshold} reached\n"
-        f"Current value: {current_str}"
+        f"**{condition}** threshold {threshold} reached\nCurrent value: {current_str}"
     )
     if note:
         body += f"\nNote: {note}"
@@ -516,9 +535,7 @@ def check_signal_changes(
             )
 
     if changes:
-        log.info(
-            "Signal changes detected for %s: %d event(s)", symbol, len(changes)
-        )
+        log.info("Signal changes detected for %s: %d event(s)", symbol, len(changes))
     return changes
 
 

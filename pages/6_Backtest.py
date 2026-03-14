@@ -30,20 +30,34 @@ lookback = col4.selectbox(
     ["1 year", "2 years", "3 years", "5 years"],
     index=1,
 )
-lookback_years = {"1 year": 1.0, "2 years": 2.0, "3 years": 3.0, "5 years": 5.0}[lookback]
+lookback_years = {"1 year": 1.0, "2 years": 2.0, "3 years": 3.0, "5 years": 5.0}[
+    lookback
+]
 
 # P6.3: Transaction costs
 with st.expander("Transaction Costs (P6.3)", expanded=False):
     tc_col1, tc_col2 = st.columns(2)
-    commission_pct = tc_col1.number_input(
-        "Commission per trade (%)", min_value=0.0, max_value=1.0, value=0.1, step=0.05
-    ) / 100
-    slippage_pct = tc_col2.number_input(
-        "Slippage per side (%)", min_value=0.0, max_value=0.5, value=0.05, step=0.01
-    ) / 100
+    commission_pct = (
+        tc_col1.number_input(
+            "Commission per trade (%)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.1,
+            step=0.05,
+        )
+        / 100
+    )
+    slippage_pct = (
+        tc_col2.number_input(
+            "Slippage per side (%)", min_value=0.0, max_value=0.5, value=0.05, step=0.01
+        )
+        / 100
+    )
 
 # P6.1: Walk-forward validation toggle
-enable_walkforward = st.checkbox("Enable walk-forward validation (70%/30% in/out-of-sample)", value=False)
+enable_walkforward = st.checkbox(
+    "Enable walk-forward validation (70%/30% in/out-of-sample)", value=False
+)
 
 # P6.2: Parameter sweep toggle
 enable_sweep = st.checkbox("Enable parameter sensitivity sweep", value=False)
@@ -77,14 +91,20 @@ if st.button("Run Backtest", type="primary"):
     with st.spinner(f"Fetching {lookback} of price data for {symbol}..."):
         try:
             daily = api.get_daily(symbol, years=max(3, int(lookback_years) + 1))
-            df = pd.DataFrame({
-                "Date": pd.to_datetime(daily["t"], unit="s"),
-                "Open": daily["o"],
-                "High": daily["h"],
-                "Low": daily["l"],
-                "Close": daily["c"],
-                "Volume": daily["v"],
-            }).sort_values("Date").reset_index(drop=True)
+            df = (
+                pd.DataFrame(
+                    {
+                        "Date": pd.to_datetime(daily["t"], unit="s"),
+                        "Open": daily["o"],
+                        "High": daily["h"],
+                        "Low": daily["l"],
+                        "Close": daily["c"],
+                        "Volume": daily["v"],
+                    }
+                )
+                .sort_values("Date")
+                .reset_index(drop=True)
+            )
         except Exception as e:
             st.error(f"Could not fetch price data: {e}")
             st.stop()
@@ -118,18 +138,36 @@ if st.button("Run Backtest", type="primary"):
         wf_col1, wf_col2 = st.columns(2)
         with wf_col1:
             st.markdown("**In-Sample (70% of history)**")
-            st.metric("Strategy Return", f"{in_result.total_return_pct:+.1f}%",
-                      f"{in_result.total_return_pct - in_result.benchmark_return_pct:+.1f}% vs B&H")
-            st.metric("Sharpe Ratio", f"{in_result.sharpe_ratio:.2f}" if in_result.sharpe_ratio else "N/A")
+            st.metric(
+                "Strategy Return",
+                f"{in_result.total_return_pct:+.1f}%",
+                f"{in_result.total_return_pct - in_result.benchmark_return_pct:+.1f}% vs B&H",
+            )
+            st.metric(
+                "Sharpe Ratio",
+                f"{in_result.sharpe_ratio:.2f}" if in_result.sharpe_ratio else "N/A",
+            )
             st.metric("Max Drawdown", f"{in_result.max_drawdown_pct:.1f}%")
-            st.metric("Win Rate", f"{in_result.win_rate_pct:.1f}% ({in_result.total_trades} trades)")
+            st.metric(
+                "Win Rate",
+                f"{in_result.win_rate_pct:.1f}% ({in_result.total_trades} trades)",
+            )
         with wf_col2:
             st.markdown("**Out-of-Sample (30% of history)**")
-            st.metric("Strategy Return", f"{out_result.total_return_pct:+.1f}%",
-                      f"{out_result.total_return_pct - out_result.benchmark_return_pct:+.1f}% vs B&H")
-            st.metric("Sharpe Ratio", f"{out_result.sharpe_ratio:.2f}" if out_result.sharpe_ratio else "N/A")
+            st.metric(
+                "Strategy Return",
+                f"{out_result.total_return_pct:+.1f}%",
+                f"{out_result.total_return_pct - out_result.benchmark_return_pct:+.1f}% vs B&H",
+            )
+            st.metric(
+                "Sharpe Ratio",
+                f"{out_result.sharpe_ratio:.2f}" if out_result.sharpe_ratio else "N/A",
+            )
             st.metric("Max Drawdown", f"{out_result.max_drawdown_pct:.1f}%")
-            st.metric("Win Rate", f"{out_result.win_rate_pct:.1f}% ({out_result.total_trades} trades)")
+            st.metric(
+                "Win Rate",
+                f"{out_result.win_rate_pct:.1f}% ({out_result.total_trades} trades)",
+            )
 
         if in_result.sharpe_ratio and out_result.sharpe_ratio:
             degradation = in_result.sharpe_ratio - out_result.sharpe_ratio
@@ -165,7 +203,11 @@ if st.button("Run Backtest", type="primary"):
         if sweep:
             best = sweep["best_params"]
             sharpe_str = f"{best['sharpe']:.2f}" if best.get("sharpe") else "N/A"
-            ret_str = f"{best['total_return']:.1f}%" if best.get("total_return") is not None else "N/A"
+            ret_str = (
+                f"{best['total_return']:.1f}%"
+                if best.get("total_return") is not None
+                else "N/A"
+            )
             st.info(
                 f"**Best parameters:** Entry={best['entry']}, Exit={best['exit']}, "
                 f"Sharpe={sharpe_str}, Return={ret_str}"
@@ -180,7 +222,9 @@ if st.button("Run Backtest", type="primary"):
             if not sharpe_grid.empty:
                 fig_heat = px.imshow(
                     sharpe_grid.astype(float).round(2),
-                    labels=dict(x="Exit Threshold", y="Entry Threshold", color="Sharpe"),
+                    labels=dict(
+                        x="Exit Threshold", y="Entry Threshold", color="Sharpe"
+                    ),
                     title="Sharpe Ratio by Entry/Exit Threshold",
                     color_continuous_scale="RdYlGn",
                     text_auto=True,
@@ -192,7 +236,9 @@ if st.button("Run Backtest", type="primary"):
             if not return_grid.empty:
                 fig_heat2 = px.imshow(
                     return_grid.astype(float).round(1),
-                    labels=dict(x="Exit Threshold", y="Entry Threshold", color="Return %"),
+                    labels=dict(
+                        x="Exit Threshold", y="Entry Threshold", color="Return %"
+                    ),
                     title="Total Return % by Entry/Exit Threshold",
                     color_continuous_scale="RdYlGn",
                     text_auto=True,
@@ -238,10 +284,13 @@ if st.button("Run Backtest", type="primary"):
         f"Costs: -{result.total_cost_pct:.2f}%",
     )
     kc3.metric("CAGR", f"{result.cagr_pct:+.1f}%")
-    kc4.metric("Sharpe Ratio", f"{result.sharpe_ratio:.2f}" if result.sharpe_ratio else "N/A")
+    kc4.metric(
+        "Sharpe Ratio", f"{result.sharpe_ratio:.2f}" if result.sharpe_ratio else "N/A"
+    )
     kc5.metric("Max Drawdown", f"{result.max_drawdown_pct:.1f}%")
-    kc6.metric("Win Rate", f"{result.win_rate_pct:.1f}%",
-               f"{result.total_trades} trades")
+    kc6.metric(
+        "Win Rate", f"{result.win_rate_pct:.1f}%", f"{result.total_trades} trades"
+    )
 
     # P6.3: Dividend reinvestment comparison
     if result.dividend_return_pct > 0:
@@ -260,33 +309,39 @@ if st.button("Run Backtest", type="primary"):
         f"Period: {result.start_date} → {result.end_date}  |  "
         f"Buy-and-hold: {result.benchmark_return_pct:+.1f}%  |  "
         f"Entry: {result.entry_threshold}  Exit: {result.exit_threshold}  |  "
-        f"Commission: {commission_pct*100:.2f}%  Slippage: {slippage_pct*100:.2f}%/side"
+        f"Commission: {commission_pct * 100:.2f}%  Slippage: {slippage_pct * 100:.2f}%/side"
     )
 
     # Equity curve
     st.subheader("Equity Curve vs. Buy-and-Hold")
 
     fig_equity = go.Figure()
-    fig_equity.add_trace(go.Scatter(
-        x=result.equity_dates,
-        y=[v * 100 for v in result.equity_curve],
-        name="Strategy (Net of Costs)",
-        line=dict(color="#2da44e", width=2),
-    ))
+    fig_equity.add_trace(
+        go.Scatter(
+            x=result.equity_dates,
+            y=[v * 100 for v in result.equity_curve],
+            name="Strategy (Net of Costs)",
+            line=dict(color="#2da44e", width=2),
+        )
+    )
     # P6.3: Dividend-reinvested equity curve
     if result.dividend_return_pct > 0 and result.equity_curve_with_dividends:
-        fig_equity.add_trace(go.Scatter(
-            x=result.equity_dates,
-            y=[v * 100 for v in result.equity_curve_with_dividends],
-            name="Strategy + Dividends Reinvested",
-            line=dict(color="#1f77b4", width=2, dash="dash"),
-        ))
-    fig_equity.add_trace(go.Scatter(
-        x=result.equity_dates[:len(result.benchmark_curve)],
-        y=[v * 100 for v in result.benchmark_curve],
-        name="Buy & Hold",
-        line=dict(color="#888", width=2, dash="dot"),
-    ))
+        fig_equity.add_trace(
+            go.Scatter(
+                x=result.equity_dates,
+                y=[v * 100 for v in result.equity_curve_with_dividends],
+                name="Strategy + Dividends Reinvested",
+                line=dict(color="#1f77b4", width=2, dash="dash"),
+            )
+        )
+    fig_equity.add_trace(
+        go.Scatter(
+            x=result.equity_dates[: len(result.benchmark_curve)],
+            y=[v * 100 for v in result.benchmark_curve],
+            name="Buy & Hold",
+            line=dict(color="#888", width=2, dash="dot"),
+        )
+    )
     fig_equity.add_hline(y=100, line_dash="dot", line_color="#ccc", opacity=0.5)
     fig_equity.update_layout(
         height=450,
@@ -302,25 +357,29 @@ if st.button("Run Backtest", type="primary"):
         st.subheader(f"Trade History ({len(result.trades)} trades)")
         trade_rows = []
         for t in result.trades:
-            trade_rows.append({
-                "Entry Date": t.entry_date,
-                "Exit Date": t.exit_date,
-                "Entry Price": f"${t.entry_price:,.2f}",
-                "Exit Price": f"${t.exit_price:,.2f}",
-                "P&L % (Net)": f"{t.pnl_pct:+.1f}%",
-                "Result": "✅ Win" if t.is_win else "❌ Loss",
-                "Signal @ Entry": t.signal_at_entry,
-            })
+            trade_rows.append(
+                {
+                    "Entry Date": t.entry_date,
+                    "Exit Date": t.exit_date,
+                    "Entry Price": f"${t.entry_price:,.2f}",
+                    "Exit Price": f"${t.exit_price:,.2f}",
+                    "P&L % (Net)": f"{t.pnl_pct:+.1f}%",
+                    "Result": "✅ Win" if t.is_win else "❌ Loss",
+                    "Signal @ Entry": t.signal_at_entry,
+                }
+            )
         trade_df = pd.DataFrame(trade_rows)
         st.dataframe(trade_df, use_container_width=True, hide_index=True)
 
         pnls = [t.pnl_pct for t in result.trades]
-        fig_pnl = go.Figure(go.Histogram(
-            x=pnls,
-            nbinsx=20,
-            marker_color=["#2da44e" if p > 0 else "#e05252" for p in pnls],
-            opacity=0.8,
-        ))
+        fig_pnl = go.Figure(
+            go.Histogram(
+                x=pnls,
+                nbinsx=20,
+                marker_color=["#2da44e" if p > 0 else "#e05252" for p in pnls],
+                opacity=0.8,
+            )
+        )
         fig_pnl.add_vline(x=0, line_dash="dash", line_color="#333")
         fig_pnl.update_layout(
             height=250,
@@ -334,7 +393,9 @@ if st.button("Run Backtest", type="primary"):
     # Claude commentary (P9.3)
     # -------------------------------------------------------------------------
     st.subheader("AI Backtest Commentary (P9.3)")
-    use_cache = st.checkbox("Use cached Claude analysis if available", value=True, key="bt_cache")
+    use_cache = st.checkbox(
+        "Use cached Claude analysis if available", value=True, key="bt_cache"
+    )
     if st.button("Analyze with Claude"):
         placeholder = st.empty()
         text = ""

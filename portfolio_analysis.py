@@ -11,6 +11,7 @@ Computes portfolio metrics for a multi-stock portfolio including:
 Usage:
     from portfolio_analysis import analyze_portfolio, monte_carlo_simulation, kelly_sizing, factor_attribution
 """
+
 from __future__ import annotations
 
 import math
@@ -105,7 +106,11 @@ def portfolio_stats(
 
     # Sharpe (risk-free rate ~= 5% annual for current rate environment)
     rf_daily = 0.05 / 252
-    sharpe = ((port_mean - rf_daily) / port_std_daily * math.sqrt(252)) if port_std_daily > 0 else None
+    sharpe = (
+        ((port_mean - rf_daily) / port_std_daily * math.sqrt(252))
+        if port_std_daily > 0
+        else None
+    )
 
     # Diversification ratio = weighted avg individual vol / portfolio vol
     individual_vols = sub.std() * math.sqrt(252)
@@ -123,8 +128,9 @@ def portfolio_stats(
         "sharpe": round(sharpe, 2) if sharpe else None,
         "diversification_ratio": round(div_ratio, 2),
         "effective_n": effective_n,
-        "individual_vols": {t: round(float(individual_vols[t]) * 100, 1)
-                            for t in tickers},
+        "individual_vols": {
+            t: round(float(individual_vols[t]) * 100, 1) for t in tickers
+        },
     }
 
 
@@ -274,7 +280,7 @@ def monte_carlo_simulation(
         # Compound returns: (1+r1)(1+r2)...(1+rN) - 1
         compounded = 1.0
         for r in sampled:
-            compounded *= (1 + r)
+            compounded *= 1 + r
         final_returns.append((compounded - 1) * 100)  # as percentage
 
     final_returns.sort()
@@ -303,9 +309,7 @@ def monte_carlo_simulation(
 
     # Probability of ruin (drawdown > 20%)
     ruin_threshold = -20.0
-    prob_ruin = round(
-        sum(1 for r in final_returns if r <= ruin_threshold) / n * 100, 1
-    )
+    prob_ruin = round(sum(1 for r in final_returns if r <= ruin_threshold) / n * 100, 1)
 
     log.info(
         "Monte Carlo: %d sims, median=%.1f%%, ruin_prob=%.1f%%",
@@ -421,8 +425,14 @@ def kelly_sizing(
 
 
 FACTOR_DIMENSIONS = [
-    "valuation", "trend", "rsi", "macd",
-    "sentiment", "earnings", "analyst", "range",
+    "valuation",
+    "trend",
+    "rsi",
+    "macd",
+    "sentiment",
+    "earnings",
+    "analyst",
+    "range",
 ]
 
 
@@ -480,7 +490,9 @@ def factor_attribution(
         factor_shares[f] = round(share, 1)
 
     # Concentration risk: top factor by share
-    top_factor = max(factor_shares, key=lambda f: factor_shares[f]) if factor_shares else None
+    top_factor = (
+        max(factor_shares, key=lambda f: factor_shares[f]) if factor_shares else None
+    )
     top_share = factor_shares.get(top_factor, 0) if top_factor else 0
 
     concentration_warning = None
@@ -506,6 +518,7 @@ def factor_attribution(
 # ---------------------------------------------------------------------------
 # P17.1: Risk-parity portfolio builder
 # ---------------------------------------------------------------------------
+
 
 def compute_risk_parity_weights(returns: pd.DataFrame) -> dict[str, float]:
     """Compute inverse-volatility (risk-parity) weights for each ticker.
@@ -537,7 +550,9 @@ def compute_risk_parity_weights(returns: pd.DataFrame) -> dict[str, float]:
 
     # If any vol is None or zero → fall back to equal weight
     if any(v is None for v in vols.values()):
-        log.debug("compute_risk_parity_weights: zero-vol ticker detected, using equal weights")
+        log.debug(
+            "compute_risk_parity_weights: zero-vol ticker detected, using equal weights"
+        )
         eq = round(1.0 / len(tickers), 4)
         return {t: eq for t in tickers}
 
@@ -624,7 +639,10 @@ def run_stress_tests(
             for sc_sector, rate in sector_losses.items():
                 if sc_sector == "default":
                     continue
-                if sc_sector.lower() in sector.lower() or sector.lower() in sc_sector.lower():
+                if (
+                    sc_sector.lower() in sector.lower()
+                    or sector.lower() in sc_sector.lower()
+                ):
                     loss_rate = rate
                     break
 
@@ -632,19 +650,23 @@ def run_stress_tests(
             loss_dollar = position_value * loss_rate  # negative value
 
             portfolio_loss += weight * loss_rate
-            by_position.append({
-                "ticker": ticker,
-                "sector": sector,
-                "loss_rate": round(loss_rate, 4),
-                "loss_dollar": round(loss_dollar, 2),
-            })
+            by_position.append(
+                {
+                    "ticker": ticker,
+                    "sector": sector,
+                    "loss_rate": round(loss_rate, 4),
+                    "loss_dollar": round(loss_dollar, 2),
+                }
+            )
 
-        results.append({
-            "scenario": scenario_name,
-            "portfolio_loss_pct": round(portfolio_loss, 4),
-            "portfolio_loss_dollar": round(total_value * portfolio_loss, 2),
-            "by_position": by_position,
-        })
+        results.append(
+            {
+                "scenario": scenario_name,
+                "portfolio_loss_pct": round(portfolio_loss, 4),
+                "portfolio_loss_dollar": round(total_value * portfolio_loss, 2),
+                "by_position": by_position,
+            }
+        )
 
     log.debug("Stress tests complete: %d scenarios", len(results))
     return results
@@ -653,6 +675,7 @@ def run_stress_tests(
 # ---------------------------------------------------------------------------
 # P17.3: Tax-loss harvesting suggestions
 # ---------------------------------------------------------------------------
+
 
 def find_tax_loss_opportunities(
     positions: dict[str, dict],
@@ -721,17 +744,20 @@ def find_tax_loss_opportunities(
                     f"(correlation: {best_corr:.2f})."
                 )
 
-        opportunities.append({
-            "ticker": ticker,
-            "loss_pct": round(loss_pct, 2),
-            "corr_replacement": corr_replacement,
-            "correlation": best_corr,
-            "message": message,
-        })
+        opportunities.append(
+            {
+                "ticker": ticker,
+                "loss_pct": round(loss_pct, 2),
+                "corr_replacement": corr_replacement,
+                "correlation": best_corr,
+                "message": message,
+            }
+        )
 
     log.debug(
         "Tax-loss harvesting: %d opportunities found out of %d positions",
-        len(opportunities), len(positions),
+        len(opportunities),
+        len(positions),
     )
     return opportunities
 
@@ -739,6 +765,7 @@ def find_tax_loss_opportunities(
 # ---------------------------------------------------------------------------
 # P17.5: Portfolio drift alerts
 # ---------------------------------------------------------------------------
+
 
 def compute_portfolio_drift(
     positions: dict[str, dict],
@@ -770,17 +797,20 @@ def compute_portfolio_drift(
         current = float((positions.get(ticker) or {}).get("current_weight", 0))
         target = float(target_weights.get(ticker, 0))
         drift = current - target
-        drift_list.append({
-            "ticker": ticker,
-            "current_weight": round(current, 4),
-            "target_weight": round(target, 4),
-            "drift": round(drift, 4),
-            "drifted": abs(drift) > 0.05,
-        })
+        drift_list.append(
+            {
+                "ticker": ticker,
+                "current_weight": round(current, 4),
+                "target_weight": round(target, 4),
+                "drift": round(drift, 4),
+                "drifted": abs(drift) > 0.05,
+            }
+        )
 
     drift_list.sort(key=lambda x: abs(x["drift"]), reverse=True)
     log.debug(
         "Portfolio drift: %d tickers checked, %d drifted",
-        len(drift_list), sum(1 for d in drift_list if d["drifted"]),
+        len(drift_list),
+        sum(1 for d in drift_list if d["drifted"]),
     )
     return drift_list

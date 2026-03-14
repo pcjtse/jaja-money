@@ -2,6 +2,7 @@
 
 Provides helper functions that return bytes suitable for st.download_button.
 """
+
 from __future__ import annotations
 
 import csv
@@ -10,8 +11,13 @@ from datetime import datetime
 from typing import Any
 
 
-def factors_to_csv(symbol: str, factors: list[dict], risk: dict,
-                   quote: dict, financials: dict | None = None) -> bytes:
+def factors_to_csv(
+    symbol: str,
+    factors: list[dict],
+    risk: dict,
+    quote: dict,
+    financials: dict | None = None,
+) -> bytes:
     """Serialize factor scores and risk data to CSV bytes."""
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -24,53 +30,85 @@ def factors_to_csv(symbol: str, factors: list[dict], risk: dict,
 
     # Quote
     writer.writerow(["== Quote =="])
-    writer.writerow(["Price", "Day Change", "Day Change %", "Day High", "Day Low", "Prev Close"])
-    writer.writerow([
-        quote.get("c", ""), quote.get("d", ""), quote.get("dp", ""),
-        quote.get("h", ""), quote.get("l", ""), quote.get("pc", ""),
-    ])
+    writer.writerow(
+        ["Price", "Day Change", "Day Change %", "Day High", "Day Low", "Prev Close"]
+    )
+    writer.writerow(
+        [
+            quote.get("c", ""),
+            quote.get("d", ""),
+            quote.get("dp", ""),
+            quote.get("h", ""),
+            quote.get("l", ""),
+            quote.get("pc", ""),
+        ]
+    )
     writer.writerow([])
 
     # Financials
     if financials:
         writer.writerow(["== Key Financials =="])
-        writer.writerow(["P/E (TTM)", "EPS (TTM)", "Market Cap (M)", "Div Yield %",
-                         "52W High", "52W Low"])
-        writer.writerow([
-            financials.get("peBasicExclExtraTTM", ""),
-            financials.get("epsBasicExclExtraItemsTTM", ""),
-            financials.get("marketCapitalization", ""),
-            financials.get("dividendYieldIndicatedAnnual", ""),
-            financials.get("52WeekHigh", ""),
-            financials.get("52WeekLow", ""),
-        ])
+        writer.writerow(
+            [
+                "P/E (TTM)",
+                "EPS (TTM)",
+                "Market Cap (M)",
+                "Div Yield %",
+                "52W High",
+                "52W Low",
+            ]
+        )
+        writer.writerow(
+            [
+                financials.get("peBasicExclExtraTTM", ""),
+                financials.get("epsBasicExclExtraItemsTTM", ""),
+                financials.get("marketCapitalization", ""),
+                financials.get("dividendYieldIndicatedAnnual", ""),
+                financials.get("52WeekHigh", ""),
+                financials.get("52WeekLow", ""),
+            ]
+        )
         writer.writerow([])
 
     # Factor scores
     writer.writerow(["== Factor Score Engine =="])
     writer.writerow(["Factor", "Score", "Weight", "Label", "Detail"])
     for f in factors:
-        writer.writerow([
-            f.get("name", ""), f.get("score", ""),
-            f"{f.get('weight', 0):.0%}", f.get("label", ""), f.get("detail", ""),
-        ])
+        writer.writerow(
+            [
+                f.get("name", ""),
+                f.get("score", ""),
+                f"{f.get('weight', 0):.0%}",
+                f.get("label", ""),
+                f.get("detail", ""),
+            ]
+        )
     writer.writerow([])
 
     # Risk
     writer.writerow(["== Risk Guardrails =="])
-    writer.writerow(["Risk Score", "Risk Level", "Volatility (20d %)", "Drawdown from 52W High %"])
-    writer.writerow([
-        risk.get("risk_score", ""), risk.get("risk_level", ""),
-        f"{risk.get('hv', ''):.1f}" if risk.get("hv") is not None else "",
-        f"{risk.get('drawdown_pct', ''):.1f}" if risk.get("drawdown_pct") is not None else "",
-    ])
+    writer.writerow(
+        ["Risk Score", "Risk Level", "Volatility (20d %)", "Drawdown from 52W High %"]
+    )
+    writer.writerow(
+        [
+            risk.get("risk_score", ""),
+            risk.get("risk_level", ""),
+            f"{risk.get('hv', ''):.1f}" if risk.get("hv") is not None else "",
+            f"{risk.get('drawdown_pct', ''):.1f}"
+            if risk.get("drawdown_pct") is not None
+            else "",
+        ]
+    )
     writer.writerow([])
 
     # Flags
     writer.writerow(["== Active Risk Flags =="])
     writer.writerow(["Severity", "Title", "Message"])
     for flag in risk.get("flags", []):
-        writer.writerow([flag.get("severity", ""), flag.get("title", ""), flag.get("message", "")])
+        writer.writerow(
+            [flag.get("severity", ""), flag.get("title", ""), flag.get("message", "")]
+        )
 
     return buf.getvalue().encode("utf-8")
 
@@ -78,7 +116,9 @@ def factors_to_csv(symbol: str, factors: list[dict], risk: dict,
 def price_history_to_csv(symbol: str, df: Any) -> bytes:
     """Export price DataFrame to CSV bytes."""
     buf = io.StringIO()
-    buf.write(f"# {symbol} Price History — exported {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n")
+    buf.write(
+        f"# {symbol} Price History — exported {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+    )
     df.to_csv(buf)
     return buf.getvalue().encode("utf-8")
 
@@ -104,33 +144,44 @@ def analysis_to_html(
     rows = ""
     for f in factors:
         score = f["score"]
-        bar_color = "#2da44e" if score >= 60 else "#f0b429" if score >= 40 else "#e05252"
+        bar_color = (
+            "#2da44e" if score >= 60 else "#f0b429" if score >= 40 else "#e05252"
+        )
         rows += f"""
         <tr>
-          <td>{f['name']}</td>
+          <td>{f["name"]}</td>
           <td style="width:120px">
             <div style="background:#eee;border-radius:3px;height:14px">
               <div style="width:{score}%;background:{bar_color};height:14px;border-radius:3px"></div>
             </div>
           </td>
           <td><b>{score}/100</b></td>
-          <td>{f.get('weight',0):.0%}</td>
-          <td>{f['label']}</td>
-          <td style="font-size:0.85em;color:#666">{f['detail']}</td>
+          <td>{f.get("weight", 0):.0%}</td>
+          <td>{f["label"]}</td>
+          <td style="font-size:0.85em;color:#666">{f["detail"]}</td>
         </tr>"""
 
     flag_rows = ""
     for flag in risk.get("flags", []):
         sev = flag["severity"]
-        bg = {"danger": "#fde8e8", "warning": "#fef3cd", "info": "#d1ecf1"}.get(sev, "#fff")
+        bg = {"danger": "#fde8e8", "warning": "#fef3cd", "info": "#d1ecf1"}.get(
+            sev, "#fff"
+        )
         flag_rows += f"""<tr style="background:{bg}">
-          <td>{flag['icon']} {flag['title']}</td>
-          <td>{flag['message']}</td></tr>"""
+          <td>{flag["icon"]} {flag["title"]}</td>
+          <td>{flag["message"]}</td></tr>"""
 
-    signal_color = "#1a7f37" if composite_score >= 70 else \
-                   "#2da44e" if composite_score >= 55 else \
-                   "#888" if composite_score >= 45 else \
-                   "#e05252" if composite_score >= 30 else "#cf2929"
+    signal_color = (
+        "#1a7f37"
+        if composite_score >= 70
+        else "#2da44e"
+        if composite_score >= 55
+        else "#888"
+        if composite_score >= 45
+        else "#e05252"
+        if composite_score >= 30
+        else "#cf2929"
+    )
 
     risk_score = risk.get("risk_score", 0)
     risk_level = risk.get("risk_level", "N/A")
@@ -138,8 +189,13 @@ def analysis_to_html(
 
     pe = (financials or {}).get("peBasicExclExtraTTM")
     mc = (financials or {}).get("marketCapitalization")
-    mc_str = f"${float(mc)/1000:.1f}B" if mc and float(mc) < 1_000_000 else \
-             f"${float(mc)/1_000_000:.2f}T" if mc else "N/A"
+    mc_str = (
+        f"${float(mc) / 1000:.1f}B"
+        if mc and float(mc) < 1_000_000
+        else f"${float(mc) / 1_000_000:.2f}T"
+        if mc
+        else "N/A"
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -170,18 +226,24 @@ def analysis_to_html(
 
 <h2>Quote</h2>
 <div class="kpi-grid">
-  <div class="kpi"><div class="lbl">Price</div><div class="val">${price:,.2f}</div></div>
+  <div class="kpi"><div class="lbl">Price</div><div class="val">${
+        price:,.2f}</div></div>
   <div class="kpi"><div class="lbl">Day Change</div>
-    <div class="val" style="color:{'#2da44e' if change >= 0 else '#e05252'}">{change:+.2f} ({change_pct:+.2f}%)</div></div>
+    <div class="val" style="color:{"#2da44e" if change >= 0 else "#e05252"}">{
+        change:+.2f} ({change_pct:+.2f}%)</div></div>
   <div class="kpi"><div class="lbl">P/E Ratio</div>
     <div class="val">{f"{pe:.1f}x" if pe else "N/A"}</div></div>
-  <div class="kpi"><div class="lbl">Market Cap</div><div class="val">{mc_str}</div></div>
+  <div class="kpi"><div class="lbl">Market Cap</div><div class="val">{
+        mc_str
+    }</div></div>
 </div>
 
 <h2>Factor Score Engine</h2>
 <div>
   <span class="composite">{composite_score}/100</span>
-  <span style="font-size:1.2rem;font-weight:600;color:{signal_color}">{composite_label}</span>
+  <span style="font-size:1.2rem;font-weight:600;color:{signal_color}">{
+        composite_label
+    }</span>
 </div>
 <table>
   <tr><th>Factor</th><th colspan="2">Score</th><th>Weight</th><th>Label</th><th>Detail</th></tr>
@@ -192,8 +254,11 @@ def analysis_to_html(
 <div style="font-size:1.2rem;font-weight:600;color:{risk_color};margin-bottom:12px">
   Risk Score: {risk_score}/100 — {risk_level}
 </div>
-{"<table><tr><th>Flag</th><th>Message</th></tr>" + flag_rows + "</table>"
- if flag_rows else "<p style='color:#2da44e'>No active risk flags.</p>"}
+{
+        "<table><tr><th>Flag</th><th>Message</th></tr>" + flag_rows + "</table>"
+        if flag_rows
+        else "<p style='color:#2da44e'>No active risk flags.</p>"
+    }
 
 </body>
 </html>"""
@@ -222,8 +287,13 @@ def analysis_to_pdf(
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-            HRFlowable, Image as RLImage,
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+            HRFlowable,
+            Image as RLImage,
         )
     except ImportError:
         raise RuntimeError(
@@ -233,20 +303,31 @@ def analysis_to_pdf(
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        rightMargin=2 * cm, leftMargin=2 * cm,
-        topMargin=2 * cm, bottomMargin=2 * cm,
+        buf,
+        pagesize=A4,
+        rightMargin=2 * cm,
+        leftMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "JajaTitle", parent=styles["Title"], fontSize=20, spaceAfter=4,
+        "JajaTitle",
+        parent=styles["Title"],
+        fontSize=20,
+        spaceAfter=4,
     )
     h2_style = ParagraphStyle(
-        "JajaH2", parent=styles["Heading2"], fontSize=12,
-        spaceBefore=12, spaceAfter=4,
+        "JajaH2",
+        parent=styles["Heading2"],
+        fontSize=12,
+        spaceBefore=12,
+        spaceAfter=4,
     )
     small_style = ParagraphStyle(
-        "JajaSmall", parent=styles["Normal"], fontSize=8,
+        "JajaSmall",
+        parent=styles["Normal"],
+        fontSize=8,
         textColor=colors.grey,
     )
     body_style = ParagraphStyle("JajaBody", parent=styles["Normal"], fontSize=9)
@@ -263,9 +344,11 @@ def analysis_to_pdf(
     if mc:
         mc_f = float(mc)
         mc_str = (
-            f"${mc_f / 1_000_000:.2f}T" if mc_f >= 1_000_000 else
-            f"${mc_f / 1_000:.1f}B" if mc_f >= 1_000 else
-            f"${mc_f:.0f}M"
+            f"${mc_f / 1_000_000:.2f}T"
+            if mc_f >= 1_000_000
+            else f"${mc_f / 1_000:.1f}B"
+            if mc_f >= 1_000
+            else f"${mc_f:.0f}M"
         )
     else:
         mc_str = "N/A"
@@ -279,15 +362,22 @@ def analysis_to_pdf(
     story.append(Spacer(1, 0.3 * cm))
 
     story.append(Paragraph("Quote", h2_style))
-    _row_style = TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ])
+    _row_style = TableStyle(
+        [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            (
+                "ROWBACKGROUNDS",
+                (0, 1),
+                (-1, -1),
+                [colors.white, colors.HexColor("#f9f9f9")],
+            ),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]
+    )
     qt_data = [
         ["Metric", "Value"],
         ["Price", f"${price:,.2f}"],
@@ -312,49 +402,75 @@ def analysis_to_pdf(
     factor_data = [["Factor", "Score", "Wt", "Label", "Detail"]]
     for f in factors:
         detail = f.get("detail") or ""
-        factor_data.append([
-            f.get("name", ""),
-            str(f.get("score", "")),
-            f"{f.get('weight', 0):.0%}",
-            f.get("label", ""),
-            detail[:55] + ("…" if len(detail) > 55 else ""),
-        ])
-    ft = Table(factor_data, colWidths=[4.5 * cm, 1.5 * cm, 1.5 * cm, 3.5 * cm, 5.5 * cm])
-    ft.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+        factor_data.append(
+            [
+                f.get("name", ""),
+                str(f.get("score", "")),
+                f"{f.get('weight', 0):.0%}",
+                f.get("label", ""),
+                detail[:55] + ("…" if len(detail) > 55 else ""),
+            ]
+        )
+    ft = Table(
+        factor_data, colWidths=[4.5 * cm, 1.5 * cm, 1.5 * cm, 3.5 * cm, 5.5 * cm]
+    )
+    ft.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [colors.white, colors.HexColor("#f9f9f9")],
+                ),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
     story.append(ft)
     story.append(Spacer(1, 0.4 * cm))
 
     risk_score = risk.get("risk_score", 0)
     risk_level = risk.get("risk_level", "N/A")
-    story.append(Paragraph(f"Risk Guardrails  ({risk_score}/100 — {risk_level})", h2_style))
+    story.append(
+        Paragraph(f"Risk Guardrails  ({risk_score}/100 — {risk_level})", h2_style)
+    )
     flags = risk.get("flags", [])
     if flags:
         flag_data = [["Severity", "Title", "Message"]]
         for flag in flags:
             msg = flag.get("message") or ""
-            flag_data.append([
-                flag.get("severity", "").upper(),
-                flag.get("title", ""),
-                msg[:80] + ("…" if len(msg) > 80 else ""),
-            ])
+            flag_data.append(
+                [
+                    flag.get("severity", "").upper(),
+                    flag.get("title", ""),
+                    msg[:80] + ("…" if len(msg) > 80 else ""),
+                ]
+            )
         flt = Table(flag_data, colWidths=[2.5 * cm, 5 * cm, 8.5 * cm])
-        flt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
+        flt.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f4f8")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#f9f9f9")],
+                    ),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
         story.append(flt)
     else:
         story.append(Paragraph("No active risk flags.", body_style))
@@ -428,17 +544,33 @@ def export_to_google_sheets(
         existing = ws.get_all_values()
         if not existing:
             headers = [
-                "Date", "Symbol", "Composite Score", "Signal",
-                "Risk Score", "Risk Level", "Flags",
-                "P/E", "EPS", "Revenue Growth", "Gross Margin",
+                "Date",
+                "Symbol",
+                "Composite Score",
+                "Signal",
+                "Risk Score",
+                "Risk Level",
+                "Flags",
+                "P/E",
+                "EPS",
+                "Revenue Growth",
+                "Gross Margin",
             ] + [f["name"] for f in factors]
             ws.append_row(headers)
 
         # Build data row
         from datetime import datetime as _datetime
+
         composite = sum(f.get("score", 0) * f.get("weight", 0) for f in factors)
-        signal_labels = {(0, 40): "Bearish", (40, 60): "Neutral", (60, 80): "Bullish", (80, 101): "Strong Buy"}
-        signal = next((v for (lo, hi), v in signal_labels.items() if lo <= composite < hi), "N/A")
+        signal_labels = {
+            (0, 40): "Bearish",
+            (40, 60): "Neutral",
+            (60, 80): "Bullish",
+            (80, 101): "Strong Buy",
+        }
+        signal = next(
+            (v for (lo, hi), v in signal_labels.items() if lo <= composite < hi), "N/A"
+        )
 
         fin = financials or {}
         row = [
@@ -539,16 +671,26 @@ def _parse_schwab(lines: list[str]) -> list[dict]:
             sym = row[0].strip().upper()
             if not sym or sym in ("TOTAL", "CASH"):
                 continue
-            qty = _parse_float(row[header.index("Quantity")] if "Quantity" in header else row[1])
-            cost = _parse_float(row[header.index("Cost Basis")] if "Cost Basis" in header else row[5])
-            value = _parse_float(row[header.index("Market Value")] if "Market Value" in header else row[4])
-            positions.append({
-                "symbol": sym,
-                "quantity": qty,
-                "cost_basis": cost,
-                "current_value": value,
-                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
-            })
+            qty = _parse_float(
+                row[header.index("Quantity")] if "Quantity" in header else row[1]
+            )
+            cost = _parse_float(
+                row[header.index("Cost Basis")] if "Cost Basis" in header else row[5]
+            )
+            value = _parse_float(
+                row[header.index("Market Value")]
+                if "Market Value" in header
+                else row[4]
+            )
+            positions.append(
+                {
+                    "symbol": sym,
+                    "quantity": qty,
+                    "cost_basis": cost,
+                    "current_value": value,
+                    "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+                }
+            )
         except (ValueError, IndexError):
             continue
 
@@ -570,21 +712,29 @@ def _parse_fidelity(lines: list[str]) -> list[dict]:
             continue
 
         try:
-            sym_col = next((i for i, h in enumerate(header) if h in ("Symbol", "Ticker")), 0)
+            sym_col = next(
+                (i for i, h in enumerate(header) if h in ("Symbol", "Ticker")), 0
+            )
             sym = row[sym_col].upper().strip("\"'")
             if not sym or sym in ("TOTAL", "CASH", "SPAXX**"):
                 continue
 
             qty = _parse_float(_get_col(row, header, ("Quantity", "Shares")))
-            cost = _parse_float(_get_col(row, header, ("Cost Basis Total", "Total Cost Basis")))
-            value = _parse_float(_get_col(row, header, ("Current Value", "Market Value")))
-            positions.append({
-                "symbol": sym,
-                "quantity": qty,
-                "cost_basis": cost,
-                "current_value": value,
-                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
-            })
+            cost = _parse_float(
+                _get_col(row, header, ("Cost Basis Total", "Total Cost Basis"))
+            )
+            value = _parse_float(
+                _get_col(row, header, ("Current Value", "Market Value"))
+            )
+            positions.append(
+                {
+                    "symbol": sym,
+                    "quantity": qty,
+                    "cost_basis": cost,
+                    "current_value": value,
+                    "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+                }
+            )
         except (ValueError, IndexError):
             continue
 
@@ -605,13 +755,15 @@ def _parse_ibkr(lines: list[str]) -> list[dict]:
             qty = _parse_float(row[5])
             cost = _parse_float(row[7]) if len(row) > 7 else None
             value = _parse_float(row[10]) if len(row) > 10 else None
-            positions.append({
-                "symbol": sym,
-                "quantity": qty,
-                "cost_basis": cost,
-                "current_value": value,
-                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
-            })
+            positions.append(
+                {
+                    "symbol": sym,
+                    "quantity": qty,
+                    "cost_basis": cost,
+                    "current_value": value,
+                    "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+                }
+            )
         except (ValueError, IndexError):
             continue
 
@@ -634,20 +786,28 @@ def _parse_generic(lines: list[str]) -> list[dict]:
             continue
 
         try:
-            sym_col = next((i for i, h in enumerate(header) if h in ("symbol", "ticker")), 0)
+            sym_col = next(
+                (i for i, h in enumerate(header) if h in ("symbol", "ticker")), 0
+            )
             sym = row[sym_col].upper()
             if not sym or sym in ("CASH", "TOTAL", "SPAXX**", "FDRXX**"):
                 continue
             qty = _parse_float(_get_col(row, header, ("quantity", "shares", "qty")))
-            cost = _parse_float(_get_col(row, header, ("cost", "cost basis", "costbasis", "total cost")))
-            value = _parse_float(_get_col(row, header, ("value", "market value", "current value")))
-            positions.append({
-                "symbol": sym,
-                "quantity": qty,
-                "cost_basis": cost,
-                "current_value": value,
-                "unrealized_pnl": round((value or 0) - (cost or 0), 2),
-            })
+            cost = _parse_float(
+                _get_col(row, header, ("cost", "cost basis", "costbasis", "total cost"))
+            )
+            value = _parse_float(
+                _get_col(row, header, ("value", "market value", "current value"))
+            )
+            positions.append(
+                {
+                    "symbol": sym,
+                    "quantity": qty,
+                    "cost_basis": cost,
+                    "current_value": value,
+                    "unrealized_pnl": round((value or 0) - (cost or 0), 2),
+                }
+            )
         except (ValueError, IndexError):
             continue
 
@@ -676,5 +836,6 @@ def _get_col(row: list[str], header: list[str], names: tuple) -> str | None:
 def _csv_reader(lines: list[str]):
     import csv
     import io
+
     reader = csv.reader(io.StringIO("\n".join(lines)))
     return list(reader)

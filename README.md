@@ -216,7 +216,9 @@ OpenAPI docs available at `/docs`. See [API Server Setup](#rest-api-server-p143)
 
 - Python 3.10+
 - A free [Finnhub](https://finnhub.io) API key
-- An [Anthropic](https://console.anthropic.com) API key (for Claude analysis and sentiment themes)
+- **One of the following for Claude AI analysis:**
+  - An [Anthropic](https://console.anthropic.com) API key (`ANTHROPIC_API_KEY`) — default; or
+  - The [Claude Code CLI](https://claude.ai/code) (`claude` binary) — lets you skip the API key entirely by reusing your existing Claude Code session credentials (see [Claude Code CLI Backend](#claude-code-cli-backend-p96))
 
 ## Setup
 
@@ -245,7 +247,7 @@ OpenAPI docs available at `/docs`. See [API Server Setup](#rest-api-server-p143)
 
 4. Get API keys:
    - Finnhub: [https://finnhub.io](https://finnhub.io) (free tier)
-   - Anthropic: [https://console.anthropic.com](https://console.anthropic.com)
+   - Anthropic (**optional if using Claude Code CLI**): [https://console.anthropic.com](https://console.anthropic.com)
 
 5. Create a `.env` file from the example and add your keys:
 
@@ -256,8 +258,11 @@ OpenAPI docs available at `/docs`. See [API Server Setup](#rest-api-server-p143)
    Edit `.env`:
    ```
    FINNHUB_API_KEY=your_finnhub_key_here
-   ANTHROPIC_API_KEY=your_anthropic_key_here
+   ANTHROPIC_API_KEY=your_anthropic_key_here   # not required if using Claude Code CLI
    ```
+
+   > **Tip:** If you have the [Claude Code CLI](https://claude.ai/code) installed, you can skip
+   > `ANTHROPIC_API_KEY` entirely — see [Claude Code CLI Backend](#claude-code-cli-backend-p96).
 
 ## Usage
 
@@ -421,7 +426,7 @@ python server.py
 | `JAJA_API_KEY` | _(empty — auth disabled)_ | Set to a secret string to require `X-API-Key` header |
 | `JAJA_API_PORT` | `8080` | Listening port |
 | `FINNHUB_API_KEY` | _(required)_ | Finnhub API key |
-| `ANTHROPIC_API_KEY` | _(required)_ | Anthropic API key |
+| `ANTHROPIC_API_KEY` | _(required for sdk backend)_ | Anthropic API key — omit if `ai_backend: cli` |
 | `CACHE_BACKEND` | `disk` | `disk` or `redis` |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis URL (when `CACHE_BACKEND=redis`) |
 
@@ -457,6 +462,42 @@ JAJA_API_KEY=your-secret docker compose --profile server up --build
 Requires:
 ```bash
 pip install fastapi "uvicorn[standard]"
+```
+
+---
+
+### Claude Code CLI Backend (P9.6)
+
+Use your existing **Claude Code** session credentials instead of a separate `ANTHROPIC_API_KEY`.
+
+**Requirements:** Install the [Claude Code CLI](https://claude.ai/code) so that `claude` is on your `PATH`.
+
+**Enable it in `config.yaml`:**
+
+```yaml
+# config.yaml
+ai_backend: "cli"   # "sdk" (default) or "cli"
+```
+
+**How it works:**
+
+| Setting | Behaviour |
+|---------|-----------|
+| `ai_backend: sdk` (default) | Uses the `anthropic` Python SDK; requires `ANTHROPIC_API_KEY` in `.env` |
+| `ai_backend: cli` | Shells out to the `claude` CLI binary; reuses your existing Claude Code session — no separate API key needed |
+
+- If `ai_backend: cli` is set but the `claude` binary is not found on `PATH`, the app logs a warning and falls back to the SDK backend automatically.
+- All streaming analysis functions, chat, screener, sector rotation, backtesting, and peer narratives work identically with both backends — no UI or API changes required.
+- The `anthropic` Python package is not imported when the CLI backend is active, so you can omit it from your environment.
+
+**Docker / CI usage:**
+
+If running in Docker with the CLI backend, mount the Claude Code credentials directory into the container:
+
+```bash
+docker run -p 8501:8501 --env-file .env \
+  -v "$HOME/.claude:/root/.claude" \
+  jaja-money
 ```
 
 ---

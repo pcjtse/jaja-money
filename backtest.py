@@ -12,6 +12,7 @@ Enhancements:
 Usage:
     from backtest import run_backtest, BacktestResult, run_parameter_sweep, run_walk_forward
 """
+
 from __future__ import annotations
 
 import math
@@ -28,6 +29,7 @@ log = get_logger(__name__)
 # Signal computation (price-based only — no fundamental data for history)
 # ---------------------------------------------------------------------------
 
+
 def _compute_signal(close: pd.Series, index: int) -> int:
     """Compute a simplified signal score (0-100) at a given price history index.
 
@@ -37,7 +39,7 @@ def _compute_signal(close: pd.Series, index: int) -> int:
     if index < 35:
         return 50  # Not enough history
 
-    slice_ = close.iloc[:index + 1]
+    slice_ = close.iloc[: index + 1]
     n = len(slice_)
 
     # SMA trend
@@ -62,10 +64,10 @@ def _compute_signal(close: pd.Series, index: int) -> int:
         delta = slice_.diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(alpha=1/14, min_periods=14).mean()
-        avg_loss = loss.ewm(alpha=1/14, min_periods=14).mean()
+        avg_gain = gain.ewm(alpha=1 / 14, min_periods=14).mean()
+        avg_loss = loss.ewm(alpha=1 / 14, min_periods=14).mean()
         rs = avg_gain / avg_loss
-        rsi = float((100 - 100/(1+rs)).iloc[-1])
+        rsi = float((100 - 100 / (1 + rs)).iloc[-1])
         if not math.isnan(rsi):
             rsi_score = int(max(0, min(100, 100 - abs(rsi - 50) * 0.5)))
 
@@ -95,6 +97,7 @@ def _compute_signal(close: pd.Series, index: int) -> int:
 # Trade record
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Trade:
     entry_date: str
@@ -109,6 +112,7 @@ class Trade:
 # ---------------------------------------------------------------------------
 # Backtest result
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BacktestResult:
@@ -141,6 +145,7 @@ class BacktestResult:
 # ---------------------------------------------------------------------------
 # Core backtester
 # ---------------------------------------------------------------------------
+
 
 def run_backtest(
     df: pd.DataFrame,
@@ -246,13 +251,17 @@ def run_backtest(
             # P6.3: Dividend reinvestment — apply dividend yield on ex-dividend days
             if d in div_lookup and p > 0:
                 div_yield = div_lookup[d] / p  # dividend as fraction of price
-                position_mult_divs *= (1 + div_yield)
+                position_mult_divs *= 1 + div_yield
                 total_dividend_pct += div_yield * 100
 
             if s <= exit_threshold:
                 # Apply exit slippage (effective exit price is slightly lower)
                 exit_price = p * (1 - slippage_pct)
-                pnl_gross = (p - entry_price / (1 + slippage_pct)) / (entry_price / (1 + slippage_pct)) * 100
+                pnl_gross = (
+                    (p - entry_price / (1 + slippage_pct))
+                    / (entry_price / (1 + slippage_pct))
+                    * 100
+                )
                 pnl_pct = pnl_gross - round_trip_cost_pct
                 trade = Trade(
                     entry_date=entry_date,
@@ -264,9 +273,9 @@ def run_backtest(
                     is_win=pnl_pct > 0,
                 )
                 trades.append(trade)
-                position_mult_gross *= (1 + pnl_gross / 100)
-                position_mult *= (1 + pnl_pct / 100)
-                position_mult_divs *= (1 + pnl_pct / 100)
+                position_mult_gross *= 1 + pnl_gross / 100
+                position_mult *= 1 + pnl_pct / 100
+                position_mult_divs *= 1 + pnl_pct / 100
                 total_cost_pct += round_trip_cost_pct
                 in_position = False
 
@@ -278,20 +287,26 @@ def run_backtest(
     # Close open position at last price
     if in_position and n > 0:
         exit_price = prices[-1] * (1 - slippage_pct)
-        pnl_gross = (prices[-1] - entry_price / (1 + slippage_pct)) / (entry_price / (1 + slippage_pct)) * 100
+        pnl_gross = (
+            (prices[-1] - entry_price / (1 + slippage_pct))
+            / (entry_price / (1 + slippage_pct))
+            * 100
+        )
         pnl_pct = pnl_gross - round_trip_cost_pct
-        trades.append(Trade(
-            entry_date=entry_date,
-            exit_date=dates[-1],
-            entry_price=round(entry_price, 2),
-            exit_price=round(exit_price, 2),
-            pnl_pct=round(pnl_pct, 2),
-            signal_at_entry=entry_signal,
-            is_win=pnl_pct > 0,
-        ))
-        position_mult_gross *= (1 + pnl_gross / 100)
-        position_mult *= (1 + pnl_pct / 100)
-        position_mult_divs *= (1 + pnl_pct / 100)
+        trades.append(
+            Trade(
+                entry_date=entry_date,
+                exit_date=dates[-1],
+                entry_price=round(entry_price, 2),
+                exit_price=round(exit_price, 2),
+                pnl_pct=round(pnl_pct, 2),
+                signal_at_entry=entry_signal,
+                is_win=pnl_pct > 0,
+            )
+        )
+        position_mult_gross *= 1 + pnl_gross / 100
+        position_mult *= 1 + pnl_pct / 100
+        position_mult_divs *= 1 + pnl_pct / 100
         total_cost_pct += round_trip_cost_pct
         equity[-1] = position_mult
         equity_gross[-1] = position_mult_gross
@@ -304,7 +319,11 @@ def run_backtest(
 
     days = n
     years = days / 252
-    cagr_pct = ((position_mult ** (1 / years)) - 1) * 100 if years > 0 and position_mult > 0 else 0
+    cagr_pct = (
+        ((position_mult ** (1 / years)) - 1) * 100
+        if years > 0 and position_mult > 0
+        else 0
+    )
 
     # Sharpe (simplified: daily returns)
     sharpe = None
@@ -312,7 +331,9 @@ def run_backtest(
         eq_series = pd.Series(equity)
         daily_rets = eq_series.pct_change().dropna()
         if len(daily_rets) > 1 and daily_rets.std() > 0:
-            sharpe = round(float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)), 2)
+            sharpe = round(
+                float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)), 2
+            )
 
     # Max drawdown
     peak = 1.0
@@ -360,6 +381,7 @@ def run_backtest(
 # P6.1: Walk-forward validation
 # ---------------------------------------------------------------------------
 
+
 def run_walk_forward(
     df: pd.DataFrame,
     symbol: str,
@@ -386,7 +408,9 @@ def run_walk_forward(
     (in_sample_result, out_of_sample_result) tuple of BacktestResult
     """
     if df is None or len(df) < 100:
-        raise ValueError("Insufficient data for walk-forward validation (need 100+ days)")
+        raise ValueError(
+            "Insufficient data for walk-forward validation (need 100+ days)"
+        )
 
     df = df.sort_values("Date").reset_index(drop=True)
     split_idx = int(len(df) * insample_pct)
@@ -428,6 +452,7 @@ def run_walk_forward(
 # P6.2: Parameter sensitivity sweep
 # ---------------------------------------------------------------------------
 
+
 def run_parameter_sweep(
     df: pd.DataFrame,
     symbol: str,
@@ -453,7 +478,12 @@ def run_parameter_sweep(
     sharpe_grid = {}
     return_grid = {}
     best_sharpe = -999.0
-    best_params = {"entry": entry_values[0], "exit": exit_values[0], "sharpe": None, "total_return": None}
+    best_params = {
+        "entry": entry_values[0],
+        "exit": exit_values[0],
+        "sharpe": None,
+        "total_return": None,
+    }
 
     for entry in entry_values:
         sharpe_grid[entry] = {}
@@ -490,14 +520,15 @@ def run_parameter_sweep(
                 return_grid[entry][exit_] = None
 
     import pandas as pd
+
     sharpe_df = pd.DataFrame(sharpe_grid).T  # entry as rows, exit as cols
     return_df = pd.DataFrame(return_grid).T
 
     # Boundary warning: optimal params are at min/max of the tested range
-    boundary_warning = (
-        best_params["entry"] in [min(entry_values), max(entry_values)]
-        or best_params["exit"] in [min(exit_values), max(exit_values)]
-    )
+    boundary_warning = best_params["entry"] in [
+        min(entry_values),
+        max(entry_values),
+    ] or best_params["exit"] in [min(exit_values), max(exit_values)]
 
     return {
         "grid_sharpe": sharpe_df,

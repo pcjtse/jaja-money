@@ -1,4 +1,5 @@
 """Tests for P10.2: SEC EDGAR Filing Analysis."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -80,7 +81,11 @@ def test_get_recent_filings_success():
             "recent": {
                 "form": ["10-K", "10-Q", "8-K"],
                 "filingDate": ["2024-02-01", "2023-11-01", "2023-10-01"],
-                "accessionNumber": ["0001234-24-001", "0001234-23-002", "0001234-23-003"],
+                "accessionNumber": [
+                    "0001234-24-001",
+                    "0001234-23-002",
+                    "0001234-23-003",
+                ],
                 "primaryDocument": ["doc1.htm", "doc2.htm", "doc3.htm"],
             }
         }

@@ -9,6 +9,7 @@ Usage:
     log = get_logger(__name__)
     log.info("Fetching quote", extra={"symbol": "AAPL"})
 """
+
 from __future__ import annotations
 
 import logging
