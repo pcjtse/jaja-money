@@ -150,7 +150,6 @@ def compute_options_metrics(chain_data: dict, current_price: float) -> dict:
     nearest_options = nearest_block.get("options", {})
     nearest_calls = nearest_options.get("CALL", [])
     nearest_puts = nearest_options.get("PUT", [])
-    nearest_exp = nearest_block.get("expirationDate", "")
 
     atm_iv_call = None
     atm_iv_put = None

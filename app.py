@@ -78,7 +78,6 @@ from ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
 from options_analysis import build_iv_surface, compute_options_metrics, compute_hedge_suggestions
 from social import fetch_reddit_mentions, fetch_stocktwits_messages, compute_social_sentiment
 from ownership import fetch_institutional_ownership, fetch_insider_summary
-from edgar import extract_business_sections
 
 log = get_logger(__name__)
 
@@ -714,6 +713,14 @@ if df is not None and len(df) > 0:
             mime="text/csv",
         )
 
+# Fetch insider transactions early (needed by ownership expander and factor section)
+_insider_txns = []
+try:
+    with st.spinner("Fetching insider transactions..."):
+        _insider_txns = fetch_insider_transactions(symbol)
+except Exception:
+    pass
+
 # --- Market Research ---
 st.header("Market Research")
 
@@ -900,7 +907,6 @@ with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False
                 oc4.metric("Unusual Flows", str(_opt_metrics.get("unusual_flow_count", 0)))
 
             if _iv_surface.get("strikes") and _iv_surface.get("expiries"):
-                import numpy as _np
                 _z = _iv_surface.get("iv_matrix", [])
                 if _z:
                     fig_iv = go.Figure(go.Surface(
@@ -1145,14 +1151,8 @@ except Exception:
     pass
 
 # Fetch additional data for new factors and guardrails
-_insider_txns = []
 _short_int = {}
 _revisions = {}
-try:
-    with st.spinner("Fetching insider transactions..."):
-        _insider_txns = fetch_insider_transactions(symbol)
-except Exception:
-    pass
 try:
     with st.spinner("Fetching short interest..."):
         _short_int = fetch_short_interest(symbol)

@@ -391,12 +391,6 @@ def run_batch_analysis(api, limit: int = 50) -> dict:
     for symbol in batch:
         try:
             quote = api.get_quote(symbol)
-            profile = {}
-            try:
-                profile = api.get_company_profile(symbol) or {}
-            except Exception:
-                pass
-
             price = quote.get("c") or quote.get("price")
 
             # Minimal factor score: use price vs. 52-week range as a proxy
