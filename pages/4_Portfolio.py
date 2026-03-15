@@ -13,10 +13,14 @@ from portfolio_analysis import (
     compute_portfolio_drift,
 )
 
+from theme import inject_css, page_header
+
 st.set_page_config(page_title="Portfolio Analysis", page_icon="💼", layout="wide")
-st.title("Portfolio Analysis")
-st.caption(
-    "Enter a multi-stock portfolio to compute correlation, risk, and diversification metrics."
+inject_css()
+page_header(
+    "Portfolio Analysis",
+    subtitle="Enter a multi-stock portfolio to compute correlation, risk, and diversification metrics.",
+    icon="💼",
 )
 
 # -------------------------------------------------------------------------

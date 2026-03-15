@@ -101,10 +101,35 @@ def streamlit_server(tmp_path_factory):
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     env["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 
+    # Prefer a Python that has streamlit installed (the pytest venv may not).
+    import shutil
+
+    _streamlit_bin = shutil.which("streamlit")
+    if _streamlit_bin:
+        _python_cmd: list[str] = [_streamlit_bin]
+    else:
+        # Fall back: find the Python that has streamlit
+        _candidates = [
+            "/usr/local/bin/python3",
+            "/usr/bin/python3",
+            sys.executable,
+        ]
+        _py = next(
+            (
+                p
+                for p in _candidates
+                if Path(p).exists()
+                and __import__("subprocess")
+                .run([p, "-c", "import streamlit"], capture_output=True)
+                .returncode
+                == 0
+            ),
+            sys.executable,
+        )
+        _python_cmd = [_py, "-m", "streamlit"]
+
     cmd = [
-        sys.executable,
-        "-m",
-        "streamlit",
+        *_python_cmd,
         "run",
         str(REPO_ROOT / "app.py"),
         "--server.port",
@@ -182,6 +207,11 @@ def app_page(page, streamlit_server):
     page.wait_for_selector('[data-testid="stApp"]', timeout=30_000)
     # Wait for at least the sidebar navigation to be populated
     page.wait_for_selector('[data-testid="stSidebar"]', timeout=30_000)
+    # Wait for the Analyze button (confirms sidebar custom content is rendered)
+    try:
+        page.wait_for_selector('button:has-text("Analyze")', timeout=20_000)
+    except Exception:
+        pass  # Gracefully continue if not found — individual tests will assert
     # Give Streamlit a moment to finish rendering all widgets
-    page.wait_for_timeout(3000)
+    page.wait_for_timeout(2000)
     return page

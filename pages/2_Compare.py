@@ -6,10 +6,14 @@ import plotly.graph_objects as go
 from api import FinnhubAPI
 from comparison import compare_tickers, comparison_dataframe
 
+from theme import inject_css, page_header
+
 st.set_page_config(page_title="Compare Stocks", page_icon="⚖️", layout="wide")
-st.title("Multi-Stock Comparison")
-st.caption(
-    "Compare up to 5 stocks side-by-side across factor scores, risk, and key metrics."
+inject_css()
+page_header(
+    "Multi-Stock Comparison",
+    subtitle="Compare up to 5 stocks side-by-side across factor scores, risk, and key metrics.",
+    icon="⚖️",
 )
 
 # --- Input ---

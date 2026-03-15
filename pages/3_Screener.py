@@ -17,11 +17,17 @@ from screener import (
     apply_esg_filter,
 )
 
+from theme import inject_css, page_header
+
 st.set_page_config(page_title="Stock Screener", page_icon="🔍", layout="wide")
-st.title("Stock Screener")
-st.caption(
-    "Filter stocks by factor score, risk score, P/E, RSI, and more. "
-    "Supports rule-based filters with AND/OR logic and AI natural-language queries."
+inject_css()
+page_header(
+    "Stock Screener",
+    subtitle=(
+        "Filter stocks by factor score, risk score, P/E, RSI, and more. "
+        "Supports rule-based filters with AND/OR logic and AI natural-language queries."
+    ),
+    icon="🔍",
 )
 
 # P7.3: Sentiment warning

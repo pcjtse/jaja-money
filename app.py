@@ -104,6 +104,7 @@ from export import (
 from cache import get_cache
 from log_setup import get_logger
 from ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
+from theme import inject_css, page_header
 from options_analysis import (
     build_iv_surface,
     compute_options_metrics,
@@ -128,6 +129,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+inject_css()
 
 # ---------------------------------------------------------------------------
 # Local technical indicator helpers
@@ -275,12 +277,28 @@ def fetch_earnings_history(symbol: str) -> list:
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.header("📈 jaja-money")
+    st.markdown(
+        """
+        <div style="padding:0.5rem 0 1.25rem">
+          <h1 style="margin:0;font-size:1.4rem;font-weight:700;
+                     background:linear-gradient(135deg,#6366F1,#818CF8);
+                     -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                     background-clip:text;letter-spacing:-0.02em">
+            📈 jaja-money
+          </h1>
+          <p style="margin:0.2rem 0 0;color:#8B949E;font-size:0.75rem;
+                    font-weight:500;letter-spacing:0.04em;text-transform:uppercase">
+            AI Stock Analysis
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     symbol = st.text_input("Stock Symbol", placeholder="e.g. AAPL").strip().upper()
     analyze = st.button("Analyze", type="primary", use_container_width=True)
 
-    st.caption("Finnhub free tier: 60 req/min. Results cached 5 min (memory) + disk.")
+    st.caption("Finnhub free tier · 60 req/min · cached 5 min")
     st.divider()
 
     # Watchlist quick view
@@ -318,7 +336,8 @@ with st.sidebar:
 
     # P18.1: Dark mode toggle
     _dark = is_dark_mode()
-    if st.button("🌙 Dark Mode" if not _dark else "☀️ Light Mode", key="dark_mode_btn"):
+    _mode_label = "☀️ Switch to Light Mode" if _dark else "🌙 Switch to Dark Mode"
+    if st.button(_mode_label, key="dark_mode_btn", use_container_width=True):
         toggle_dark_mode()
         st.rerun()
 
@@ -394,15 +413,73 @@ if "symbol_override" in st.session_state:
 # ---------------------------------------------------------------------------
 
 if not analyze and not symbol:
-    st.title("📈 Stock Analysis Dashboard")
-    st.info(
-        "Enter a stock symbol in the sidebar and click **Analyze** to get started.\n\n"
-        "Navigate to other pages using the sidebar menu for:\n"
-        "- **Compare** — side-by-side multi-stock comparison\n"
-        "- **Screener** — filter stocks by factor/risk criteria\n"
-        "- **Portfolio** — correlation & portfolio risk analysis\n"
-        "- **Sectors** — sector rotation tracker\n"
-        "- **Backtest** — historical signal backtesting"
+    page_header(
+        "Stock Analysis Dashboard",
+        subtitle="Institutional-grade analysis powered by Claude AI & Finnhub data",
+        icon="📈",
+    )
+
+    st.markdown(
+        """
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1.5rem 0">
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">🔬</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">Multi-Factor Scoring</div>
+            <div style="color:#8B949E;font-size:0.85rem">8-factor quantitative engine
+            covering valuation, momentum, sentiment, earnings quality and more.</div>
+          </div>
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">🛡️</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">Risk Guardrails</div>
+            <div style="color:#8B949E;font-size:0.85rem">13 red-flag conditions including
+            overbought signals, high leverage, insider selling and yield-curve stress.</div>
+          </div>
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">🤖</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">AI Analysis</div>
+            <div style="color:#8B949E;font-size:0.85rem">Claude-powered institutional-quality
+            commentary, price targets, and interactive Q&amp;A chat.</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem">
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">⚖️</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">Compare Stocks</div>
+            <div style="color:#8B949E;font-size:0.85rem">Side-by-side radar charts and
+            correlation heatmaps for up to 5 symbols.</div>
+          </div>
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">💼</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">Portfolio Analysis</div>
+            <div style="color:#8B949E;font-size:0.85rem">Monte Carlo simulation, Kelly
+            sizing, Sharpe ratio, and risk attribution.</div>
+          </div>
+          <div class="jaja-card">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">📊</div>
+            <div style="font-weight:600;color:#E6EDF3;margin-bottom:0.3rem">Backtest Strategies</div>
+            <div style="color:#8B949E;font-size:0.85rem">Historical signal backtesting
+            with DRIP support and equity curve visualisation.</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);
+                    border-radius:12px;padding:1.2rem 1.5rem;display:flex;align-items:center;gap:1rem">
+          <span style="font-size:1.4rem">👈</span>
+          <div>
+            <div style="font-weight:600;color:#C9D1D9">Get started</div>
+            <div style="color:#8B949E;font-size:0.875rem">
+              Enter a stock symbol in the sidebar (e.g. <code>AAPL</code>) and click
+              <strong style="color:#818CF8">Analyze</strong>.
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
     st.stop()
 
@@ -410,7 +487,7 @@ if not symbol:
     st.error("Please enter a stock symbol.")
     st.stop()
 
-st.title(f"Analysis: {symbol}")
+page_header(f"Analysis: {symbol}", icon="📈")
 log.info("Running analysis for %s", symbol)
 
 # ---------------------------------------------------------------------------
@@ -1738,7 +1815,9 @@ with st.expander("Track in Paper Portfolio (Forward Test)"):
     _ft_shares = _ft_col2.number_input(
         "Shares", min_value=0.01, value=1.0, step=0.5, key="ft_shares"
     )
-    if st.button("Add to Portfolio", key="ft_track_btn", disabled=_selected_pf_id is None):
+    if st.button(
+        "Add to Portfolio", key="ft_track_btn", disabled=_selected_pf_id is None
+    ):
         _ft.add_position(
             portfolio_id=_selected_pf_id,
             symbol=symbol,

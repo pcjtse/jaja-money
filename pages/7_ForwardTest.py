@@ -13,15 +13,21 @@ import pandas as pd
 
 import forward_test as ft
 
+from theme import inject_css, page_header
+
 st.set_page_config(
     page_title="Forward Test",
     page_icon="🧪",
     layout="wide",
 )
-st.title("Forward Testing — Paper Portfolio")
-st.caption(
-    "Track AI-recommended stocks in a paper portfolio to validate signals "
-    "without risking real capital."
+inject_css()
+page_header(
+    "Forward Testing — Paper Portfolio",
+    subtitle=(
+        "Track AI-recommended stocks in a paper portfolio to validate signals "
+        "without risking real capital."
+    ),
+    icon="🧪",
 )
 
 # ---------------------------------------------------------------------------
@@ -57,9 +63,7 @@ with st.sidebar:
 
     # Rename
     with st.expander("Rename Portfolio"):
-        rename_val = st.text_input(
-            "New name", value=selected_name, key="rename_input"
-        )
+        rename_val = st.text_input("New name", value=selected_name, key="rename_input")
         if st.button("Rename", key="rename_btn"):
             if rename_val.strip() and rename_val.strip() != selected_name:
                 ft.rename_portfolio(selected_pf_id, rename_val.strip())
@@ -83,8 +87,12 @@ st.caption(f"Created: {selected_pf['created_date']}")
 
 with st.expander("Add Position Manually"):
     ac1, ac2, ac3, ac4 = st.columns(4)
-    ap_symbol = ac1.text_input("Symbol", placeholder="AAPL", key="ap_sym").strip().upper()
-    ap_price = ac2.number_input("Entry Price ($)", min_value=0.01, value=100.0, key="ap_price")
+    ap_symbol = (
+        ac1.text_input("Symbol", placeholder="AAPL", key="ap_sym").strip().upper()
+    )
+    ap_price = ac2.number_input(
+        "Entry Price ($)", min_value=0.01, value=100.0, key="ap_price"
+    )
     ap_shares = ac3.number_input("Shares", min_value=0.01, value=1.0, key="ap_shares")
     ap_factor = ac4.number_input(
         "Factor Score (0-100)", min_value=0, max_value=100, value=0, key="ap_factor"
@@ -138,9 +146,7 @@ if open_positions:
         sym = pos["symbol"]
         entry = pos["entry_price"]
         current = live_prices.get(sym, entry)
-        days_held = (
-            pd.Timestamp.today() - pd.Timestamp(pos["entry_date"])
-        ).days
+        days_held = (pd.Timestamp.today() - pd.Timestamp(pos["entry_date"])).days
         pnl_pct = (current - entry) / entry * 100 if entry else 0.0
         rows.append(
             {
@@ -174,7 +180,11 @@ if open_positions:
     )
     # Pre-fill with live price if available
     _close_pos = next((p for p in open_positions if p["id"] == close_id), None)
-    _default_exit = live_prices.get(_close_pos["symbol"], _close_pos["entry_price"]) if _close_pos else 0.0
+    _default_exit = (
+        live_prices.get(_close_pos["symbol"], _close_pos["entry_price"])
+        if _close_pos
+        else 0.0
+    )
     close_price = close_cols[1].number_input(
         "Exit Price ($)", min_value=0.01, value=float(_default_exit), key="close_price"
     )
