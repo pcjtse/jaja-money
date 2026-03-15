@@ -103,7 +103,6 @@ jobs:
         run: |
           pytest tests/integration/ -v \
             --browser chromium \
-            --headed=false \
             --screenshot=only-on-failure \
             --output=test-results \
             -x \
