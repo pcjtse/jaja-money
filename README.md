@@ -39,37 +39,47 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 ```mermaid
 flowchart LR
     %% Global Styles
-    classDef default font-family:Inter,sans-serif,font-size:13px;
+    classDef start fill:#1e293b,stroke:#0f172a,color:#fff
+    classDef finish fill:#059669,stroke:#065f46,color:#fff
+    classDef step fill:#fff,stroke:#cbd5e1,color:#475569
     
-    %% Specific Node Classes
-    classDef start fill:#1e293b,stroke:#0f172a,color:#fff,stroke-width:2px;
-    classDef finish fill:#059669,stroke:#065f46,color:#fff,stroke-width:2px;
-    classDef step fill:#ffffff,stroke:#e2e8f0,color:#475569,stroke-width:1px;
-    
-    classDef buy fill:#dcfce7,stroke:#22c55e,color:#166534,stroke-width:1px;
-    classDef hold fill:#f8fafc,stroke:#94a3b8,color:#475569,stroke-width:1px;
-    classDef sell fill:#fee2e2,stroke:#ef4444,color:#991b1b,stroke-width:1px;
+    classDef buy fill:#dcfce7,stroke:#22c55e,color:#166534
+    classDef hold fill:#f8fafc,stroke:#94a3b8,color:#475569
+    classDef sell fill:#fee2e2,stroke:#ef4444,color:#991b1b
 
-    %% Diagram Nodes
     START(["🔍 Enter Ticker"]):::start
 
-    subgraph D ["&nbsp;&nbsp;📡  DATA COLLECTION&nbsp;&nbsp;"]
-        D1["<b>Sources</b><br/>• Quote & Price History<br/>• Fundamentals & Earnings<br/>• News, Analysts & Insiders"]:::step
+    subgraph D [Data Collection]
+        D1["Sources:
+        • Quote & Price History
+        • Fundamentals & Earnings
+        • News & Analyst Ratings"]:::step
     end
 
-    subgraph F ["&nbsp;&nbsp;⚙️  FACTOR SCORING&nbsp;&nbsp;"]
-        F1["<b>8 Core Factors</b><br/>Valuation • Trend • Momentum<br/>MACD • Sentiment • Earnings<br/>Consensus • 52-Week<br/><br/><b>0 ➔ 100 Score</b>"]:::step
+    subgraph F [Factor Scoring]
+        F1["8 Core Factors:
+        Valuation, Trend, MACD,
+        Momentum, Sentiment
+        ---
+        0 to 100 Score"]:::step
     end
 
-    subgraph R ["&nbsp;&nbsp;🛡️  RISK ASSESSMENT&nbsp;&nbsp;"]
-        R1["<b>Risk Metrics</b><br/>Volatility • Drawdown<br/>RSI • 200-Day Trend<br/><br/><b>13 Red-Flag Alerts</b>"]:::step
+    subgraph R [Risk Assessment]
+        R1["Risk Metrics:
+        Volatility & Drawdown
+        RSI & 200-Day Trend
+        ---
+        13 Red-Flag Alerts"]:::step
     end
 
-    subgraph AI ["&nbsp;&nbsp;🤖  AI ANALYSIS (CLAUDE)&nbsp;&nbsp;"]
-        AI1["<b>Synthesis</b><br/>Bull/Bear Thesis<br/>Price Targets<br/>Sentiment Synthesis"]:::step
+    subgraph AI [AI Analysis]
+        AI1["Claude Synthesis:
+        Bull/Bear Thesis
+        Price Targets
+        Sentiment Synthesis"]:::step
     end
 
-    subgraph SIG ["&nbsp;&nbsp;📊  INVESTMENT SIGNAL&nbsp;&nbsp;"]
+    subgraph SIG [Investment Signal]
         direction TB
         S1["Strong Buy"]:::buy
         S2["Buy"]:::buy
@@ -78,7 +88,7 @@ flowchart LR
         S5["Strong Sell"]:::sell
     end
 
-    END(["💡 Output: Watchlist, Alerts & Backtests"]):::finish
+    END(["💡 Watchlist & Backtests"]):::finish
 
     %% Connections
     START --> D
