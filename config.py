@@ -160,6 +160,10 @@ class _Config:
     def factor_weights(self) -> dict[str, float]:
         return self.get("factor_weights", default=_DEFAULTS["factor_weights"])
 
+    @factor_weights.setter
+    def factor_weights(self, value: dict[str, float]) -> None:
+        self._data["factor_weights"] = value
+
     @property
     def screener_universe(self) -> list[str]:
         return self.get(
