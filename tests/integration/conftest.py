@@ -22,12 +22,13 @@ REPO_ROOT = Path(__file__).parents[2]
 MOCKS_DIR = Path(__file__).parent / "mocks"
 STREAMLIT_PORT = 8502  # Use a different port than the default 8501
 
-# Chromium executable — try several known locations
+# Chromium executable — only override when the default playwright browser is
+# missing (e.g. local dev with a mismatched playwright version).  In CI,
+# playwright install puts the browser in the expected location automatically
+# so we leave CHROMIUM_PATH as None and let pytest-playwright find it.
 _CHROMIUM_CANDIDATES = [
-    # Pre-installed playwright chromium (headless shell)
     "/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome",
     "/root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome",
-    # System chromium
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
     "/usr/bin/google-chrome",
@@ -35,9 +36,12 @@ _CHROMIUM_CANDIDATES = [
 
 CHROMIUM_PATH: str | None = None
 for _c in _CHROMIUM_CANDIDATES:
-    if Path(_c).exists():
-        CHROMIUM_PATH = _c
-        break
+    try:
+        if Path(_c).exists():
+            CHROMIUM_PATH = _c
+            break
+    except (PermissionError, OSError):
+        continue
 
 # ---------------------------------------------------------------------------
 # Helpers
