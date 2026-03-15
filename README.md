@@ -34,6 +34,103 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 
 ---
 
+## Analysis Workflow
+
+```mermaid
+flowchart TD
+    A([🔍 Enter Ticker Symbol]) --> B
+
+    subgraph FETCH ["📡 Data Collection"]
+        B[Real-time Quote\nprice · change · volume]
+        C[Company Fundamentals\nP/E · EPS · margins · growth]
+        D[Price History\n2 years of daily OHLCV]
+        E[Recent News\nlast 7 days of headlines]
+        F[Earnings History\n4 quarters of EPS vs estimates]
+        G[Analyst Recommendations\nbuy / hold / sell counts]
+        H[Insider Activity\nrecent buy / sell transactions]
+    end
+
+    B --> I
+    C --> I
+    D --> I
+    E --> I
+    F --> I
+    G --> I
+    H --> I
+
+    subgraph SCORE ["⚙️ Quantitative Scoring"]
+        I{8-Factor\nEngine}
+        I --> J1[Valuation\nP/E vs peers · 15%]
+        I --> J2[Trend\nSMA-50 / SMA-200 · 20%]
+        I --> J3[Momentum\nRSI-14 · 10%]
+        I --> J4[MACD Signal\ndirection change · 10%]
+        I --> J5[News Sentiment\nFinBERT score · 15%]
+        I --> J6[Earnings Quality\nbeat consistency · 15%]
+        I --> J7[Analyst Consensus\nrecommendation mix · 10%]
+        I --> J8[52-Week Strength\nprice vs range · 5%]
+        J1 & J2 & J3 & J4 & J5 & J6 & J7 & J8 --> K[Weighted\nComposite Score\n0 – 100]
+    end
+
+    subgraph RISK ["🛡️ Risk Assessment"]
+        K --> L{4-Dimension\nRisk Engine}
+        L --> M1[Volatility Risk\nhistorical vol · regime]
+        L --> M2[Drawdown Risk\npeak-to-trough pullback]
+        L --> M3[Overbought / Oversold\nRSI extremes]
+        L --> M4[Trend Risk\nprice vs 200-day SMA]
+        M1 & M2 & M3 & M4 --> N[Overall Risk Score\nLow → Extreme]
+        N --> O{13 Red-Flag\nAlerts}
+    end
+
+    subgraph AI ["🤖 AI Narrative  ·  Claude"]
+        K --> P[Investment Thesis\nbull case · growth · moat]
+        K --> Q[Risk Analysis\nbear case · headwinds]
+        K --> R[Valuation & Price Target\n12-month bull / base / bear]
+        K --> S[Financial Health\nbalance sheet · cash flow]
+        P & Q & R & S --> T[News Sentiment\nSynthesis]
+    end
+
+    subgraph VERDICT ["📊 Signal & Verdict"]
+        K --> U{Score\nBand}
+        U -->|80–100| V1[🟢 Strong Buy]
+        U -->|60–80| V2[🟩 Buy]
+        U -->|40–60| V3[⬜ Hold]
+        U -->|20–40| V4[🟧 Sell]
+        U -->|0–20| V5[🔴 Strong Sell]
+    end
+
+    N --> V1
+    N --> V2
+    N --> V3
+    N --> V4
+    N --> V5
+    T --> W
+
+    subgraph ACTIONS ["💡 Next Steps"]
+        W[Interactive\nAI Chat]
+        X[Save to\nWatchlist]
+        Y[Set Price\nAlert]
+        Z[Export\nReport]
+        AA[Backtest\nStrategy]
+    end
+
+    V1 & V2 & V3 & V4 & V5 --> W
+    V1 & V2 & V3 & V4 & V5 --> X
+    V1 & V2 & V3 & V4 & V5 --> Y
+    V1 & V2 & V3 & V4 & V5 --> Z
+    V1 & V2 & V3 & V4 & V5 --> AA
+
+    style FETCH fill:#1a2332,stroke:#2d4a6e,color:#a8c4e0
+    style SCORE fill:#1a2a1a,stroke:#2d5a2d,color:#a8d4a8
+    style RISK  fill:#2a1a1a,stroke:#5a2d2d,color:#d4a8a8
+    style AI    fill:#1a1a2a,stroke:#2d2d5a,color:#a8a8d4
+    style VERDICT fill:#1a2020,stroke:#2d5050,color:#a8d4d4
+    style ACTIONS fill:#2a2a1a,stroke:#5a5a2d,color:#d4d4a8
+
+    style A fill:#0066cc,stroke:#0044aa,color:#fff
+```
+
+---
+
 ## Key Features
 
 ### Market Data & Technicals
