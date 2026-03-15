@@ -12,6 +12,12 @@ a REST API server, and more.
 
 ![Screenshot](screenshot.png)
 
+### Dashboard in Action
+
+| Homepage | AAPL Analysis |
+|----------|--------------|
+| ![Homepage](screenshots/analysis_aapl.png) | ![Scores](screenshots/analysis_scores.png) |
+
 ## Features
 
 ### Market Data
