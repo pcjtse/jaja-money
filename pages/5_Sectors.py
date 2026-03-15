@@ -8,11 +8,17 @@ from api import FinnhubAPI
 from sectors import get_sector_data, classify_rotation_phase
 from analyzer import stream_sector_rotation_narrative
 
+from theme import inject_css, page_header
+
 st.set_page_config(page_title="Sector Rotation", page_icon="🔄", layout="wide")
-st.title("Sector & Industry Rotation Tracker")
-st.caption(
-    "Tracks relative strength across 11 S&P 500 sector ETFs to identify "
-    "rotation trends, leading sectors, and lagging sectors."
+inject_css()
+page_header(
+    "Sector & Industry Rotation",
+    subtitle=(
+        "Tracks relative strength across 11 S&P 500 sector ETFs to identify "
+        "rotation trends, leading sectors, and lagging sectors."
+    ),
+    icon="🔄",
 )
 
 if st.button("Load Sector Data", type="primary"):

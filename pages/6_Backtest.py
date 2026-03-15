@@ -9,11 +9,17 @@ from api import FinnhubAPI
 from backtest import run_backtest, run_walk_forward, run_parameter_sweep
 from analyzer import stream_backtest_narrative
 
+from theme import inject_css, page_header
+
 st.set_page_config(page_title="Backtest", page_icon="📊", layout="wide")
-st.title("Strategy Backtesting")
-st.caption(
-    "Test the factor signal model against historical price data. "
-    "The signal is a price-based composite of SMA trend, RSI, and MACD."
+inject_css()
+page_header(
+    "Strategy Backtesting",
+    subtitle=(
+        "Test the factor signal model against historical price data. "
+        "The signal is a price-based composite of SMA trend, RSI, and MACD."
+    ),
+    icon="📊",
 )
 
 # -------------------------------------------------------------------------
