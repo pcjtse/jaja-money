@@ -37,15 +37,15 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 ## Analysis Workflow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#e2e8f0', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'ui-monospace,monospace'}}}%%
 flowchart LR
-    classDef stage fill:#f8fafc,stroke:#64748b,color:#1e293b,rx:6
-    classDef start fill:#1d4ed8,stroke:#1e40af,color:#fff
-    classDef finish fill:#0f766e,stroke:#0f766e,color:#fff
-    classDef buy  fill:#bbf7d0,stroke:#16a34a,color:#14532d
-    classDef hold fill:#f1f5f9,stroke:#94a3b8,color:#334155
-    classDef sell fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+    classDef start  fill:#1d4ed8,stroke:#60a5fa,color:#eff6ff,font-weight:bold
+    classDef finish fill:#065f46,stroke:#34d399,color:#d1fae5,font-weight:bold
+    classDef buy    fill:#052e16,stroke:#22c55e,color:#86efac
+    classDef hold   fill:#1e293b,stroke:#64748b,color:#94a3b8
+    classDef sell   fill:#450a0a,stroke:#ef4444,color:#fca5a5
 
-    START(["🔍 Enter Ticker"]):::start
+    START(["🔍  Enter Ticker"]):::start
 
     subgraph D ["📡  Data Collection"]
         D1["Quote & price history
@@ -54,13 +54,13 @@ flowchart LR
     end
 
     subgraph F ["⚙️  Factor Scoring"]
-        F1["8 factors each scored 0–100
+        F1["8 factors · each scored 0 – 100
 
         Valuation · Trend · Momentum
         MACD · Sentiment · Earnings
-        Consensus · 52-Week Strength
+        Analyst Consensus · 52-Week Strength
 
-        ▼  Composite Score  0 → 100"]
+        ▼  Weighted Composite Score"]
     end
 
     subgraph R ["🛡️  Risk Assessment"]
@@ -70,39 +70,38 @@ flowchart LR
         Price vs 200-day trend
 
         ▼  Risk Score  Low → Extreme
-        + 13 red-flag alerts"]
+        ⚑  13 red-flag alerts"]
     end
 
     subgraph AI ["🤖  AI Analysis  ·  Claude"]
         AI1["Investment thesis & bull case
         Risk factors & bear case
-        Valuation & price target
+        Valuation & 12-month price target
         News sentiment synthesis"]
     end
 
     subgraph SIG ["📊  Investment Signal"]
-        S1["💚  Strong Buy   80–100"]:::buy
-        S2["🟢  Buy          60–80"]:::buy
-        S3["⬜  Hold         40–60"]:::hold
-        S4["🟠  Sell         20–40"]:::sell
-        S5["🔴  Strong Sell   0–20"]:::sell
+        S1["💚  Strong Buy    80 – 100"]:::buy
+        S2["🟢  Buy           60 – 80"]:::buy
+        S3["◻️   Hold          40 – 60"]:::hold
+        S4["🟠  Sell          20 – 40"]:::sell
+        S5["🔴  Strong Sell    0 – 20"]:::sell
     end
 
-    END(["💡  Chat · Watchlist · Alerts
-    Export · Backtest"]):::finish
+    END(["💡  Chat · Watchlist · Alerts · Export · Backtest"]):::finish
 
     START --> D --> F
-    F --> R
-    F --> AI
-    R --> SIG
-    AI --> SIG
-    SIG --> END
+    F      --> R
+    F      --> AI
+    R      --> SIG
+    AI     --> SIG
+    SIG    --> END
 
-    style D  fill:#eff6ff,stroke:#93c5fd,color:#1e3a5f
-    style F  fill:#f0fdf4,stroke:#86efac,color:#14532d
-    style R  fill:#fff1f2,stroke:#fca5a5,color:#7f1d1d
-    style AI fill:#faf5ff,stroke:#c4b5fd,color:#2e1065
-    style SIG fill:#fefce8,stroke:#fde047,color:#713f12
+    style D   fill:#0c1e35,stroke:#38bdf8,color:#bae6fd
+    style F   fill:#0a1f0e,stroke:#4ade80,color:#bbf7d0
+    style R   fill:#1f0a0a,stroke:#f87171,color:#fecaca
+    style AI  fill:#130a1f,stroke:#a78bfa,color:#ddd6fe
+    style SIG fill:#1a1500,stroke:#facc15,color:#fef08a
 ```
 
 ---
