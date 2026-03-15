@@ -37,71 +37,64 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 ## Analysis Workflow
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#94a3b8', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'background': '#0f172a', 'mainBkg': '#1e293b', 'nodeBorder': '#475569', 'clusterBkg': '#0f172a', 'clusterBorder': '#334155', 'titleColor': '#e2e8f0', 'edgeLabelBackground': '#1e293b', 'fontFamily': 'ui-monospace,monospace'}}}%%
 flowchart LR
-    classDef start  fill:#1d4ed8,stroke:#60a5fa,color:#eff6ff,font-weight:bold
-    classDef finish fill:#065f46,stroke:#34d399,color:#d1fae5,font-weight:bold
-    classDef buy    fill:#052e16,stroke:#22c55e,color:#86efac
-    classDef hold   fill:#1e293b,stroke:#64748b,color:#94a3b8
-    classDef sell   fill:#450a0a,stroke:#ef4444,color:#fca5a5
+    %% Global Styles
+    classDef default font-family:Inter,sans-serif,font-size:13px;
+    
+    %% Specific Node Classes
+    classDef start fill:#1e293b,stroke:#0f172a,color:#fff,stroke-width:2px;
+    classDef finish fill:#059669,stroke:#065f46,color:#fff,stroke-width:2px;
+    classDef step fill:#ffffff,stroke:#e2e8f0,color:#475569,stroke-width:1px;
+    
+    classDef buy fill:#dcfce7,stroke:#22c55e,color:#166534,stroke-width:1px;
+    classDef hold fill:#f8fafc,stroke:#94a3b8,color:#475569,stroke-width:1px;
+    classDef sell fill:#fee2e2,stroke:#ef4444,color:#991b1b,stroke-width:1px;
 
-    START(["🔍  Enter Ticker"]):::start
+    %% Diagram Nodes
+    START(["🔍 Enter Ticker"]):::start
 
-    subgraph D ["📡  Data Collection"]
-        D1["Quote & price history
-        Fundamentals & earnings
-        News, analysts & insiders"]
+    subgraph D ["&nbsp;&nbsp;📡  DATA COLLECTION&nbsp;&nbsp;"]
+        D1["<b>Sources</b><br/>• Quote & Price History<br/>• Fundamentals & Earnings<br/>• News, Analysts & Insiders"]:::step
     end
 
-    subgraph F ["⚙️  Factor Scoring"]
-        F1["8 factors · each scored 0 – 100
-
-        Valuation · Trend · Momentum
-        MACD · Sentiment · Earnings
-        Analyst Consensus · 52-Week Strength
-
-        ▼  Weighted Composite Score"]
+    subgraph F ["&nbsp;&nbsp;⚙️  FACTOR SCORING&nbsp;&nbsp;"]
+        F1["<b>8 Core Factors</b><br/>Valuation • Trend • Momentum<br/>MACD • Sentiment • Earnings<br/>Consensus • 52-Week<br/><br/><b>0 ➔ 100 Score</b>"]:::step
     end
 
-    subgraph R ["🛡️  Risk Assessment"]
-        R1["Volatility regime
-        Max drawdown
-        RSI overbought / oversold
-        Price vs 200-day trend
-
-        ▼  Risk Score  Low → Extreme
-        ⚑  13 red-flag alerts"]
+    subgraph R ["&nbsp;&nbsp;🛡️  RISK ASSESSMENT&nbsp;&nbsp;"]
+        R1["<b>Risk Metrics</b><br/>Volatility • Drawdown<br/>RSI • 200-Day Trend<br/><br/><b>13 Red-Flag Alerts</b>"]:::step
     end
 
-    subgraph AI ["🤖  AI Analysis  ·  Claude"]
-        AI1["Investment thesis & bull case
-        Risk factors & bear case
-        Valuation & 12-month price target
-        News sentiment synthesis"]
+    subgraph AI ["&nbsp;&nbsp;🤖  AI ANALYSIS (CLAUDE)&nbsp;&nbsp;"]
+        AI1["<b>Synthesis</b><br/>Bull/Bear Thesis<br/>Price Targets<br/>Sentiment Synthesis"]:::step
     end
 
-    subgraph SIG ["📊  Investment Signal"]
-        S1["💚  Strong Buy    80 – 100"]:::buy
-        S2["🟢  Buy           60 – 80"]:::buy
-        S3["◻️   Hold          40 – 60"]:::hold
-        S4["🟠  Sell          20 – 40"]:::sell
-        S5["🔴  Strong Sell    0 – 20"]:::sell
+    subgraph SIG ["&nbsp;&nbsp;📊  INVESTMENT SIGNAL&nbsp;&nbsp;"]
+        direction TB
+        S1["Strong Buy"]:::buy
+        S2["Buy"]:::buy
+        S3["Hold"]:::hold
+        S4["Sell"]:::sell
+        S5["Strong Sell"]:::sell
     end
 
-    END(["💡  Chat · Watchlist · Alerts · Export · Backtest"]):::finish
+    END(["💡 Output: Watchlist, Alerts & Backtests"]):::finish
 
-    START --> D --> F
-    F      --> R
-    F      --> AI
-    R      --> SIG
-    AI     --> SIG
-    SIG    --> END
+    %% Connections
+    START --> D
+    D --> F
+    F --> R
+    F --> AI
+    R --> SIG
+    AI --> SIG
+    SIG --> END
 
-    style D   fill:#0c1e35,stroke:#38bdf8,color:#bae6fd
-    style F   fill:#0a1f0e,stroke:#4ade80,color:#bbf7d0
-    style R   fill:#1f0a0a,stroke:#f87171,color:#fecaca
-    style AI  fill:#130a1f,stroke:#a78bfa,color:#ddd6fe
-    style SIG fill:#1a1500,stroke:#facc15,color:#fef08a
+    %% Subgraph Styling
+    style D fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray: 5 5
+    style F fill:#f1f5f9,stroke:#cbd5e1,stroke-dasharray: 5 5
+    style R fill:#fff1f2,stroke:#fecaca,stroke-dasharray: 5 5
+    style AI fill:#f5f3ff,stroke:#ddd6fe,stroke-dasharray: 5 5
+    style SIG fill:#f8fafc,stroke:#e2e8f0
 ```
 
 ---
