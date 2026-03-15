@@ -37,96 +37,72 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 ## Analysis Workflow
 
 ```mermaid
-flowchart TD
-    A([🔍 Enter Ticker Symbol]) --> B
+flowchart LR
+    classDef stage fill:#f8fafc,stroke:#64748b,color:#1e293b,rx:6
+    classDef start fill:#1d4ed8,stroke:#1e40af,color:#fff
+    classDef finish fill:#0f766e,stroke:#0f766e,color:#fff
+    classDef buy  fill:#bbf7d0,stroke:#16a34a,color:#14532d
+    classDef hold fill:#f1f5f9,stroke:#94a3b8,color:#334155
+    classDef sell fill:#fecaca,stroke:#dc2626,color:#7f1d1d
 
-    subgraph FETCH ["📡 Data Collection"]
-        B[Real-time Quote\nprice · change · volume]
-        C[Company Fundamentals\nP/E · EPS · margins · growth]
-        D[Price History\n2 years of daily OHLCV]
-        E[Recent News\nlast 7 days of headlines]
-        F[Earnings History\n4 quarters of EPS vs estimates]
-        G[Analyst Recommendations\nbuy / hold / sell counts]
-        H[Insider Activity\nrecent buy / sell transactions]
+    START(["🔍 Enter Ticker"]):::start
+
+    subgraph D ["📡  Data Collection"]
+        D1["Quote & price history
+        Fundamentals & earnings
+        News, analysts & insiders"]
     end
 
-    B --> I
-    C --> I
-    D --> I
-    E --> I
-    F --> I
-    G --> I
-    H --> I
+    subgraph F ["⚙️  Factor Scoring"]
+        F1["8 factors each scored 0–100
 
-    subgraph SCORE ["⚙️ Quantitative Scoring"]
-        I{8-Factor\nEngine}
-        I --> J1[Valuation\nP/E vs peers · 15%]
-        I --> J2[Trend\nSMA-50 / SMA-200 · 20%]
-        I --> J3[Momentum\nRSI-14 · 10%]
-        I --> J4[MACD Signal\ndirection change · 10%]
-        I --> J5[News Sentiment\nFinBERT score · 15%]
-        I --> J6[Earnings Quality\nbeat consistency · 15%]
-        I --> J7[Analyst Consensus\nrecommendation mix · 10%]
-        I --> J8[52-Week Strength\nprice vs range · 5%]
-        J1 & J2 & J3 & J4 & J5 & J6 & J7 & J8 --> K[Weighted\nComposite Score\n0 – 100]
+        Valuation · Trend · Momentum
+        MACD · Sentiment · Earnings
+        Consensus · 52-Week Strength
+
+        ▼  Composite Score  0 → 100"]
     end
 
-    subgraph RISK ["🛡️ Risk Assessment"]
-        K --> L{4-Dimension\nRisk Engine}
-        L --> M1[Volatility Risk\nhistorical vol · regime]
-        L --> M2[Drawdown Risk\npeak-to-trough pullback]
-        L --> M3[Overbought / Oversold\nRSI extremes]
-        L --> M4[Trend Risk\nprice vs 200-day SMA]
-        M1 & M2 & M3 & M4 --> N[Overall Risk Score\nLow → Extreme]
-        N --> O{13 Red-Flag\nAlerts}
+    subgraph R ["🛡️  Risk Assessment"]
+        R1["Volatility regime
+        Max drawdown
+        RSI overbought / oversold
+        Price vs 200-day trend
+
+        ▼  Risk Score  Low → Extreme
+        + 13 red-flag alerts"]
     end
 
-    subgraph AI ["🤖 AI Narrative  ·  Claude"]
-        K --> P[Investment Thesis\nbull case · growth · moat]
-        K --> Q[Risk Analysis\nbear case · headwinds]
-        K --> R[Valuation & Price Target\n12-month bull / base / bear]
-        K --> S[Financial Health\nbalance sheet · cash flow]
-        P & Q & R & S --> T[News Sentiment\nSynthesis]
+    subgraph AI ["🤖  AI Analysis  ·  Claude"]
+        AI1["Investment thesis & bull case
+        Risk factors & bear case
+        Valuation & price target
+        News sentiment synthesis"]
     end
 
-    subgraph VERDICT ["📊 Signal & Verdict"]
-        K --> U{Score\nBand}
-        U -->|80–100| V1[🟢 Strong Buy]
-        U -->|60–80| V2[🟩 Buy]
-        U -->|40–60| V3[⬜ Hold]
-        U -->|20–40| V4[🟧 Sell]
-        U -->|0–20| V5[🔴 Strong Sell]
+    subgraph SIG ["📊  Investment Signal"]
+        S1["💚  Strong Buy   80–100"]:::buy
+        S2["🟢  Buy          60–80"]:::buy
+        S3["⬜  Hold         40–60"]:::hold
+        S4["🟠  Sell         20–40"]:::sell
+        S5["🔴  Strong Sell   0–20"]:::sell
     end
 
-    N --> V1
-    N --> V2
-    N --> V3
-    N --> V4
-    N --> V5
-    T --> W
+    END(["💡  Chat · Watchlist · Alerts
+    Export · Backtest"]):::finish
 
-    subgraph ACTIONS ["💡 Next Steps"]
-        W[Interactive\nAI Chat]
-        X[Save to\nWatchlist]
-        Y[Set Price\nAlert]
-        Z[Export\nReport]
-        AA[Backtest\nStrategy]
-    end
+    START --> D --> F
+    F --> R
+    F --> AI
+    R --> SIG
+    AI --> SIG
+    SIG --> END
 
-    V1 & V2 & V3 & V4 & V5 --> W
-    V1 & V2 & V3 & V4 & V5 --> X
-    V1 & V2 & V3 & V4 & V5 --> Y
-    V1 & V2 & V3 & V4 & V5 --> Z
-    V1 & V2 & V3 & V4 & V5 --> AA
-
-    style FETCH fill:#1a2332,stroke:#2d4a6e,color:#a8c4e0
-    style SCORE fill:#1a2a1a,stroke:#2d5a2d,color:#a8d4a8
-    style RISK  fill:#2a1a1a,stroke:#5a2d2d,color:#d4a8a8
-    style AI    fill:#1a1a2a,stroke:#2d2d5a,color:#a8a8d4
-    style VERDICT fill:#1a2020,stroke:#2d5050,color:#a8d4d4
-    style ACTIONS fill:#2a2a1a,stroke:#5a5a2d,color:#d4d4a8
-
-    style A fill:#0066cc,stroke:#0044aa,color:#fff
+    style D  fill:#eff6ff,stroke:#93c5fd,color:#1e3a5f
+    style F  fill:#f0fdf4,stroke:#86efac,color:#14532d
+    style R  fill:#fff1f2,stroke:#fca5a5,color:#7f1d1d
+    style AI fill:#faf5ff,stroke:#c4b5fd,color:#2e1065
+    style SIG fill:#fefce8,stroke:#fde047,color:#713f12
 ```
 
 ---
