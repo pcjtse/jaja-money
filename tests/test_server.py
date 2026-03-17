@@ -9,8 +9,8 @@ import os
 import pytest
 
 # Conditionally skip if fastapi or httpx are not available
-fastapi = pytest.importorskip("fastapi")
-httpx = pytest.importorskip("httpx")
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
