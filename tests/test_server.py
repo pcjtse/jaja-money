@@ -8,12 +8,16 @@ from __future__ import annotations
 import os
 import pytest
 
-# Conditionally skip if fastapi or httpx are not available
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+from unittest.mock import MagicMock
 
-from fastapi.testclient import TestClient  # noqa: E402
-from unittest.mock import MagicMock  # noqa: E402
+# Skip the whole module if fastapi[testclient] or httpx is not available.
+# We must guard the import itself, because conftest.py stubs `fastapi` as a
+# plain ModuleType (not a package), so importorskip("fastapi") passes even
+# when the real package is absent — leaving from fastapi.testclient to fail.
+try:
+    from fastapi.testclient import TestClient
+except Exception:  # ImportError or ModuleNotFoundError with "not a package"
+    pytest.skip("fastapi[testclient] not available", allow_module_level=True)
 
 
 # ---------------------------------------------------------------------------
