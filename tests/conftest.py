@@ -29,7 +29,26 @@ if "torch" not in sys.modules:
 # Stub out `yfinance` so tests run without the optional dep
 # ---------------------------------------------------------------------------
 if "yfinance" not in sys.modules:
-    sys.modules["yfinance"] = types.ModuleType("yfinance")
+    yf_mod = types.ModuleType("yfinance")
+
+    class _FakeTicker:
+        def __init__(self, *a, **kw):
+            self.info = {}
+            self.news = []
+            self.recommendations = None
+            self.institutional_holders = None
+
+        def history(self, *a, **kw):
+            class _DF:
+                empty = True
+
+                def __getitem__(self, key):
+                    return []
+
+            return _DF()
+
+    yf_mod.Ticker = _FakeTicker
+    sys.modules["yfinance"] = yf_mod
 
 # ---------------------------------------------------------------------------
 # Stub out `finnhub` to avoid needing a real API key
@@ -211,6 +230,32 @@ except ImportError:
 
     _sa_mod.Credentials = _FakeCreds
     sys.modules["google.oauth2.service_account"] = _sa_mod
+
+# ---------------------------------------------------------------------------
+# Stub out `anthropic` if not installed in the pytest env
+# ---------------------------------------------------------------------------
+try:
+    import anthropic  # noqa: F401
+except ImportError:
+    import types as _types
+
+    _ant = _types.ModuleType("anthropic")
+
+    class _FakeAnthropic:
+        def __init__(self, *a, **kw):
+            pass
+
+        class messages:
+            @staticmethod
+            def create(*a, **kw):
+                class _Resp:
+                    content = []
+                return _Resp()
+
+    _ant.Anthropic = _FakeAnthropic
+    _ant.APIError = Exception
+    _ant.AuthenticationError = Exception
+    sys.modules["anthropic"] = _ant
 
 # Stub pdfplumber if not installed (P10.5)
 try:
