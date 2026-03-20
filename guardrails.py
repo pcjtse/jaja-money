@@ -517,6 +517,30 @@ def _build_flags(
                 # We can only flag if we have volume data
                 # This will be enhanced when volume is passed
 
+    # --- P23.4: Altman Z-Score distress flag ---
+    from factors import compute_altman_zscore
+
+    altman = compute_altman_zscore(financials)
+    if altman["zone"] == "Distress":
+        z = altman["z_score"]
+        flag(
+            "danger",
+            "💀",
+            "Altman Z-Score: Distress zone",
+            f"Z-Score = {z:.2f} (< 1.8 = distress). "
+            f"The Altman model flags elevated bankruptcy risk based on balance sheet ratios. "
+            f"Verify solvency before considering a position.",
+        )
+    elif altman["zone"] == "Grey":
+        z = altman["z_score"]
+        flag(
+            "warning",
+            "⚠️",
+            "Altman Z-Score: Grey zone",
+            f"Z-Score = {z:.2f} (1.8–2.99 = grey zone). "
+            f"The company is not in immediate distress but warrants monitoring.",
+        )
+
     # --- P8.2: Volatility regime detection ---
     vol_regime, hv_5d, hv_30d = _detect_vol_regime(close)
     if vol_regime == "spike" and hv_5d is not None and hv_30d is not None:

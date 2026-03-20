@@ -294,6 +294,82 @@ def get_asset_class_data(api) -> list[dict]:
     return results
 
 
+# ---------------------------------------------------------------------------
+# P24.2: Dual Momentum (Absolute + Relative)
+# ---------------------------------------------------------------------------
+
+
+def compute_dual_momentum(
+    asset_data: list[dict],
+    risk_free_rate_annual: float = 5.0,
+) -> list[dict]:
+    """Apply Gary Antonacci's Dual Momentum filter to asset class data (24.2).
+
+    An asset passes the dual momentum filter only if it has BOTH:
+      1. Absolute momentum: 12-month return > risk-free rate (T-bill proxy)
+      2. Relative momentum: 12-month return beats SPY (the benchmark)
+
+    Parameters
+    ----------
+    asset_data         : list of dicts from get_asset_class_data() — must include
+                         perf_6m and/or perf_12m fields (% returns).
+    risk_free_rate_annual: annualised risk-free rate % (default 5.0 = ~5% T-bill yield)
+
+    Returns
+    -------
+    Same list of dicts, each augmented with:
+        abs_momentum_pass – bool
+        rel_momentum_pass – bool
+        dual_momentum_pass – bool
+        dual_momentum_signal – "Hold" | "Cash" | "No data"
+    """
+    # Find SPY's 12-month return as the relative benchmark
+    spy_12m: float | None = None
+    for r in asset_data:
+        if r.get("ticker") == "SPY":
+            spy_12m = r.get("perf_12m") or r.get("perf_6m")
+            break
+
+    # Approximate 12-month risk-free return from annualised rate
+    rf_12m = risk_free_rate_annual
+
+    results = []
+    for r in asset_data:
+        ret_12m = r.get("perf_12m") or r.get("perf_6m")
+
+        abs_pass: bool | None = None
+        rel_pass: bool | None = None
+
+        if ret_12m is not None:
+            abs_pass = ret_12m > rf_12m
+            if spy_12m is not None:
+                rel_pass = ret_12m >= spy_12m
+
+        if abs_pass is None or (rel_pass is None and spy_12m is not None):
+            signal = "No data"
+            dual_pass = False
+        elif abs_pass and (rel_pass is True or rel_pass is None):
+            signal = "Hold"
+            dual_pass = True
+        else:
+            signal = "Cash"
+            dual_pass = False
+
+        results.append(
+            {
+                **r,
+                "abs_momentum_pass": abs_pass,
+                "rel_momentum_pass": rel_pass,
+                "dual_momentum_pass": dual_pass,
+                "dual_momentum_signal": signal,
+            }
+        )
+
+    n_hold = sum(1 for r in results if r["dual_momentum_signal"] == "Hold")
+    log.debug("Dual momentum: %d/%d assets pass filter", n_hold, len(results))
+    return results
+
+
 def compute_asset_class_risk_parity_weights(asset_data: list[dict]) -> dict[str, float]:
     """Compute inverse-volatility (risk parity) weights for asset class ETFs (21.9).
 

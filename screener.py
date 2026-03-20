@@ -712,6 +712,157 @@ SHORT_SELLING_PRESET: dict = {
 }
 
 
+# ---------------------------------------------------------------------------
+# P23.1: Low Volatility Anomaly preset
+# ---------------------------------------------------------------------------
+
+LOW_VOL_PRESET: dict = {
+    "max_vol_60d_pct": 25.0,
+    "min_factor_score": 45,
+    "max_risk_score": 55,
+}
+
+# ---------------------------------------------------------------------------
+# P23.2: Shareholder Yield preset
+# ---------------------------------------------------------------------------
+
+SHAREHOLDER_YIELD_PRESET: dict = {
+    "min_total_yield_pct": 5.0,
+    "min_factor_score": 40,
+    "max_risk_score": 60,
+}
+
+# ---------------------------------------------------------------------------
+# P23.3: Earnings Revision Momentum preset
+# ---------------------------------------------------------------------------
+
+REVISION_MOMENTUM_PRESET: dict = {
+    "min_revision_score": 65,
+    "min_factor_score": 45,
+    "max_risk_score": 55,
+}
+
+# ---------------------------------------------------------------------------
+# P23.5: NCAV (Net-Net) preset
+# ---------------------------------------------------------------------------
+
+NCAV_PRESET: dict = {
+    "require_net_net": True,
+    "min_margin_of_safety": 0.10,
+    "max_risk_score": 65,
+}
+
+# ---------------------------------------------------------------------------
+# P24.1: 52-Week High Breakout preset
+# ---------------------------------------------------------------------------
+
+BREAKOUT_PRESET: dict = {
+    "max_pct_from_52w_high": -2.0,
+    "min_volume_ratio": 1.3,
+    "min_factor_score": 50,
+}
+
+# ---------------------------------------------------------------------------
+# P25.1: Insider Buying cluster preset
+# ---------------------------------------------------------------------------
+
+INSIDER_BUYING_PRESET: dict = {
+    "min_insider_buyers": 2,
+    "min_buy_value": 200_000.0,
+    "min_factor_score": 40,
+    "max_risk_score": 65,
+}
+
+# ---------------------------------------------------------------------------
+# P25.2: Tax-Loss Harvesting Bounce preset
+# ---------------------------------------------------------------------------
+
+TAX_LOSS_BOUNCE_PRESET: dict = {
+    "max_ytd_return_pct": -40.0,
+    "active_months": [11, 12, 1],
+}
+
+# ---------------------------------------------------------------------------
+# P26.1: VRP Harvest preset
+# ---------------------------------------------------------------------------
+
+VRP_HARVEST_PRESET: dict = {
+    "min_vrp_pts": 5.0,
+    "min_avg_iv_pct": 20.0,
+    "max_risk_score": 60,
+}
+
+
+def is_breakout_candidate(result: dict, breakout_data: dict | None = None) -> bool:
+    """Return True if ticker meets 52-week high breakout criteria (24.1)."""
+    p = BREAKOUT_PRESET
+    if result.get("factor_score", 0) < p["min_factor_score"]:
+        return False
+    if breakout_data is None:
+        return False
+    pct = breakout_data.get("pct_from_52w_high")
+    vol_ratio = breakout_data.get("volume_ratio")
+    if pct is None or pct < p["max_pct_from_52w_high"]:
+        return False
+    if vol_ratio is not None and vol_ratio < p["min_volume_ratio"]:
+        return False
+    return True
+
+
+def is_insider_buying_candidate(
+    result: dict,
+    insider_summary: dict | None = None,
+) -> bool:
+    """Return True if ticker meets cluster insider buying criteria (25.1)."""
+    p = INSIDER_BUYING_PRESET
+    if result.get("factor_score", 0) < p["min_factor_score"]:
+        return False
+    if result.get("risk_score", 100) > p["max_risk_score"]:
+        return False
+    if insider_summary is None:
+        return False
+    buyers = len(insider_summary.get("recent_buyers", []))
+    buy_value = float(insider_summary.get("buy_value", 0.0))
+    return buyers >= p["min_insider_buyers"] and buy_value >= p["min_buy_value"]
+
+
+def is_tax_loss_bounce_candidate(
+    result: dict,  # noqa: ARG001
+    ytd_return_pct: float | None,
+    month: int | None = None,
+) -> bool:
+    """Return True if ticker meets tax-loss harvesting bounce criteria (25.2)."""
+    import datetime
+
+    p = TAX_LOSS_BOUNCE_PRESET
+    if month is None:
+        month = datetime.date.today().month
+    if month not in p["active_months"]:
+        return False
+    if ytd_return_pct is None:
+        return False
+    return ytd_return_pct <= p["max_ytd_return_pct"]
+
+
+def is_vrp_harvest_candidate(
+    result: dict,
+    options_metrics: dict | None = None,
+    hv30: float | None = None,
+) -> bool:
+    """Return True if ticker meets Volatility Risk Premium harvest criteria (26.1)."""
+    p = VRP_HARVEST_PRESET
+    if result.get("risk_score", 100) > p["max_risk_score"]:
+        return False
+    if options_metrics is None or not options_metrics.get("available"):
+        return False
+    avg_iv = options_metrics.get("avg_iv_pct")
+    if avg_iv is None or avg_iv < p["min_avg_iv_pct"]:
+        return False
+    if hv30 is not None and (avg_iv - hv30) < p["min_vrp_pts"]:
+        return False
+    return True
+
+
 def is_short_selling_candidate(
     result: dict,
     insider_summary: dict | None = None,

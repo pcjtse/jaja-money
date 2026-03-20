@@ -1729,3 +1729,859 @@ def compute_seasonal_bias(month: int | None = None, day: int | None = None) -> d
         "active_event": active_event,
         "detail": detail,
     }
+
+
+# ---------------------------------------------------------------------------
+# P23.1: Low Volatility Anomaly
+# ---------------------------------------------------------------------------
+
+
+def compute_low_volatility_score(close: "pd.Series | None") -> dict:
+    """Score based on the low-volatility anomaly (23.1).
+
+    Lower 60-day realized volatility = higher score (inverse relationship).
+    Historically, lower-volatility stocks outperform on a risk-adjusted basis.
+
+    Returns
+    -------
+    dict with:
+        score        – int 0-100 (higher = lower vol = more favourable)
+        volatility_60d – float annualised % or None
+        label        – str
+        detail       – str
+    """
+    if close is None or len(close) < 62:
+        return {
+            "score": 50,
+            "volatility_60d": None,
+            "label": "No data",
+            "detail": "Insufficient price history (need 62+ days)",
+        }
+
+    ratio = (close / close.shift(1)).dropna()
+    ratio = ratio[ratio > 0]
+    if len(ratio) < 60:
+        return {
+            "score": 50,
+            "volatility_60d": None,
+            "label": "No data",
+            "detail": "Insufficient price history",
+        }
+
+    log_returns = ratio.apply(math.log)
+    daily_std = float(log_returns.tail(60).std())
+    vol_60d = daily_std * math.sqrt(252) * 100  # annualised %
+
+    if vol_60d < 15:
+        score, label = 90, "Very low volatility"
+    elif vol_60d < 20:
+        score, label = 78, "Low volatility"
+    elif vol_60d < 30:
+        score, label = 60, "Moderate volatility"
+    elif vol_60d < 40:
+        score, label = 40, "High volatility"
+    elif vol_60d < 55:
+        score, label = 24, "Very high volatility"
+    else:
+        score, label = 10, "Extreme volatility"
+
+    return {
+        "score": score,
+        "volatility_60d": round(vol_60d, 2),
+        "label": label,
+        "detail": f"60-day annualised vol: {vol_60d:.1f}%",
+    }
+
+
+# ---------------------------------------------------------------------------
+# P23.2: Shareholder Yield
+# ---------------------------------------------------------------------------
+
+
+def compute_shareholder_yield(financials: dict | None) -> dict:
+    """Compute total shareholder yield = dividend yield + buyback yield (23.2).
+
+    Combines dividend yield + net share repurchase yield into a single
+    composite return metric. Firms returning >8% combined yield historically
+    outperform on a total-return basis.
+
+    Returns
+    -------
+    dict with:
+        score               – int 0-100
+        dividend_yield_pct  – float
+        buyback_yield_pct   – float or None
+        total_yield_pct     – float
+        label               – str
+        detail              – str
+    """
+    m = financials or {}
+    div_yield = m.get("dividendYieldIndicatedAnnual")
+    buyback = m.get("repurchaseOfCommonStockAnnual") or m.get(
+        "commonStockRepurchasedAnnual"
+    )
+    market_cap = m.get("marketCapitalization")
+
+    div_pct = float(div_yield) if div_yield is not None else 0.0
+    buyback_pct: float | None = None
+
+    if buyback is not None and market_cap is not None:
+        mc = float(market_cap)
+        if mc > 0:
+            buyback_pct = round(abs(float(buyback)) / mc * 100, 2)
+
+    total_yield = div_pct + (buyback_pct or 0.0)
+
+    if total_yield >= 10:
+        score, label = 95, "Exceptional shareholder yield"
+    elif total_yield >= 8:
+        score, label = 85, "Very high shareholder yield"
+    elif total_yield >= 5:
+        score, label = 72, "High shareholder yield"
+    elif total_yield >= 3:
+        score, label = 58, "Moderate shareholder yield"
+    elif total_yield >= 1:
+        score, label = 42, "Low shareholder yield"
+    else:
+        score, label = 20, "Minimal shareholder return"
+
+    parts = [f"Dividend: {div_pct:.2f}%"]
+    if buyback_pct is not None:
+        parts.append(f"Buyback: {buyback_pct:.2f}%")
+    parts.append(f"Total yield: {total_yield:.2f}%")
+
+    return {
+        "score": score,
+        "dividend_yield_pct": round(div_pct, 2),
+        "buyback_yield_pct": buyback_pct,
+        "total_yield_pct": round(total_yield, 2),
+        "label": label,
+        "detail": " | ".join(parts),
+    }
+
+
+# ---------------------------------------------------------------------------
+# P23.3: Earnings Revision Momentum
+# ---------------------------------------------------------------------------
+
+
+def compute_earnings_revision_momentum(
+    earnings: list | None,
+    revisions: dict | None,
+) -> dict:
+    """Compute earnings revision momentum from EPS surprise trend (23.3).
+
+    Detects whether EPS surprises are accelerating or decelerating across
+    recent quarters by computing a linear slope of the surprise % series.
+    Augmented by analyst estimate revision direction if available.
+
+    Returns
+    -------
+    dict with:
+        score          – int 0-100
+        trend          – "Accelerating" | "Improving" | "Stable" | "Decelerating" | ...
+        surprise_slope – float or None (positive = improving quarter-over-quarter)
+        avg_surprise   – float or None
+        detail         – str
+    """
+    surprises: list[float] = []
+    if earnings:
+        for e in (earnings or [])[:8]:
+            sp = e.get("surprisePercent")
+            if sp is not None:
+                surprises.append(float(sp))
+
+    revision_dir = (revisions or {}).get("revision_direction", "flat") if revisions else "flat"
+
+    if len(surprises) < 2:
+        if revision_dir == "up":
+            return {
+                "score": 72,
+                "trend": "Improving",
+                "surprise_slope": None,
+                "avg_surprise": None,
+                "detail": "Analyst estimates revised upward",
+            }
+        if revision_dir == "down":
+            return {
+                "score": 28,
+                "trend": "Deteriorating",
+                "surprise_slope": None,
+                "avg_surprise": None,
+                "detail": "Analyst estimates revised downward",
+            }
+        return {
+            "score": 50,
+            "trend": "No data",
+            "surprise_slope": None,
+            "avg_surprise": None,
+            "detail": "Insufficient earnings data",
+        }
+
+    # Compute slope of surprise series (oldest → newest)
+    series = list(reversed(surprises[:4]))
+    n = len(series)
+    x_mean = (n - 1) / 2.0
+    y_mean = sum(series) / n
+    numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(series))
+    denominator = sum((i - x_mean) ** 2 for i in range(n))
+    slope = numerator / denominator if denominator > 0 else 0.0
+    avg_surprise = sum(series) / n
+
+    if slope > 3:
+        score, trend = 88, "Accelerating"
+    elif slope > 1:
+        score, trend = 75, "Improving"
+    elif slope > -1:
+        if avg_surprise > 3:
+            score, trend = 65, "Stable positive"
+        elif avg_surprise > 0:
+            score, trend = 55, "Stable"
+        else:
+            score, trend = 42, "Stable negative"
+    elif slope > -3:
+        score, trend = 32, "Decelerating"
+    else:
+        score, trend = 18, "Deteriorating"
+
+    if revision_dir == "up":
+        score = min(100, score + 8)
+    elif revision_dir == "down":
+        score = max(0, score - 8)
+
+    detail = (
+        f"Surprise slope: {slope:+.2f}/qtr | "
+        f"Avg: {avg_surprise:+.1f}% | Revisions: {revision_dir}"
+    )
+
+    return {
+        "score": _clamp(score),
+        "trend": trend,
+        "surprise_slope": round(slope, 3),
+        "avg_surprise": round(avg_surprise, 2),
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P23.4: Altman Z-Score
+# ---------------------------------------------------------------------------
+
+
+def compute_altman_zscore(financials: dict | None) -> dict:
+    """Compute the Altman Z-Score for bankruptcy risk prediction (23.4).
+
+    Z = 1.2×X1 + 1.4×X2 + 3.3×X3 + 0.6×X4 + 1.0×X5
+
+    Where:
+      X1 = Working Capital / Total Assets
+      X2 = Retained Earnings / Total Assets
+      X3 = EBIT / Total Assets
+      X4 = Market Value of Equity / Book Value of Total Liabilities
+      X5 = Revenue / Total Assets
+
+    Zones:
+      Z > 2.99  = Safe zone
+      1.8–2.99  = Grey zone
+      Z ≤ 1.8   = Distress zone
+
+    Returns
+    -------
+    dict with:
+        z_score    – float or None
+        zone       – "Safe" | "Grey" | "Distress" | "No data"
+        score      – int 0-100 (higher = safer / less distress risk)
+        components – dict of X1–X5 values (float or None)
+        detail     – str
+    """
+    m = financials or {}
+
+    def _get(key: str) -> float | None:
+        v = m.get(key)
+        return float(v) if v is not None else None
+
+    current_assets = _get("totalCurrentAssetsAnnual") or _get("totalCurrentAssets")
+    current_liab = _get("totalCurrentLiabilitiesAnnual") or _get("totalCurrentLiabilities")
+    total_assets = _get("totalAssetsAnnual") or _get("totalAssets")
+    retained_earnings = _get("retainedEarningsAnnual") or _get("retainedEarnings")
+    ebit = _get("ebitAnnual") or _get("ebitTTM")
+    market_cap = _get("marketCapitalization")
+    total_liab = _get("totalLiabilitiesAnnual") or _get("totalLiabilities")
+    revenue = _get("revenueAnnual") or _get("revenueTTM")
+
+    components: dict[str, float | None] = {}
+
+    if current_assets is not None and current_liab is not None and total_assets and total_assets > 0:
+        components["X1"] = (current_assets - current_liab) / total_assets
+    else:
+        components["X1"] = None
+
+    if retained_earnings is not None and total_assets and total_assets > 0:
+        components["X2"] = retained_earnings / total_assets
+    else:
+        components["X2"] = None
+
+    if ebit is not None and total_assets and total_assets > 0:
+        components["X3"] = ebit / total_assets
+    else:
+        components["X3"] = None
+
+    if market_cap is not None and total_liab and total_liab > 0:
+        components["X4"] = float(market_cap) / total_liab
+    else:
+        components["X4"] = None
+
+    if revenue is not None and total_assets and total_assets > 0:
+        components["X5"] = revenue / total_assets
+    else:
+        components["X5"] = None
+
+    available = [k for k, v in components.items() if v is not None]
+
+    if len(available) < 3:
+        return {
+            "z_score": None,
+            "zone": "No data",
+            "score": 50,
+            "components": components,
+            "detail": f"Only {len(available)}/5 Altman components available",
+        }
+
+    weights = {"X1": 1.2, "X2": 1.4, "X3": 3.3, "X4": 0.6, "X5": 1.0}
+    total_w = sum(weights[k] for k in available)
+    full_w = sum(weights.values())
+
+    z_raw = sum(weights[k] * components[k] for k in available)  # type: ignore[operator]
+    # Scale proportionally when components are missing
+    z = z_raw * (full_w / total_w) if total_w > 0 else z_raw
+    z = round(z, 3)
+
+    if z > 2.99:
+        zone = "Safe"
+        score = _clamp(75 + min(25, int((z - 3.0) * 10)))
+    elif z > 1.8:
+        zone = "Grey"
+        score = _clamp(35 + int((z - 1.8) / 1.2 * 30))
+    else:
+        zone = "Distress"
+        score = _clamp(max(5, int(30 + z * 5)))
+
+    detail = f"Z-Score: {z:.2f} | Zone: {zone} | Components: {len(available)}/5"
+    log.debug("Altman Z-Score: %.2f (%s)", z, zone)
+
+    return {
+        "z_score": z,
+        "zone": zone,
+        "score": score,
+        "components": {k: round(v, 4) if v is not None else None for k, v in components.items()},
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P23.5: Net Current Asset Value (NCAV) Screen
+# ---------------------------------------------------------------------------
+
+
+def compute_ncav(financials: dict | None, price: float | None) -> dict:
+    """Compute Net Current Asset Value per share for net-net screening (23.5).
+
+    NCAV = Current Assets − Total Liabilities
+    NCAV/share = NCAV (in $M × 1e6) / Shares Outstanding
+
+    Stocks trading below NCAV per share are Benjamin Graham "net-nets",
+    historically a deep-value anomaly with strong empirical returns.
+
+    Returns
+    -------
+    dict with:
+        ncav_per_share   – float or None
+        margin_of_safety – float or None (positive = trading below NCAV)
+        is_net_net       – bool
+        score            – int 0-100
+        detail           – str
+    """
+    m = financials or {}
+    current_assets = m.get("totalCurrentAssetsAnnual") or m.get("totalCurrentAssets")
+    total_liab = m.get("totalLiabilitiesAnnual") or m.get("totalLiabilities")
+    shares = m.get("shareOutstanding") or m.get("sharesOutstanding")
+
+    if current_assets is None or total_liab is None or shares is None:
+        return {
+            "ncav_per_share": None,
+            "margin_of_safety": None,
+            "is_net_net": False,
+            "score": 50,
+            "detail": "Insufficient balance sheet data for NCAV",
+        }
+
+    shares_val = float(shares)
+    if shares_val <= 0:
+        return {
+            "ncav_per_share": None,
+            "margin_of_safety": None,
+            "is_net_net": False,
+            "score": 50,
+            "detail": "Invalid share count",
+        }
+
+    # Finnhub balance sheet values are in $M; shares outstanding is raw count
+    ncav_m = float(current_assets) - float(total_liab)  # millions
+    ncav_per_share = (ncav_m * 1_000_000) / shares_val
+
+    if price is None or price <= 0:
+        return {
+            "ncav_per_share": round(ncav_per_share, 2),
+            "margin_of_safety": None,
+            "is_net_net": ncav_per_share > 0,
+            "score": 60 if ncav_per_share > 0 else 30,
+            "detail": f"NCAV/share: ${ncav_per_share:.2f} | Price unavailable",
+        }
+
+    is_net_net = price < ncav_per_share
+    margin = (ncav_per_share - price) / ncav_per_share if ncav_per_share > 0 else -1.0
+
+    if is_net_net and margin >= 0.30:
+        score, lbl = 95, "Deep net-net — trading well below NCAV"
+    elif is_net_net and margin >= 0.10:
+        score, lbl = 82, "Net-net — trading below NCAV"
+    elif is_net_net:
+        score, lbl = 70, "Near net-net — slight NCAV discount"
+    elif ncav_per_share > 0 and margin >= -0.30:
+        score, lbl = 50, "Positive NCAV — modest premium"
+    elif ncav_per_share > 0:
+        score, lbl = 35, "Positive NCAV — significant premium"
+    else:
+        score, lbl = 15, "Negative NCAV — liabilities exceed current assets"
+
+    detail = (
+        f"NCAV/share: ${ncav_per_share:.2f} | Price: ${price:.2f} | "
+        f"MoS: {margin:.0%} | {lbl}"
+    )
+
+    return {
+        "ncav_per_share": round(ncav_per_share, 2),
+        "margin_of_safety": round(margin, 4),
+        "is_net_net": is_net_net,
+        "score": score,
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P24.1: 52-Week High Breakout Signal
+# ---------------------------------------------------------------------------
+
+
+def compute_breakout_signal(
+    close: "pd.Series | None",
+    volume: "pd.Series | None",
+    financials: dict | None,
+) -> dict:
+    """Detect 52-week high breakout with volume confirmation (24.1).
+
+    A breakout is signaled when price is within 1% of or above the 52-week
+    high AND current volume is ≥ 1.5× the 20-day average volume.
+
+    Returns
+    -------
+    dict with:
+        score             – int 0-100
+        is_breakout       – bool
+        pct_from_52w_high – float (negative = below high)
+        volume_ratio      – float or None (current / 20d avg)
+        label             – str
+        detail            – str
+    """
+    m = financials or {}
+    high52 = m.get("52WeekHigh")
+
+    if close is None or len(close) < 20:
+        return {
+            "score": 50,
+            "is_breakout": False,
+            "pct_from_52w_high": None,
+            "volume_ratio": None,
+            "label": "No data",
+            "detail": "Insufficient price history",
+        }
+
+    price = float(close.iloc[-1])
+
+    if high52 is None:
+        lookback = min(252, len(close))
+        high52 = float(close.tail(lookback).max())
+    else:
+        high52 = float(high52)
+
+    if high52 <= 0:
+        return {
+            "score": 50,
+            "is_breakout": False,
+            "pct_from_52w_high": None,
+            "volume_ratio": None,
+            "label": "No data",
+            "detail": "Invalid 52-week high",
+        }
+
+    pct_from_high = (price - high52) / high52 * 100
+
+    volume_ratio: float | None = None
+    if volume is not None and len(volume) >= 20:
+        avg_vol = float(volume.tail(20).mean())
+        if avg_vol > 0:
+            volume_ratio = round(float(volume.iloc[-1]) / avg_vol, 2)
+
+    vol_confirmed = volume_ratio is not None and volume_ratio >= 1.5
+    is_breakout = pct_from_high >= -1.0
+
+    if is_breakout and vol_confirmed:
+        score, label = 90, "Confirmed breakout"
+    elif is_breakout:
+        score, label = 72, "Potential breakout (low volume)"
+    elif pct_from_high >= -5:
+        score, label = 60, "Near 52-week high"
+    elif pct_from_high >= -15:
+        score, label = 50, "Mid-range"
+    elif pct_from_high >= -30:
+        score, label = 38, "Below 52-week high"
+    else:
+        score, label = 22, "Far below 52-week high"
+
+    vol_str = f" | Vol ratio: {volume_ratio:.1f}x" if volume_ratio is not None else ""
+    detail = f"Price vs 52W High: {pct_from_high:+.1f}%{vol_str}"
+
+    return {
+        "score": score,
+        "is_breakout": is_breakout,
+        "pct_from_52w_high": round(pct_from_high, 2),
+        "volume_ratio": volume_ratio,
+        "label": label,
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P24.3: Index Trend Gate (MA Filter)
+# ---------------------------------------------------------------------------
+
+
+def get_index_trend_gate(spy_close: "pd.Series | None") -> dict:
+    """Compute SPY 200-day SMA trend gate to suppress long signals (24.3).
+
+    When SPY is below its 200-day SMA, apply a score penalty to all long
+    signals as a simple but powerful market-regime filter.
+
+    Returns
+    -------
+    dict with:
+        gate_open  – bool (True = SPY above 200d SMA, long-friendly)
+        spy_price  – float or None
+        sma200     – float or None
+        pct_vs_sma – float or None
+        penalty    – int (points to subtract from long signals when gate closed)
+        detail     – str
+    """
+    if spy_close is None or len(spy_close) < 200:
+        return {
+            "gate_open": True,
+            "spy_price": None,
+            "sma200": None,
+            "pct_vs_sma": None,
+            "penalty": 0,
+            "detail": "SPY data unavailable — gate defaulting to open",
+        }
+
+    sma200 = float(spy_close.rolling(window=200).mean().iloc[-1])
+    spy_price = float(spy_close.iloc[-1])
+    pct_vs_sma = round((spy_price / sma200 - 1) * 100, 2)
+    gate_open = spy_price > sma200
+
+    if gate_open:
+        penalty = 0
+        qual = "strong bull" if pct_vs_sma >= 5 else "above"
+        detail = f"Gate OPEN — SPY {pct_vs_sma:+.1f}% above 200d SMA ({qual})"
+    else:
+        penalty = 10
+        detail = f"Gate CLOSED — SPY {pct_vs_sma:+.1f}% below 200d SMA (suppress longs)"
+
+    log.debug(
+        "Index trend gate: %s (SPY %.2f vs SMA200 %.2f)",
+        "OPEN" if gate_open else "CLOSED",
+        spy_price,
+        sma200,
+    )
+
+    return {
+        "gate_open": gate_open,
+        "spy_price": round(spy_price, 2),
+        "sma200": round(sma200, 2),
+        "pct_vs_sma": pct_vs_sma,
+        "penalty": penalty,
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P25.2: Tax-Loss Harvesting Bounce Signal
+# ---------------------------------------------------------------------------
+
+
+def compute_tax_loss_bounce_signal(
+    close: "pd.Series | None",
+    month: int | None = None,
+) -> dict:
+    """Detect tax-loss harvesting bounce candidates (25.2).
+
+    Stocks down >40% YTD in Q4 (Oct–Dec) experience excess selling from
+    tax-loss harvesting. A systematic reversal entry in late December /
+    early January captures the mean-reversion bounce.
+
+    Parameters
+    ----------
+    close : daily close series (most recent last)
+    month : current month (1-12); auto-detected if None
+
+    Returns
+    -------
+    dict with:
+        score          – int 0-100
+        ytd_return_pct – float or None
+        is_candidate   – bool
+        signal_active  – bool (True in Nov/Dec/Jan window)
+        label          – str
+        detail         – str
+    """
+    import datetime
+
+    if month is None:
+        month = datetime.date.today().month
+
+    signal_active = month in (11, 12, 1)
+
+    if close is None or len(close) < 21:
+        return {
+            "score": 50,
+            "ytd_return_pct": None,
+            "is_candidate": False,
+            "signal_active": signal_active,
+            "label": "No data",
+            "detail": "Insufficient price history",
+        }
+
+    lookback = min(252, len(close) - 1)
+    price_now = float(close.iloc[-1])
+    price_start = float(close.iloc[-lookback])
+    ytd_return = (price_now / price_start - 1) * 100 if price_start > 0 else 0.0
+
+    is_candidate = ytd_return <= -40.0
+
+    if is_candidate and signal_active:
+        score, label = (88 if ytd_return <= -60 else 75), (
+            "Strong bounce candidate (severe YTD decline)"
+            if ytd_return <= -60
+            else "Bounce candidate (>40% YTD decline)"
+        )
+    elif is_candidate:
+        score, label = 60, "Potential candidate (outside seasonal window)"
+    elif ytd_return <= -25:
+        score, label = 45, "Significant YTD decline (monitor in Q4)"
+    elif ytd_return <= -10:
+        score, label = 40, "Moderate YTD decline"
+    else:
+        score, label = 30, "Not a bounce candidate"
+
+    season_note = " | In seasonal window" if signal_active else " | Outside seasonal window"
+    detail = f"YTD return: {ytd_return:+.1f}%{season_note}"
+
+    return {
+        "score": score,
+        "ytd_return_pct": round(ytd_return, 2),
+        "is_candidate": is_candidate,
+        "signal_active": signal_active,
+        "label": label,
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P27.1: Interest Rate Sensitivity
+# ---------------------------------------------------------------------------
+
+
+def compute_rate_sensitivity(
+    close: "pd.Series | None",
+    tlt_close: "pd.Series | None",
+    window: int = 60,
+) -> dict:
+    """Compute a stock's beta vs TLT (long-bond ETF) as rate sensitivity (27.1).
+
+    A negative TLT beta means the stock moves opposite bonds (hurt by rate
+    rises). High |beta_tlt| > 0.3 is classified as rate-sensitive.
+
+    Parameters
+    ----------
+    close     : stock daily close series
+    tlt_close : TLT (iShares 20+ Year Treasury Bond ETF) daily close series
+    window    : lookback window in trading days (default 60)
+
+    Returns
+    -------
+    dict with:
+        beta_tlt          – float or None
+        is_rate_sensitive – bool
+        direction         – "Rate-Sensitive (inverse)" | "Rate-Sensitive (direct)" | "Neutral"
+        score_penalty     – int (points to subtract in rising-rate environments)
+        label             – str
+        detail            – str
+    """
+    if close is None or tlt_close is None:
+        return {
+            "beta_tlt": None,
+            "is_rate_sensitive": False,
+            "direction": "Unknown",
+            "score_penalty": 0,
+            "label": "No data",
+            "detail": "TLT or price data unavailable",
+        }
+
+    min_len = min(len(close), len(tlt_close))
+    if min_len < window + 5:
+        return {
+            "beta_tlt": None,
+            "is_rate_sensitive": False,
+            "direction": "Unknown",
+            "score_penalty": 0,
+            "label": "Insufficient data",
+            "detail": f"Need {window + 5} days of aligned data",
+        }
+
+    stock_ret = close.tail(min_len).pct_change().dropna()
+    tlt_ret = tlt_close.tail(min_len).pct_change().dropna()
+
+    n = min(len(stock_ret), len(tlt_ret), window)
+    sr = stock_ret.tail(n)
+    tr = tlt_ret.tail(n)
+
+    var_tlt = float(tr.var())
+    if len(sr) < 10 or var_tlt == 0:
+        return {
+            "beta_tlt": None,
+            "is_rate_sensitive": False,
+            "direction": "Unknown",
+            "score_penalty": 0,
+            "label": "Insufficient data",
+            "detail": "Cannot compute TLT beta",
+        }
+
+    cov = float(sr.cov(tr))
+    beta_tlt = round(cov / var_tlt, 3)
+
+    abs_beta = abs(beta_tlt)
+    is_rate_sensitive = abs_beta > 0.3
+
+    if beta_tlt < -0.3:
+        direction = "Rate-Sensitive (inverse)"
+        score_penalty = int(min(15, abs_beta * 20))
+    elif beta_tlt > 0.3:
+        direction = "Rate-Sensitive (direct)"
+        score_penalty = int(min(10, abs_beta * 15))
+    else:
+        direction = "Neutral"
+        score_penalty = 0
+
+    if abs_beta > 0.6:
+        label = "Highly rate-sensitive"
+    elif abs_beta > 0.3:
+        label = "Moderately rate-sensitive"
+    else:
+        label = "Rate-neutral"
+
+    return {
+        "beta_tlt": beta_tlt,
+        "is_rate_sensitive": is_rate_sensitive,
+        "direction": direction,
+        "score_penalty": score_penalty,
+        "label": label,
+        "detail": f"TLT beta: {beta_tlt:+.3f} | {direction}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# P27.2: FX Exposure Adjustment
+# ---------------------------------------------------------------------------
+
+
+def compute_fx_exposure_adjustment(
+    financials: dict | None,
+    dxy_trend: str | None = None,
+) -> dict:
+    """Estimate international revenue exposure and FX headwind/tailwind (27.2).
+
+    Uses international revenue % (if available in fundamentals) and DXY
+    trend direction to compute a score adjustment for internationally exposed
+    companies.
+
+    Parameters
+    ----------
+    financials : Finnhub metrics dict or None
+    dxy_trend  : "strengthening" | "weakening" | "neutral" | None
+
+    Returns
+    -------
+    dict with:
+        intl_revenue_pct  – float or None (0-100)
+        fx_exposure       – "High" | "Moderate" | "Low" | "Unknown"
+        score_adjustment  – int (-8 to +8 based on exposure × DXY trend)
+        label             – str
+        detail            – str
+    """
+    m = financials or {}
+
+    intl_rev_pct: float | None = None
+    rev_intl = m.get("revenueInternational") or m.get("internationalRevenue")
+    revenue = m.get("revenueAnnual") or m.get("revenueTTM")
+
+    if rev_intl is not None and revenue and float(revenue) > 0:
+        intl_rev_pct = round(float(rev_intl) / float(revenue) * 100, 1)
+
+    if intl_rev_pct is None:
+        fx_exposure = "Unknown"
+    elif intl_rev_pct >= 50:
+        fx_exposure = "High"
+    elif intl_rev_pct >= 30:
+        fx_exposure = "Moderate"
+    else:
+        fx_exposure = "Low"
+
+    score_adjustment = 0
+    if fx_exposure in ("High", "Moderate") and dxy_trend is not None:
+        mult = 1.0 if fx_exposure == "High" else 0.5
+        if dxy_trend == "weakening":
+            score_adjustment = int(8 * mult)
+        elif dxy_trend == "strengthening":
+            score_adjustment = int(-8 * mult)
+
+    detail_parts: list[str] = []
+    if intl_rev_pct is not None:
+        detail_parts.append(f"Intl revenue: {intl_rev_pct:.0f}%")
+    detail_parts.append(f"FX exposure: {fx_exposure}")
+    if dxy_trend:
+        detail_parts.append(f"USD trend: {dxy_trend}")
+    if score_adjustment != 0:
+        detail_parts.append(f"Score adj: {score_adjustment:+d} pts")
+
+    label_map = {
+        "High": "High FX exposure",
+        "Moderate": "Moderate FX exposure",
+        "Low": "Low FX exposure",
+        "Unknown": "FX exposure unknown",
+    }
+
+    return {
+        "intl_revenue_pct": intl_rev_pct,
+        "fx_exposure": fx_exposure,
+        "score_adjustment": score_adjustment,
+        "label": label_map[fx_exposure],
+        "detail": " | ".join(detail_parts) if detail_parts else "No FX data available",
+    }

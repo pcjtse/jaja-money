@@ -1,6 +1,13 @@
-"""Options chain analysis, IV surface, unusual flow, and hedging suggestions (P15.1, P16.3, P17.4)."""
+"""Options chain analysis, IV surface, unusual flow, and hedging suggestions (P15.1, P16.3, P17.4).
+
+Extended with:
+- P26.1: Volatility Risk Premium (VRP) computation
+- P26.2: IV Rank and IV Percentile
+"""
 
 from __future__ import annotations
+
+import math
 
 from log_setup import get_logger
 
@@ -427,4 +434,184 @@ def compute_hedge_suggestions(
         "available": True,
         "protective_put": protective_put,
         "collar": collar,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P26.1: Volatility Risk Premium (VRP)
+# ---------------------------------------------------------------------------
+
+
+def compute_vrp(
+    avg_iv_pct: float | None,
+    close: "object | None",  # pd.Series
+) -> dict:
+    """Compute Volatility Risk Premium = Implied Vol − 30-day Historical Vol (26.1).
+
+    VRP measures how much implied volatility exceeds realised volatility.
+    A large positive VRP (IV > HV) signals a premium-selling opportunity
+    (covered calls, cash-secured puts). Typical threshold: VRP > 5 vol pts.
+
+    Parameters
+    ----------
+    avg_iv_pct : average implied volatility across all options, in % (e.g. 35.0)
+    close      : pd.Series of daily close prices for HV computation
+
+    Returns
+    -------
+    dict with:
+        vrp_pts    – float or None (IV − HV30, in percentage points)
+        iv_pct     – float or None (implied volatility %)
+        hv30_pct   – float or None (30-day historical vol %)
+        signal     – "Premium Selling" | "Neutral" | "Breakout Watch" | "No data"
+        score      – int 0-100 (higher = stronger premium-selling opportunity)
+        detail     – str
+    """
+    import pandas as pd
+
+    if avg_iv_pct is None:
+        return {
+            "vrp_pts": None,
+            "iv_pct": None,
+            "hv30_pct": None,
+            "signal": "No data",
+            "score": 50,
+            "detail": "Implied volatility data unavailable",
+        }
+
+    hv30_pct: float | None = None
+    if close is not None and isinstance(close, pd.Series) and len(close) >= 31:
+        ratio = (close / close.shift(1)).dropna()
+        ratio = ratio[ratio > 0]
+        if len(ratio) >= 30:
+            log_ret = ratio.apply(math.log)
+            daily_std = float(log_ret.tail(30).std())
+            hv30_pct = round(daily_std * math.sqrt(252) * 100, 2)
+
+    vrp_pts: float | None = None
+    if hv30_pct is not None:
+        vrp_pts = round(avg_iv_pct - hv30_pct, 2)
+
+    if vrp_pts is None:
+        signal = "No data"
+        score = 50
+        detail = f"IV: {avg_iv_pct:.1f}% | HV30: N/A"
+    elif vrp_pts >= 10:
+        signal = "Premium Selling"
+        score = 90
+        detail = f"IV: {avg_iv_pct:.1f}% | HV30: {hv30_pct:.1f}% | VRP: +{vrp_pts:.1f} pts (strong)"
+    elif vrp_pts >= 5:
+        signal = "Premium Selling"
+        score = 75
+        detail = f"IV: {avg_iv_pct:.1f}% | HV30: {hv30_pct:.1f}% | VRP: +{vrp_pts:.1f} pts"
+    elif vrp_pts >= 0:
+        signal = "Neutral"
+        score = 55
+        detail = f"IV: {avg_iv_pct:.1f}% | HV30: {hv30_pct:.1f}% | VRP: +{vrp_pts:.1f} pts (flat)"
+    else:
+        signal = "Breakout Watch"
+        score = 35
+        detail = f"IV: {avg_iv_pct:.1f}% | HV30: {hv30_pct:.1f}% | VRP: {vrp_pts:.1f} pts (IV compressed)"
+
+    log.debug("VRP: iv=%.1f hv30=%s vrp=%s signal=%s", avg_iv_pct, hv30_pct, vrp_pts, signal)
+
+    return {
+        "vrp_pts": vrp_pts,
+        "iv_pct": round(avg_iv_pct, 2),
+        "hv30_pct": hv30_pct,
+        "signal": signal,
+        "score": score,
+        "detail": detail,
+    }
+
+
+# ---------------------------------------------------------------------------
+# P26.2: IV Rank and IV Percentile
+# ---------------------------------------------------------------------------
+
+
+def compute_iv_rank(
+    current_iv: float | None,
+    iv_history: list[float],
+) -> dict:
+    """Compute IV Rank and IV Percentile from a history of IV readings (26.2).
+
+    IV Rank = (current IV − 52w low) / (52w high − 52w low) × 100
+    IV Percentile = % of historical days where IV was below current IV
+
+    Interpretation:
+      IV Rank > 80  → elevated premium-selling opportunity
+      IV Rank < 20  → IV compressed → potential breakout / directional move
+
+    Parameters
+    ----------
+    current_iv  : current average IV in % (e.g. 35.0)
+    iv_history  : list of historical daily IV readings (same units), most recent last
+
+    Returns
+    -------
+    dict with:
+        iv_rank_pct       – float 0-100 or None
+        iv_percentile_pct – float 0-100 or None
+        iv_52w_high       – float or None
+        iv_52w_low        – float or None
+        signal            – "High IV Rank" | "Low IV Rank" | "Normal" | "No data"
+        detail            – str
+    """
+    if current_iv is None:
+        return {
+            "iv_rank_pct": None,
+            "iv_percentile_pct": None,
+            "iv_52w_high": None,
+            "iv_52w_low": None,
+            "signal": "No data",
+            "detail": "Current IV unavailable",
+        }
+
+    if not iv_history or len(iv_history) < 5:
+        return {
+            "iv_rank_pct": None,
+            "iv_percentile_pct": None,
+            "iv_52w_high": None,
+            "iv_52w_low": None,
+            "signal": "No data",
+            "detail": f"IV: {current_iv:.1f}% | Insufficient IV history",
+        }
+
+    # Use up to 252 trading days of history
+    hist = iv_history[-252:]
+    iv_high = max(hist)
+    iv_low = min(hist)
+
+    iv_rank: float | None = None
+    if iv_high > iv_low:
+        iv_rank = round((current_iv - iv_low) / (iv_high - iv_low) * 100, 1)
+    else:
+        iv_rank = 50.0
+
+    iv_percentile = round(sum(1 for v in hist if v < current_iv) / len(hist) * 100, 1)
+
+    if iv_rank is not None and iv_rank >= 80:
+        signal = "High IV Rank"
+    elif iv_rank is not None and iv_rank <= 20:
+        signal = "Low IV Rank"
+    else:
+        signal = "Normal"
+
+    detail = (
+        f"IV: {current_iv:.1f}% | "
+        f"Rank: {iv_rank:.0f}% | "
+        f"Percentile: {iv_percentile:.0f}% | "
+        f"52W High: {iv_high:.1f}% | Low: {iv_low:.1f}%"
+    )
+
+    log.debug("IV Rank: %.0f%% IV Percentile: %.0f%% signal=%s", iv_rank or 0, iv_percentile, signal)
+
+    return {
+        "iv_rank_pct": iv_rank,
+        "iv_percentile_pct": iv_percentile,
+        "iv_52w_high": round(iv_high, 2),
+        "iv_52w_low": round(iv_low, 2),
+        "signal": signal,
+        "detail": detail,
     }

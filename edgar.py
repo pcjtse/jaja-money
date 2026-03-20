@@ -351,3 +351,126 @@ def extract_business_sections(filing_text: str) -> dict:
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# P25.3: Spinoff / Special Situations Screen
+# ---------------------------------------------------------------------------
+
+_SPINOFF_KEYWORDS = [
+    "spin-off",
+    "spinoff",
+    "spin off",
+    "distribution of shares",
+    "separation of",
+    "to be distributed",
+    "newly independent",
+    "Form 10-12",
+]
+
+
+def get_spinoff_events(ticker: str, max_filings: int = 20) -> dict:
+    """Detect recent spinoff announcements for a ticker via SEC EDGAR (25.3).
+
+    Searches for 8-K and SC TO-T filings mentioning spinoff-related language
+    within the past 18 months to flag special-situation candidates.
+
+    Parameters
+    ----------
+    ticker      : stock ticker symbol
+    max_filings : maximum number of 8-K filings to scan (default 20)
+
+    Returns
+    -------
+    dict with:
+        available        – bool
+        is_spinoff       – bool (True if recent spinoff evidence found)
+        spinoff_filings  – list of dicts {form_type, filed_date, description}
+        months_since     – int or None (approx months since most recent spinoff filing)
+        detail           – str
+    """
+    from datetime import date
+
+    try:
+        filings = get_recent_filings(ticker, form_types=["8-K", "SC TO-T", "10-12B", "10-12G"])
+    except Exception as exc:
+        log.warning("get_spinoff_events: filing fetch failed for %s: %s", ticker, exc)
+        return {
+            "available": False,
+            "is_spinoff": False,
+            "spinoff_filings": [],
+            "months_since": None,
+            "detail": "Could not fetch EDGAR filings",
+        }
+
+    if not filings:
+        return {
+            "available": True,
+            "is_spinoff": False,
+            "spinoff_filings": [],
+            "months_since": None,
+            "detail": "No recent EDGAR filings found",
+        }
+
+    spinoff_filings: list[dict] = []
+    today = date.today()
+
+    for f in filings[:max_filings]:
+        description = (f.get("description") or f.get("form", "")).lower()
+        form_type = f.get("form", "")
+        filed_date = f.get("filedAt") or f.get("filed", "")
+
+        # Check if form type is a registration statement (common for spinoffs)
+        is_registration = form_type.startswith("10-12")
+
+        # Check for spinoff keywords in description
+        has_keyword = is_registration or any(
+            kw in description for kw in _SPINOFF_KEYWORDS
+        )
+
+        if has_keyword:
+            spinoff_filings.append(
+                {
+                    "form_type": form_type,
+                    "filed_date": filed_date,
+                    "description": f.get("description", form_type),
+                }
+            )
+
+    is_spinoff = len(spinoff_filings) > 0
+    months_since: int | None = None
+
+    if is_spinoff and spinoff_filings:
+        # Most recent spinoff filing
+        most_recent_date = spinoff_filings[0].get("filed_date", "")
+        if most_recent_date:
+            try:
+                filed_dt = date.fromisoformat(most_recent_date[:10])
+                delta_days = (today - filed_dt).days
+                months_since = max(0, delta_days // 30)
+            except (ValueError, TypeError):
+                months_since = None
+
+    if is_spinoff:
+        age_str = f" ({months_since}mo ago)" if months_since is not None else ""
+        detail = (
+            f"Spinoff evidence in {len(spinoff_filings)} EDGAR filing(s){age_str}. "
+            "Review for special-situation opportunity (forced selling / price dislocation)."
+        )
+    else:
+        detail = "No spinoff indicators found in recent EDGAR filings"
+
+    log.debug(
+        "Spinoff scan for %s: is_spinoff=%s, filings=%d",
+        ticker,
+        is_spinoff,
+        len(spinoff_filings),
+    )
+
+    return {
+        "available": True,
+        "is_spinoff": is_spinoff,
+        "spinoff_filings": spinoff_filings,
+        "months_since": months_since,
+        "detail": detail,
+    }

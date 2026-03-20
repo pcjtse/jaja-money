@@ -209,6 +209,110 @@ def fetch_insider_summary(insider_txns: list) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# P25.1: Cluster Insider Buying Score
+# ---------------------------------------------------------------------------
+
+
+def compute_cluster_insider_score(
+    insider_txns: list,
+    window_days: int = 30,
+) -> dict:
+    """Detect cluster insider buying within a rolling window (25.1).
+
+    A cluster buy signal fires when ≥2 distinct insiders purchase shares in
+    the open market within `window_days` days, with a minimum combined net
+    dollar value. Open-market purchases (code 'P') only — grants excluded.
+
+    Parameters
+    ----------
+    insider_txns : list of insider transaction dicts (from FinnhubAPI)
+    window_days  : lookback window in days (default 30)
+
+    Returns
+    -------
+    dict with:
+        cluster_signal   – bool (True = cluster buy detected)
+        unique_buyers    – int
+        net_buy_value    – float (estimated $ value of purchases in window)
+        buyer_names      – list of str
+        signal_label     – "Cluster Buy" | "Single Buy" | "No Buy" | "No data"
+        detail           – str
+    """
+    from datetime import date, timedelta
+
+    if not insider_txns:
+        return {
+            "cluster_signal": False,
+            "unique_buyers": 0,
+            "net_buy_value": 0.0,
+            "buyer_names": [],
+            "signal_label": "No data",
+            "detail": "No insider transactions available",
+        }
+
+    cutoff = (date.today() - timedelta(days=window_days)).isoformat()
+    recent_buys = [
+        t
+        for t in insider_txns
+        if t.get("transactionCode") == "P"
+        and t.get("transactionDate", "") >= cutoff
+    ]
+
+    if not recent_buys:
+        return {
+            "cluster_signal": False,
+            "unique_buyers": 0,
+            "net_buy_value": 0.0,
+            "buyer_names": [],
+            "signal_label": "No Buy",
+            "detail": f"No open-market purchases in past {window_days} days",
+        }
+
+    buyers: dict[str, float] = {}
+    for txn in recent_buys:
+        name = txn.get("name", "Unknown")
+        shares = abs(int(txn.get("share", 0) or txn.get("change", 0) or 0))
+        price = float(txn.get("price", 0) or 0)
+        value = shares * price if price > 0 else 0.0
+        buyers[name] = buyers.get(name, 0.0) + value
+
+    unique_buyers = len(buyers)
+    net_buy_value = sum(buyers.values())
+    buyer_names = list(buyers.keys())
+    cluster_signal = unique_buyers >= 2
+
+    if cluster_signal:
+        signal_label = "Cluster Buy"
+    elif unique_buyers == 1:
+        signal_label = "Single Buy"
+    else:
+        signal_label = "No Buy"
+
+    val_str = f"~${net_buy_value:,.0f}" if net_buy_value > 0 else "value unknown"
+    detail = (
+        f"{unique_buyers} insider(s) bought in past {window_days}d | "
+        f"Net value: {val_str} | "
+        f"Buyers: {', '.join(buyer_names[:5])}"
+    )
+
+    log.debug(
+        "Cluster insider score: %d buyers, net $%.0f, signal=%s",
+        unique_buyers,
+        net_buy_value,
+        signal_label,
+    )
+
+    return {
+        "cluster_signal": cluster_signal,
+        "unique_buyers": unique_buyers,
+        "net_buy_value": round(net_buy_value, 2),
+        "buyer_names": buyer_names[:10],
+        "signal_label": signal_label,
+        "detail": detail,
+    }
+
+
 def compute_short_selling_score(
     factor_score: int,
     insider_summary: dict | None,

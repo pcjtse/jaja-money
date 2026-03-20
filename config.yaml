@@ -107,3 +107,26 @@ api_server:
 # "sdk"  — use the anthropic Python SDK (requires ANTHROPIC_API_KEY)
 # "cli"  — use the Claude Code CLI binary (uses your existing claude session/credentials)
 ai_backend: "sdk"
+
+# P24.3: Index Trend Gate (MA Filter)
+# When SPY is below its 200-day SMA, apply a score penalty to all long signals.
+index_trend_gate:
+  enabled: true
+  penalty_pts: 10  # Score points subtracted from long signals when gate is closed
+
+# P23.1: Low Volatility Anomaly thresholds
+low_vol:
+  max_vol_60d_pct: 25.0  # Max 60-day annualised vol for low-vol screen
+
+# P23.2: Shareholder Yield thresholds
+shareholder_yield:
+  min_total_yield_pct: 5.0  # Minimum combined dividend + buyback yield %
+
+# P25.1: Cluster Insider Buying thresholds
+insider_buying:
+  min_buyers: 2
+  min_buy_value: 200000  # Minimum combined dollar value of purchases
+
+# P26.1: Volatility Risk Premium harvest thresholds
+vrp:
+  min_vrp_pts: 5.0  # IV − HV30 threshold for premium-selling signal

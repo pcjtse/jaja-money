@@ -1381,10 +1381,10 @@ Allow users to add AI-recommended stock symbols to a named portfolio for live fo
 ### 23.1 Low Volatility Anomaly
 Screen for stocks with 60-day realized volatility in the bottom quartile of their sector. Historically, low-volatility stocks outperform on a risk-adjusted basis. Weight by inverse-vol.
 
-- [ ] Compute 60-day rolling realized volatility for all screener universe tickers
-- [ ] Rank stocks by volatility within their sector and bucket into quartiles
-- [ ] Generate a composite low-vol score and integrate as an optional factor dimension
-- [ ] Add a "Low Volatility" screener preset highlighting bottom-quartile vol stocks
+- [x] Compute 60-day rolling realized volatility for all screener universe tickers
+- [x] Rank stocks by volatility within their sector and bucket into quartiles
+- [x] Generate a composite low-vol score and integrate as an optional factor dimension
+- [x] Add a "Low Volatility" screener preset highlighting bottom-quartile vol stocks
 
 **Files:** `factors.py` (`compute_low_volatility_score`), `screener.py` (`LOW_VOL_PRESET`)
 
@@ -1393,10 +1393,10 @@ Screen for stocks with 60-day realized volatility in the bottom quartile of thei
 ### 23.2 Shareholder Yield Screen
 Combine dividend yield + net buyback yield (buybacks / market cap) + debt paydown into a single total shareholder yield score. Firms returning >8% combined yield historically outperform.
 
-- [ ] Compute net buyback yield from repurchase data in existing fundamentals
-- [ ] Sum dividend yield + buyback yield + debt paydown yield into a composite score
-- [ ] Add a "Shareholder Yield" screener preset filtering for >5% total yield
-- [ ] Display shareholder yield breakdown in the analysis view
+- [x] Compute net buyback yield from repurchase data in existing fundamentals
+- [x] Sum dividend yield + buyback yield + debt paydown yield into a composite score
+- [x] Add a "Shareholder Yield" screener preset filtering for >5% total yield
+- [x] Display shareholder yield breakdown in the analysis view
 
 **Files:** `factors.py` (`compute_shareholder_yield`), `screener.py` (`SHAREHOLDER_YIELD_PRESET`)
 
@@ -1405,10 +1405,10 @@ Combine dividend yield + net buyback yield (buybacks / market cap) + debt paydow
 ### 23.3 Earnings Revision Momentum
 Track upward/downward analyst EPS estimate revisions over the past 30/60/90 days as a leading indicator. Stocks with consistent upward revisions tend to drift higher before the next earnings report.
 
-- [ ] Compute 30/60/90-day EPS estimate revision % from existing earnings data
-- [ ] Generate long signals for stocks with consistent upward revisions (>+3% in 30 days)
-- [ ] Integrate revision momentum as an additional factor in the composite score
-- [ ] Surface top revision-momentum stocks in the screener
+- [x] Compute 30/60/90-day EPS estimate revision % from existing earnings data
+- [x] Generate long signals for stocks with consistent upward revisions (>+3% in 30 days)
+- [x] Integrate revision momentum as an additional factor in the composite score
+- [x] Surface top revision-momentum stocks in the screener
 
 **Files:** `factors.py` (`compute_earnings_revision_momentum`), `screener.py` (`REVISION_MOMENTUM_PRESET`)
 
@@ -1417,10 +1417,10 @@ Track upward/downward analyst EPS estimate revisions over the past 30/60/90 days
 ### 23.4 Altman Z-Score Distress Screen
 5-factor bankruptcy prediction model using EBIT, revenue, retained earnings, book value, and working capital. Z < 1.8 = distress zone. All inputs already fetched.
 
-- [ ] Implement Altman Z-Score formula: `1.2×X1 + 1.4×X2 + 3.3×X3 + 0.6×X4 + 1.0×X5`
-- [ ] Classify stocks into Safe (Z > 2.99), Grey (1.8–2.99), and Distress (Z < 1.8) zones
-- [ ] Add Z-Score as a negative screen / red flag in the risk model
-- [ ] Display Z-Score and zone classification in the analysis view
+- [x] Implement Altman Z-Score formula: `1.2×X1 + 1.4×X2 + 3.3×X3 + 0.6×X4 + 1.0×X5`
+- [x] Classify stocks into Safe (Z > 2.99), Grey (1.8–2.99), and Distress (Z < 1.8) zones
+- [x] Add Z-Score as a negative screen / red flag in the risk model
+- [x] Display Z-Score and zone classification in the analysis view
 
 **Files:** `factors.py` (`compute_altman_zscore`), `guardrails.py` (Z-Score red flag)
 
@@ -1429,10 +1429,10 @@ Track upward/downward analyst EPS estimate revisions over the past 30/60/90 days
 ### 23.5 Net-Net / NCAV Screen (Deep Benjamin Graham)
 Flag stocks trading below Net Current Asset Value `(current assets − total liabilities) / shares`. More conservative than Graham Number — buying at liquidation value.
 
-- [ ] Compute NCAV per share from balance sheet data already fetched
-- [ ] Calculate NCAV margin of safety: `(NCAV − Price) / NCAV`
-- [ ] Add as a screener filter for deep-value / distressed asset hunting
-- [ ] Display NCAV vs current price in the analysis view alongside Graham Number
+- [x] Compute NCAV per share from balance sheet data already fetched
+- [x] Calculate NCAV margin of safety: `(NCAV − Price) / NCAV`
+- [x] Add as a screener filter for deep-value / distressed asset hunting
+- [x] Display NCAV vs current price in the analysis view alongside Graham Number
 
 **Files:** `factors.py` (`compute_ncav`), `screener.py` (`NCAV_PRESET`)
 
@@ -1443,10 +1443,10 @@ Flag stocks trading below Net Current Asset Value `(current assets − total lia
 ### 24.1 52-Week High Breakout Strategy
 Buy stocks breaking to new 52-week highs on above-average volume. Strong empirical evidence for continuation. Exit when price closes >X% below the breakout level.
 
-- [ ] Detect 52-week high breakouts with above-average volume confirmation (1.5× ADV)
-- [ ] Define stop-loss exit rule: close position if price drops >7% from breakout level
-- [ ] Backtest the strategy over configurable lookback windows
-- [ ] Add a "Breakout" screener preset and surface top breakout candidates
+- [x] Detect 52-week high breakouts with above-average volume confirmation (1.5× ADV)
+- [x] Define stop-loss exit rule: close position if price drops >7% from breakout level
+- [x] Backtest the strategy over configurable lookback windows
+- [x] Add a "Breakout" screener preset and surface top breakout candidates
 
 **Files:** `factors.py` (`compute_breakout_signal`), `screener.py` (`BREAKOUT_PRESET`), `backtest.py`
 
@@ -1455,10 +1455,10 @@ Buy stocks breaking to new 52-week highs on above-average volume. Strong empiric
 ### 24.2 Dual Momentum (Absolute + Relative)
 Gary Antonacci's system: only hold an asset if it has both positive absolute momentum (beats T-bills) and positive relative momentum (beats the asset class benchmark). Apply to sector ETFs and the existing asset-class rotation.
 
-- [ ] Compute absolute momentum: 12-month return vs 3-month T-bill rate (risk-free rate proxy)
-- [ ] Compute relative momentum: 12-month return vs benchmark (SPY)
-- [ ] Generate hold/cash signals: only long when both absolute and relative momentum are positive
-- [ ] Integrate dual momentum filter into the existing sector rotation page (`sectors.py`)
+- [x] Compute absolute momentum: 12-month return vs 3-month T-bill rate (risk-free rate proxy)
+- [x] Compute relative momentum: 12-month return vs benchmark (SPY)
+- [x] Generate hold/cash signals: only long when both absolute and relative momentum are positive
+- [x] Integrate dual momentum filter into the existing sector rotation page (`sectors.py`)
 
 **Files:** `sectors.py` (`compute_dual_momentum`), `pages/5_Sectors.py`
 
@@ -1467,10 +1467,10 @@ Gary Antonacci's system: only hold an asset if it has both positive absolute mom
 ### 24.3 Moving Average Trend Filter (Index-Level Gate)
 Suppress all long signals when the broad index (SPY) is below its 200-day SMA — a simple but powerful market regime filter on top of individual stock signals.
 
-- [ ] Fetch SPY daily price and compute SMA(200) as an index-level trend gate
-- [ ] When SPY < SMA(200), apply a configurable penalty to all long factor scores (e.g. −10 pts)
-- [ ] Display the index trend gate status in the dashboard header (green/red indicator)
-- [ ] Allow users to toggle the gate on/off in `config.yaml`
+- [x] Fetch SPY daily price and compute SMA(200) as an index-level trend gate
+- [x] When SPY < SMA(200), apply a configurable penalty to all long factor scores (e.g. −10 pts)
+- [x] Display the index trend gate status in the dashboard header (green/red indicator)
+- [x] Allow users to toggle the gate on/off in `config.yaml`
 
 **Files:** `factors.py` (`get_index_trend_gate`), `config.yaml` (`index_trend_gate_enabled`)
 
@@ -1481,10 +1481,10 @@ Suppress all long signals when the broad index (SPY) is below its 200-day SMA �
 ### 25.1 Insider Buying Signal Strategy
 Systematic long signal when cluster insider buying occurs (2+ insiders buying within 30 days, net buy > $500K). Open-market insider purchases have strong empirical backing.
 
-- [ ] Detect cluster insider buying: ≥2 insiders, net dollar value > configurable threshold
-- [ ] Generate a standalone insider-buying score separate from the existing ownership factor
-- [ ] Backtest insider-buy signals over historical data
-- [ ] Surface top insider-buying stocks in the screener with a dedicated preset
+- [x] Detect cluster insider buying: ≥2 insiders, net dollar value > configurable threshold
+- [x] Generate a standalone insider-buying score separate from the existing ownership factor
+- [x] Backtest insider-buy signals over historical data
+- [x] Surface top insider-buying stocks in the screener with a dedicated preset
 
 **Files:** `ownership.py` (`compute_cluster_insider_score`), `screener.py` (`INSIDER_BUYING_PRESET`)
 
@@ -1493,10 +1493,10 @@ Systematic long signal when cluster insider buying occurs (2+ insiders buying wi
 ### 25.2 Tax-Loss Harvesting Bounce
 Stocks down >40% YTD experience excess selling in November–December from tax-loss harvesting. Systematic reversal entry in late December / early January. Ties into the existing seasonal overlay.
 
-- [ ] Compute YTD return and flag stocks down >40% in Q4 (October–December)
-- [ ] Generate a "bounce candidate" signal that activates in December and expires end of January
-- [ ] Integrate with the existing seasonal bias multipliers in `factors.py`
-- [ ] Add a "Tax-Loss Bounce" seasonal preset to the screener
+- [x] Compute YTD return and flag stocks down >40% in Q4 (October–December)
+- [x] Generate a "bounce candidate" signal that activates in December and expires end of January
+- [x] Integrate with the existing seasonal bias multipliers in `factors.py`
+- [x] Add a "Tax-Loss Bounce" seasonal preset to the screener
 
 **Files:** `factors.py` (`compute_tax_loss_bounce_signal`), `screener.py` (`TAX_LOSS_BOUNCE_PRESET`)
 
@@ -1505,10 +1505,10 @@ Stocks down >40% YTD experience excess selling in November–December from tax-l
 ### 25.3 Spinoff / Special Situations Screen
 Newly spun-off companies are often forced-sold by index funds and parent-company shareholders, creating temporary price dislocation. Flag recent spinoffs (<18 months old) with improving fundamentals.
 
-- [ ] Identify recent spinoffs by scanning SEC EDGAR announcements via `edgar.py`
-- [ ] Flag spinoffs where the factor score is improving quarter-over-quarter
-- [ ] Display spinoff age, parent company, and fundamental trend in the analysis view
-- [ ] Add a "Special Situations" screener preset
+- [x] Identify recent spinoffs by scanning SEC EDGAR announcements via `edgar.py`
+- [x] Flag spinoffs where the factor score is improving quarter-over-quarter
+- [x] Display spinoff age, parent company, and fundamental trend in the analysis view
+- [x] Add a "Special Situations" screener preset
 
 **Files:** `edgar.py` (`get_spinoff_events`), `screener.py` (`SPECIAL_SITUATIONS_PRESET`)
 
@@ -1519,10 +1519,10 @@ Newly spun-off companies are often forced-sold by index funds and parent-company
 ### 26.1 Volatility Risk Premium (VRP) Harvest
 Implied volatility is systematically higher than realized volatility. Screen for stocks where `IV − HV_30 > threshold` and flag as premium-selling opportunities (covered calls / cash-secured puts).
 
-- [ ] Compute VRP = current IV (from `options_analysis.py`) − 30-day historical volatility
-- [ ] Screen for stocks with VRP > configurable threshold (e.g. >5 vol points)
-- [ ] Display VRP ranking and suggested premium-selling strategy in the options analysis view
-- [ ] Add a "VRP Harvest" preset to the screener
+- [x] Compute VRP = current IV (from `options_analysis.py`) − 30-day historical volatility
+- [x] Screen for stocks with VRP > configurable threshold (e.g. >5 vol points)
+- [x] Display VRP ranking and suggested premium-selling strategy in the options analysis view
+- [x] Add a "VRP Harvest" preset to the screener
 
 **Files:** `options_analysis.py` (`compute_vrp`), `screener.py` (`VRP_HARVEST_PRESET`)
 
@@ -1531,10 +1531,10 @@ Implied volatility is systematically higher than realized volatility. Screen for
 ### 26.2 IV Rank / IV Percentile Signal
 Rank current IV against its 52-week range. IV rank >80% → elevated premium-selling opportunity. IV rank <20% → potential breakout / directional move imminent.
 
-- [ ] Compute IV rank: `(current IV − 52w low IV) / (52w high IV − 52w low IV) × 100`
-- [ ] Compute IV percentile: % of trading days in past year where IV was below current IV
-- [ ] Display IV rank and percentile in the options analysis view alongside existing IV surface
-- [ ] Add IV rank thresholds as screener filters (high IV rank for premium selling, low for breakout)
+- [x] Compute IV rank: `(current IV − 52w low IV) / (52w high IV − 52w low IV) × 100`
+- [x] Compute IV percentile: % of trading days in past year where IV was below current IV
+- [x] Display IV rank and percentile in the options analysis view alongside existing IV surface
+- [x] Add IV rank thresholds as screener filters (high IV rank for premium selling, low for breakout)
 
 **Files:** `options_analysis.py` (`compute_iv_rank`, `compute_iv_percentile`), `screener.py`
 
@@ -1545,10 +1545,10 @@ Rank current IV against its 52-week range. IV rank >80% → elevated premium-sel
 ### 27.1 Interest Rate Sensitivity Classification
 Compute each stock's beta to TLT (10Y bond ETF) using rolling 60-day regression. Auto-adjust position size signals when the rate regime shifts.
 
-- [ ] Fetch TLT daily returns and compute rolling 60-day beta for each stock vs TLT
-- [ ] Classify stocks as rate-sensitive (|β_TLT| > 0.3) or rate-neutral
-- [ ] When 10Y yield is rising, apply a penalty to high rate-sensitivity stocks in factor scoring
-- [ ] Display rate sensitivity classification and TLT beta in the analysis view
+- [x] Fetch TLT daily returns and compute rolling 60-day beta for each stock vs TLT
+- [x] Classify stocks as rate-sensitive (|β_TLT| > 0.3) or rate-neutral
+- [x] When 10Y yield is rising, apply a penalty to high rate-sensitivity stocks in factor scoring
+- [x] Display rate sensitivity classification and TLT beta in the analysis view
 
 **Files:** `factors.py` (`compute_rate_sensitivity`), `sectors.py` (rate regime integration)
 
@@ -1557,9 +1557,9 @@ Compute each stock's beta to TLT (10Y bond ETF) using rolling 60-day regression.
 ### 27.2 Currency / FX Exposure Screen
 Estimate international revenue exposure and flag when USD strength/weakness creates a tailwind or headwind. Tag stocks with >30% international revenue and correlate with DXY trend.
 
-- [ ] Estimate international revenue % from existing fundamentals / SEC filings
-- [ ] Fetch DXY (USD index) trend and classify as strengthening or weakening
-- [ ] Apply a USD headwind/tailwind adjustment to factor scores for internationally exposed stocks
-- [ ] Display FX exposure classification and DXY trend context in the analysis view
+- [x] Estimate international revenue % from existing fundamentals / SEC filings
+- [x] Fetch DXY (USD index) trend and classify as strengthening or weakening
+- [x] Apply a USD headwind/tailwind adjustment to factor scores for internationally exposed stocks
+- [x] Display FX exposure classification and DXY trend context in the analysis view
 
 **Files:** `factors.py` (`compute_fx_exposure_adjustment`), `sectors.py` (macro overlay)
