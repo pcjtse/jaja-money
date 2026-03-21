@@ -111,8 +111,11 @@ ai_backend: "sdk"
 # OpenClaw integration settings
 openclaw:
   skill_name: "jaja-money"
-  # Set ALPACA_API_KEY / ALPACA_API_SECRET env vars for broker integration
-  alpaca_base_url: "https://paper-api.alpaca.markets"  # switch to live URL for real trading
+  # Set ALPACA_API_KEY / ALPACA_API_SECRET env vars for read-only Alpaca monitoring.
+  # Note: real order execution is disabled; execute_signal() is simulation-only.
+  alpaca_base_url: "https://paper-api.alpaca.markets"
+  # Remote skill mode: set JAJA_API_URL env var to point the OpenClaw skill at a
+  # running jaja-money server (local or remote) instead of importing modules directly.
   # Signal thresholds for BUY/SELL decisions
   signal_buy_factor_min: 65
   signal_buy_risk_max: 50

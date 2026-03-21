@@ -250,6 +250,7 @@ except ImportError:
             def create(*a, **kw):
                 class _Resp:
                     content = []
+
                 return _Resp()
 
     _ant.Anthropic = _FakeAnthropic

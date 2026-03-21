@@ -276,7 +276,14 @@ class TestComputeShortSellingScore:
         from ownership import compute_short_selling_score
 
         result = compute_short_selling_score(50, None, None)
-        for key in ("score", "fundamental_sub", "short_int_sub", "insider_sub", "label", "detail"):
+        for key in (
+            "score",
+            "fundamental_sub",
+            "short_int_sub",
+            "insider_sub",
+            "label",
+            "detail",
+        ):
             assert key in result
 
 
@@ -328,8 +335,20 @@ class TestComputeSocialSentiment:
         from social import compute_social_sentiment
 
         posts = [
-            {"title": "Buy AAPL", "score": 100, "num_comments": 50, "created_utc": 0, "subreddit": "stocks"},
-            {"title": "AAPL moon", "score": 200, "num_comments": 30, "created_utc": 0, "subreddit": "wsb"},
+            {
+                "title": "Buy AAPL",
+                "score": 100,
+                "num_comments": 50,
+                "created_utc": 0,
+                "subreddit": "stocks",
+            },
+            {
+                "title": "AAPL moon",
+                "score": 200,
+                "num_comments": 30,
+                "created_utc": 0,
+                "subreddit": "wsb",
+            },
         ]
         result = compute_social_sentiment(posts, [])
         assert result["reddit_mentions"] == 2
@@ -339,8 +358,20 @@ class TestComputeSocialSentiment:
         from social import compute_social_sentiment
 
         posts = [
-            {"title": "A", "score": 100, "num_comments": 0, "created_utc": 0, "subreddit": "s"},
-            {"title": "B", "score": 200, "num_comments": 0, "created_utc": 0, "subreddit": "s"},
+            {
+                "title": "A",
+                "score": 100,
+                "num_comments": 0,
+                "created_utc": 0,
+                "subreddit": "s",
+            },
+            {
+                "title": "B",
+                "score": 200,
+                "num_comments": 0,
+                "created_utc": 0,
+                "subreddit": "s",
+            },
         ]
         result = compute_social_sentiment(posts, [])
         assert result["reddit_avg_score"] == pytest.approx(150.0)
@@ -360,7 +391,15 @@ class TestComputeSocialSentiment:
     def test_finbert_pipe_used_when_provided(self):
         from social import compute_social_sentiment
 
-        posts = [{"title": "AAPL is going to the moon!", "score": 10, "num_comments": 0, "created_utc": 0, "subreddit": "s"}]
+        posts = [
+            {
+                "title": "AAPL is going to the moon!",
+                "score": 10,
+                "num_comments": 0,
+                "created_utc": 0,
+                "subreddit": "s",
+            }
+        ]
         mock_pipe = MagicMock(return_value=[{"label": "positive", "score": 0.9}])
         result = compute_social_sentiment(posts, [], finbert_pipe=mock_pipe)
         mock_pipe.assert_called_once()
@@ -370,7 +409,15 @@ class TestComputeSocialSentiment:
     def test_mention_count_sum_of_both_sources(self):
         from social import compute_social_sentiment
 
-        posts = [{"title": "X", "score": 1, "num_comments": 0, "created_utc": 0, "subreddit": "s"}] * 3
+        posts = [
+            {
+                "title": "X",
+                "score": 1,
+                "num_comments": 0,
+                "created_utc": 0,
+                "subreddit": "s",
+            }
+        ] * 3
         st_msgs = [{"sentiment": "bullish"}] * 2
         result = compute_social_sentiment(posts, st_msgs)
         assert result["mention_count"] == 5

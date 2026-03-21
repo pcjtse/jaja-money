@@ -39,7 +39,7 @@ def _type_symbol_and_analyze(page, symbol: str = "AAPL"):
     analyze_btn.click()
 
     # Wait for the analysis title to appear
-    page.wait_for_selector(f'text=Analysis: {symbol}', timeout=30_000)
+    page.wait_for_selector(f"text=Analysis: {symbol}", timeout=30_000)
 
 
 # ---------------------------------------------------------------------------
@@ -142,8 +142,8 @@ class TestStockAnalysis:
 
     def test_stock_quote_section(self):
         """Stock Quote section should be displayed with price metrics."""
-        self.page.wait_for_selector('text=Stock Quote', timeout=20_000)
-        assert self.page.locator('text=Stock Quote').is_visible()
+        self.page.wait_for_selector("text=Stock Quote", timeout=20_000)
+        assert self.page.locator("text=Stock Quote").is_visible()
 
     def test_price_metrics_displayed(self):
         """Price, Day High, Day Low, Previous Close metrics should be visible."""
@@ -155,8 +155,8 @@ class TestStockAnalysis:
     def test_company_overview_loads(self):
         """Company Overview section should appear after analysis."""
         try:
-            self.page.wait_for_selector('text=Company Overview', timeout=20_000)
-            assert self.page.locator('text=Company Overview').is_visible()
+            self.page.wait_for_selector("text=Company Overview", timeout=20_000)
+            assert self.page.locator("text=Company Overview").is_visible()
         except Exception:
             # Graceful degradation if profile data fails
             pass
@@ -164,11 +164,11 @@ class TestStockAnalysis:
     def test_factor_score_section(self):
         """Factor Score section should be visible."""
         try:
-            self.page.wait_for_selector('text=Factor Score', timeout=30_000)
-            assert self.page.locator('text=Factor Score').is_visible()
+            self.page.wait_for_selector("text=Factor Score", timeout=30_000)
+            assert self.page.locator("text=Factor Score").is_visible()
         except Exception:
             # Check for alternative text in body
-            body_text = self.page.locator('body').inner_text()
+            body_text = self.page.locator("body").inner_text()
             assert any(kw in body_text for kw in ["Factor", "Score", "Composite"])
 
     def test_price_chart_rendered(self):
@@ -179,12 +179,14 @@ class TestStockAnalysis:
             assert chart.is_visible()
         except Exception:
             # Charts might render in different containers
-            chart = self.page.locator('.js-plotly-plot').first
+            chart = self.page.locator(".js-plotly-plot").first
             assert chart.is_visible()
 
     def test_screenshot_analysis(self):
         """Capture screenshot of stock analysis page."""
-        self.page.screenshot(path=str(SCREENSHOTS_DIR / "02_aapl_analysis.png"), full_page=True)
+        self.page.screenshot(
+            path=str(SCREENSHOTS_DIR / "02_aapl_analysis.png"), full_page=True
+        )
 
 
 class TestSidebarNavigation:
@@ -231,4 +233,6 @@ class TestErrorHandling:
         app_page.wait_for_timeout(2000)
         # Should show error or prompt
         body_text = app_page.locator("body").inner_text()
-        assert any(kw in body_text for kw in ["enter", "symbol", "Error", "Stock Analysis"])
+        assert any(
+            kw in body_text for kw in ["enter", "symbol", "Error", "Stock Analysis"]
+        )

@@ -168,30 +168,46 @@ RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst se
 - **Google Sheets export** — Write results to a Google Sheet via service account
 - **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
 - **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
-- **OpenClaw integration** — Publish as a ClawHub skill, execute trades via Alpaca, and trigger analysis on market events (see below)
+- **OpenClaw integration** — Publish as a ClawHub skill, connect to a local or remote jaja-money server, and trigger analysis on market events (see below)
 
 ---
 
 ## OpenClaw Integration
 
 jaja-money can be published to the [ClawHub](https://clawhub.io) skill marketplace and
-wired into OpenClaw agent workflows. The integration adds five capabilities:
+wired into OpenClaw agent workflows. The skill can run **locally** (importing analysis
+modules directly) or in **remote mode** — connecting to any running jaja-money server
+over HTTP via `JAJA_API_URL`.
+
+> **Note:** Real order execution has been removed. `broker.py` provides read-only Alpaca
+> account/position monitoring and a **simulation-only** `execute_signal()` that returns
+> what a trade *would* do without placing any real orders.
 
 | Feature | Module / Endpoint |
 |---------|-------------------|
-| ClawHub skill package | `openclaw_skill.py` |
+| ClawHub skill package (local + remote) | `openclaw_skill.py` |
+| Lightweight factor/risk scores | `POST /score` |
 | Structured signal API | `POST /signals` |
-| Alpaca trade execution | `broker.py` |
+| Active price alerts | `GET /alerts` |
 | Incoming webhook receiver | `POST /openclaw/webhook` |
 | Portfolio rebalancing | `POST /openclaw/rebalance` |
 | Autonomous research agent | `POST /openclaw/agent` |
 | Event-triggered analysis | `openclaw_events.py` |
 | Skill manifest | `GET /openclaw/manifest` |
+| Alpaca monitoring (read-only) | `broker.py` |
 
 ### 1. ClawHub Skill Package
 
 `openclaw_skill.py` is a self-contained module ready for ClawHub registration.
-Import it directly from an OpenClaw agent or register it via the manifest endpoint.
+It operates in two modes:
+
+- **Local mode** (default) — imports analysis modules directly; use when running
+  the skill in the same Python environment as jaja-money.
+- **Remote mode** — set `JAJA_API_URL` to delegate all calls to a running
+  jaja-money REST server (local network or remote host). No local dependencies
+  required beyond `requests`.
+
+**Local mode:**
 
 ```python
 from openclaw_skill import analyze, screen, score, get_alerts, research
@@ -200,7 +216,7 @@ from openclaw_skill import analyze, screen, score, get_alerts, research
 result = analyze("AAPL")
 # {'symbol': 'AAPL', 'signal': 'BUY', 'confidence': 74, 'factor_score': 72, ...}
 
-# Structured factor/risk score only
+# Lightweight factor/risk score only
 s = score("MSFT")
 # {'symbol': 'MSFT', 'signal': 'HOLD', 'confidence': 50, ...}
 
@@ -214,19 +230,79 @@ alerts = get_alerts("AAPL")
 memo = research("TSLA", question="What is the bear case?")
 ```
 
+**Remote mode** — point the skill at a running jaja-money server:
+
+```bash
+# All skill function calls are forwarded to the server via HTTP
+export JAJA_API_URL=http://analysis-server:8080
+export JAJA_API_KEY=mysecret   # optional, forwarded as X-API-Key
+```
+
+```python
+from openclaw_skill import analyze, score  # works exactly the same
+
+result = analyze("AAPL")   # calls http://analysis-server:8080/analyze
+s = score("MSFT")          # calls http://analysis-server:8080/score
+```
+
+You can also use `JajaMoneyClient` directly for finer control:
+
+```python
+from openclaw_skill import JajaMoneyClient
+
+client = JajaMoneyClient("http://analysis-server:8080", api_key="mysecret")
+client.health()                         # GET /health
+client.analyze("AAPL")                  # POST /analyze
+client.score("MSFT")                    # POST /score
+client.screen(["AAPL", "MSFT"])         # POST /screen
+client.signals(["AAPL", "MSFT"])        # POST /signals
+client.get_alerts("AAPL")              # GET /alerts?symbol=AAPL
+client.research("TSLA", question="Bear case?")  # POST /openclaw/agent (streaming, collected)
+```
+
 Retrieve the full manifest for ClawHub registration:
 
 ```bash
 curl http://localhost:8080/openclaw/manifest
 ```
 
-### 2. Enhanced REST API — `/signals` and `/openclaw/*` Endpoints
+### 2. REST API — OpenClaw Endpoints
 
 Start the API server:
 
 ```bash
 uvicorn server:app --host 0.0.0.0 --port 8080
 # or: python server.py
+```
+
+**`POST /score`** — lightweight factor + risk scores for a single ticker (used by remote skill):
+
+```bash
+curl -X POST http://localhost:8080/score \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL"}'
+```
+
+```json
+{
+  "symbol": "AAPL",
+  "factor_score": 72,
+  "composite_label": "Buy",
+  "risk_score": 38,
+  "risk_level": "Low",
+  "signal": "BUY",
+  "confidence": 74,
+  "factors": [],
+  "flags": [],
+  "timestamp": 1742500000
+}
+```
+
+**`GET /alerts`** — list active price/signal alerts (used by remote skill):
+
+```bash
+curl "http://localhost:8080/alerts"
+curl "http://localhost:8080/alerts?symbol=AAPL"
 ```
 
 **`POST /signals`** — batch BUY / HOLD / SELL signals with confidence scores:
@@ -277,18 +353,19 @@ curl -X POST http://localhost:8080/openclaw/rebalance \
   }'
 ```
 
-### 3. Alpaca Broker Integration
+### 3. Alpaca Account Monitoring (Read-Only)
 
-`broker.py` connects jaja-money signals to [Alpaca's trading API](https://alpaca.markets).
+`broker.py` provides **read-only** monitoring of an [Alpaca](https://alpaca.markets)
+account. Real order placement has been removed — `execute_signal()` always returns a
+simulation result and never submits orders to Alpaca.
 
 **Setup:**
 
 ```bash
-# Add to your .env file
+# Add to your .env file (read-only monitoring only)
 ALPACA_API_KEY=your_alpaca_key
 ALPACA_API_SECRET=your_alpaca_secret
-ALPACA_BASE_URL=https://paper-api.alpaca.markets   # paper trading (default)
-# ALPACA_BASE_URL=https://api.alpaca.markets       # live trading
+ALPACA_BASE_URL=https://paper-api.alpaca.markets   # default
 ```
 
 **Usage:**
@@ -296,24 +373,22 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets   # paper trading (default)
 ```python
 from broker import execute_signal, get_positions, get_account, is_configured
 
-# Check credentials are set
 if is_configured():
-    # Execute a factor-driven signal (dry_run=True previews without placing order)
-    result = execute_signal("AAPL", signal="BUY", qty=5, dry_run=True)
-    # {'symbol': 'AAPL', 'signal': 'BUY', 'side': 'buy', 'action': 'dry_run', ...}
-
-    # Place a live order
-    order = execute_signal("AAPL", signal="BUY", qty=5)
-
-    # Inspect account and positions
+    # Inspect account and positions (read-only Alpaca API calls)
     account = get_account()
+    # {'cash': 10000.0, 'portfolio_value': 25000.0, 'buying_power': 20000.0, ...}
+
     positions = get_positions()
+    # [{'symbol': 'AAPL', 'qty': 10.0, 'unrealized_pl': 120.0, ...}, ...]
+
+    # Simulate a signal — no order is placed regardless of dry_run flag
+    result = execute_signal("AAPL", signal="BUY", qty=5)
+    # {'symbol': 'AAPL', 'signal': 'BUY', 'action': 'simulated',
+    #  'simulated': True, 'order': None,
+    #  'note': 'Real trading is disabled. This is a simulation only.'}
 ```
 
-> **Warning:** Set `ALPACA_BASE_URL` to the **paper trading** URL during testing.
-> Live trading moves real money. Always use `dry_run=True` to validate signals first.
-
-**Combining with `score()`:**
+**Combining with `score()` for simulation:**
 
 ```python
 from openclaw_skill import score
@@ -326,8 +401,8 @@ result = execute_signal(
     qty=10,
     factor_score=s["factor_score"],
     risk_score=s["risk_score"],
-    dry_run=False,
 )
+# Always returns a simulation — use Forward Test for paper portfolio tracking
 ```
 
 ### 4. OpenClaw Incoming Webhook Receiver
@@ -389,7 +464,6 @@ from openclaw_events import (
     start_event_scheduler,
     stop_event_scheduler,
 )
-from broker import execute_signal
 
 def on_earnings(event):
     """Auto-score the stock when earnings are imminent."""
@@ -398,8 +472,11 @@ def on_earnings(event):
     print(f"{event['symbol']} earnings in {event['days_away']}d — signal: {s['signal']}")
 
 def on_price_alert(event):
-    """Execute a signal when a price alert fires."""
-    execute_signal(event["symbol"], signal="SELL", qty=10, dry_run=True)
+    """Log a simulated trade when a price alert fires."""
+    from broker import execute_signal
+    result = execute_signal(event["symbol"], signal="SELL", qty=10)
+    # result["action"] == "simulated" — no real order placed
+    print(f"Simulated: {result}")
 
 register_event_callback("earnings_approaching", on_earnings)
 register_event_callback("price_alert_triggered", on_price_alert)
@@ -414,7 +491,6 @@ Configure the scheduler in `config.yaml`:
 openclaw:
   event_scheduler_interval_seconds: 300   # poll every 5 minutes
   earnings_alert_days_ahead: 3            # fire when earnings < 3 days out
-  alpaca_base_url: "https://paper-api.alpaca.markets"
   signal_buy_factor_min: 65
   signal_buy_risk_max: 50
   signal_sell_factor_max: 35
@@ -428,10 +504,11 @@ openclaw:
 | `FINNHUB_API_KEY` | Yes | Finnhub market data |
 | `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
 | `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
-| `ALPACA_API_KEY` | Broker only | Alpaca trading API key |
-| `ALPACA_API_SECRET` | Broker only | Alpaca trading API secret |
-| `ALPACA_BASE_URL` | Broker only | Alpaca base URL (default: paper trading) |
-| `JAJA_API_PORT` | No | REST API port (default: `8080`) |
+| `JAJA_API_URL` | OpenClaw remote | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
+| `JAJA_API_PORT` | No | REST API server port (default: `8080`) |
+| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
+| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
+| `ALPACA_BASE_URL` | Monitoring only | Alpaca base URL (default: `https://paper-api.alpaca.markets`) |
 
 ---
 

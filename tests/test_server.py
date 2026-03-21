@@ -111,17 +111,23 @@ class TestHealthEndpoint:
 
 class TestForwardTestPortfolioCreate:
     def test_create_portfolio_returns_201_or_200(self, client):
-        response = client.post("/forward-test/portfolio", json={"name": "Test Portfolio"})
+        response = client.post(
+            "/forward-test/portfolio", json={"name": "Test Portfolio"}
+        )
         assert response.status_code in (200, 201)
 
     def test_create_portfolio_returns_id(self, client):
-        response = client.post("/forward-test/portfolio", json={"name": "My Paper Fund"})
+        response = client.post(
+            "/forward-test/portfolio", json={"name": "My Paper Fund"}
+        )
         data = response.json()
         assert "portfolio_id" in data
         assert isinstance(data["portfolio_id"], int)
 
     def test_create_portfolio_echoes_name(self, client):
-        response = client.post("/forward-test/portfolio", json={"name": "Alpha Strategy"})
+        response = client.post(
+            "/forward-test/portfolio", json={"name": "Alpha Strategy"}
+        )
         data = response.json()
         assert data["name"] == "Alpha Strategy"
 
@@ -219,7 +225,9 @@ class TestForwardTestSummary:
         assert response.status_code == 200
 
     def test_summary_returns_dict(self, client):
-        resp = client.post("/forward-test/portfolio", json={"name": "Summary Dict Test"})
+        resp = client.post(
+            "/forward-test/portfolio", json={"name": "Summary Dict Test"}
+        )
         pid = resp.json()["portfolio_id"]
         response = client.get(f"/forward-test/portfolio/{pid}")
         assert isinstance(response.json(), dict)

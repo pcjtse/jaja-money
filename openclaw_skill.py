@@ -11,6 +11,15 @@ Skill functions:
     get_alerts(symbol)           — Active price/signal alerts
     research(ticker, question)   — Autonomous multi-step research
 
+Remote mode:
+    Set JAJA_API_URL to the URL of a running jaja-money server to run the
+    skill against a remote (or local) instance instead of importing the
+    analysis modules directly.  Optional JAJA_API_KEY is forwarded as the
+    X-API-Key header.
+
+    export JAJA_API_URL=http://localhost:8080
+    export JAJA_API_KEY=mysecret   # optional
+
 ClawHub metadata:
     SKILL_MANIFEST — dict describing name, version, capabilities, schema
 
@@ -21,6 +30,7 @@ Usage (OpenClaw agent):
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -137,8 +147,10 @@ SKILL_MANIFEST: dict[str, Any] = {
         "base_url": "http://localhost:8080",
         "health": "/health",
         "analyze": "/analyze",
+        "score": "/score",
         "screen": "/screen",
         "signals": "/signals",
+        "alerts": "/alerts",
         "research_agent": "/openclaw/agent",
         "webhook": "/openclaw/webhook",
         "rebalance": "/openclaw/rebalance",
@@ -147,12 +159,172 @@ SKILL_MANIFEST: dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
-# Lazy API init helper
+# Remote HTTP client
+# ---------------------------------------------------------------------------
+
+
+class JajaMoneyClient:
+    """HTTP client for interacting with a remote (or local) jaja-money server.
+
+    Instantiate this when you want the OpenClaw skill to delegate all analysis
+    calls to a running jaja-money REST API instead of importing the analysis
+    modules directly.
+
+    Parameters
+    ----------
+    base_url : Base URL of the jaja-money server, e.g. "http://localhost:8080"
+    api_key  : Optional API key sent as the X-API-Key header.
+    timeout  : Per-request timeout in seconds (default 30).
+
+    Example
+    -------
+    client = JajaMoneyClient("http://analysis-server:8080", api_key="secret")
+    result = client.analyze("AAPL")
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str | None = None,
+        timeout: int = 30,
+    ) -> None:
+        try:
+            import requests as _req
+
+            self._requests = _req
+        except ImportError as exc:
+            raise ImportError(
+                "requests library is required for remote mode. "
+                "Install it with: pip install requests"
+            ) from exc
+
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self._headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            self._headers["X-API-Key"] = api_key
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get(self, path: str, params: dict | None = None) -> Any:
+        url = f"{self.base_url}{path}"
+        resp = self._requests.get(
+            url, headers=self._headers, params=params, timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def _post(self, path: str, payload: dict) -> Any:
+        url = f"{self.base_url}{path}"
+        resp = self._requests.post(
+            url, headers=self._headers, json=payload, timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    # ------------------------------------------------------------------
+    # Public methods mirroring the skill API
+    # ------------------------------------------------------------------
+
+    def health(self) -> dict[str, Any]:
+        """Check server health."""
+        return self._get("/health")
+
+    def analyze(self, ticker: str, use_cache: bool = True) -> dict[str, Any]:
+        """Full fundamental + risk analysis via the remote /analyze endpoint."""
+        return self._post("/analyze", {"symbol": ticker, "use_cache": use_cache})
+
+    def score(self, ticker: str) -> dict[str, Any]:
+        """Factor and risk scores via the remote /score endpoint."""
+        return self._post("/score", {"symbol": ticker})
+
+    def screen(
+        self,
+        tickers: list[str],
+        min_factor_score: int = 0,
+        max_risk_score: int = 100,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Stock screener via the remote /screen endpoint."""
+        return self._post(
+            "/screen",
+            {
+                "tickers": tickers,
+                "min_factor_score": min_factor_score,
+                "max_risk_score": max_risk_score,
+                "limit": limit,
+            },
+        )
+
+    def signals(self, symbols: list[str]) -> dict[str, Any]:
+        """BUY/HOLD/SELL signals via the remote /signals endpoint."""
+        return self._post("/signals", {"symbols": symbols})
+
+    def get_alerts(self, symbol: str | None = None) -> dict[str, Any]:
+        """Active alerts via the remote /alerts endpoint."""
+        params = {"symbol": symbol} if symbol else {}
+        return self._get("/alerts", params=params)
+
+    def research(
+        self,
+        ticker: str,
+        question: str = (
+            "Produce a comprehensive investment memo with bear, base, and bull case."
+        ),
+    ) -> dict[str, Any]:
+        """Collect research agent output (non-streaming) via /openclaw/agent."""
+        # The /openclaw/agent endpoint streams text; collect it here.
+        url = f"{self.base_url}/openclaw/agent"
+        resp = self._requests.post(
+            url,
+            headers=self._headers,
+            json={"symbol": ticker, "question": question},
+            timeout=max(self.timeout, 120),
+            stream=True,
+        )
+        resp.raise_for_status()
+        memo = "".join(
+            chunk
+            for chunk in resp.iter_content(chunk_size=None, decode_unicode=True)
+            if chunk
+        )
+        return {
+            "symbol": ticker.upper(),
+            "question": question,
+            "memo": memo,
+            "timestamp": int(time.time()),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Remote client factory
+# ---------------------------------------------------------------------------
+
+
+def _get_remote_client() -> JajaMoneyClient | None:
+    """Return a JajaMoneyClient if JAJA_API_URL is set, otherwise None.
+
+    Environment variables:
+        JAJA_API_URL — URL of the running jaja-money server
+        JAJA_API_KEY — Optional API key for authentication
+    """
+    url = os.getenv("JAJA_API_URL", "").strip()
+    if not url:
+        return None
+    api_key = os.getenv("JAJA_API_KEY", "") or None
+    log.debug("OpenClaw remote mode: connecting to %s", url)
+    return JajaMoneyClient(base_url=url, api_key=api_key)
+
+
+# ---------------------------------------------------------------------------
+# Lazy local API init helper
 # ---------------------------------------------------------------------------
 
 
 def _get_api():
-    """Return a FinnhubAPI instance."""
+    """Return a FinnhubAPI instance (local mode only)."""
     from api import FinnhubAPI
 
     return FinnhubAPI()
@@ -191,9 +363,16 @@ def derive_signal(factor_score: int, risk_score: int) -> dict[str, Any]:
 def analyze(ticker: str, use_cache: bool = True) -> dict[str, Any]:
     """Full fundamental + risk analysis for a stock ticker.
 
+    In remote mode (JAJA_API_URL set) delegates to the jaja-money REST API.
+    Otherwise imports analysis modules directly from the local environment.
+
     Returns a structured JSON dict with factor scores, risk metrics, and
     key financial data — ready for consumption by OpenClaw agents.
     """
+    client = _get_remote_client()
+    if client:
+        return client.analyze(ticker, use_cache=use_cache)
+
     api = _get_api()
     symbol = ticker.upper()
 
@@ -240,8 +419,18 @@ def screen(
 ) -> dict[str, Any]:
     """Screen a list of tickers against factor and risk thresholds.
 
+    In remote mode delegates to the jaja-money REST API /screen endpoint.
     Returns a ranked list of tickers that pass the filters.
     """
+    client = _get_remote_client()
+    if client:
+        return client.screen(
+            tickers,
+            min_factor_score=min_factor_score,
+            max_risk_score=max_risk_score,
+            limit=limit,
+        )
+
     api = _get_api()
 
     from screener import run_screener
@@ -266,9 +455,14 @@ def screen(
 def score(ticker: str) -> dict[str, Any]:
     """Return structured factor and risk scores for a ticker.
 
+    In remote mode delegates to the jaja-money REST API /score endpoint.
     Lightweight alternative to analyze() — returns scores only,
     not the full company profile.
     """
+    client = _get_remote_client()
+    if client:
+        return client.score(ticker)
+
     api = _get_api()
     symbol = ticker.upper()
 
@@ -302,7 +496,14 @@ def score(ticker: str) -> dict[str, Any]:
 
 
 def get_alerts(symbol: str | None = None) -> dict[str, Any]:
-    """Return all active price/signal alerts, optionally filtered by symbol."""
+    """Return all active price/signal alerts, optionally filtered by symbol.
+
+    In remote mode delegates to the jaja-money REST API /alerts endpoint.
+    """
+    client = _get_remote_client()
+    if client:
+        return client.get_alerts(symbol)
+
     from alerts import get_alerts as _get_alerts
 
     all_alerts = _get_alerts(symbol)
@@ -326,9 +527,14 @@ def research(
 ) -> dict[str, Any]:
     """Run the autonomous research agent and collect output.
 
-    Collects all streamed chunks into a single response dict.
-    For streaming output, use the /openclaw/agent endpoint directly.
+    In remote mode delegates to the jaja-money REST API /openclaw/agent
+    endpoint (streaming output is collected into a single response dict).
+    For streaming output in remote mode, call /openclaw/agent directly.
     """
+    client = _get_remote_client()
+    if client:
+        return client.research(ticker, question=question)
+
     api = _get_api()
     symbol = ticker.upper()
 

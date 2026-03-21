@@ -158,6 +158,10 @@ class AgentRequest(BaseModel):
     )
 
 
+class ScoreRequest(BaseModel):
+    symbol: str = Field(..., description="Stock ticker symbol (e.g., AAPL)")
+
+
 # ---------------------------------------------------------------------------
 # Lazy API/analyzer initialization
 # ---------------------------------------------------------------------------
@@ -495,6 +499,94 @@ async def forward_test_summary(
         summary = get_portfolio_summary(portfolio_id)
         return summary
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# /score endpoint — lightweight factor + risk scores for OpenClaw skill
+# ---------------------------------------------------------------------------
+
+
+@app.post("/score", tags=["openclaw"])
+async def score_endpoint(
+    req: ScoreRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Return lightweight factor and risk scores for a ticker.
+
+    Faster than /analyze — returns scores and signal only, no AI narrative.
+    Used by the OpenClaw skill's score() function in remote mode.
+    """
+    api = _get_api()
+    symbol = req.symbol.upper()
+
+    try:
+        from factors import compute_factors
+        from guardrails import compute_risk
+        from openclaw_skill import derive_signal
+
+        quote = api.get_quote(symbol)
+        financials = api.get_financials(symbol)
+        daily = api.get_daily(symbol)
+        news = api.get_news(symbol)
+
+        factors_result = compute_factors(symbol, quote, financials, daily, news)
+        risk_result = compute_risk(symbol, quote, financials, daily, news)
+
+        factor_score = int(factors_result.get("composite_score", 50))
+        risk_score = int(risk_result.get("risk_score", 50))
+        sig = derive_signal(factor_score, risk_score)
+
+        return {
+            "symbol": symbol,
+            "factor_score": factor_score,
+            "composite_label": factors_result.get("composite_label"),
+            "risk_score": risk_score,
+            "risk_level": risk_result.get("risk_level"),
+            "signal": sig["signal"],
+            "confidence": sig["confidence"],
+            "factors": factors_result.get("factors", []),
+            "flags": risk_result.get("flags", []),
+            "timestamp": int(time.time()),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error("Score failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# /alerts endpoint — list active price/signal alerts for OpenClaw skill
+# ---------------------------------------------------------------------------
+
+
+@app.get("/alerts", tags=["openclaw"])
+async def alerts_endpoint(
+    symbol: str | None = None,
+    _key: str = Depends(_get_api_key),
+):
+    """Return active and triggered price/signal alerts.
+
+    Optionally filter by ticker symbol via the ?symbol= query parameter.
+    Used by the OpenClaw skill's get_alerts() function in remote mode.
+    """
+    try:
+        from alerts import get_alerts as _get_alerts
+
+        all_alerts = _get_alerts(symbol)
+        active = [a for a in all_alerts if a.get("status") == "active"]
+        triggered = [a for a in all_alerts if a.get("status") == "triggered"]
+        return {
+            "symbol": symbol,
+            "active_count": len(active),
+            "triggered_count": len(triggered),
+            "active": active,
+            "triggered": triggered,
+            "timestamp": int(time.time()),
+        }
+    except Exception as exc:
+        log.error("Alerts failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

@@ -82,7 +82,9 @@ class TestBuildIvSurface:
         assert result["available"] is False
 
     def test_basic_surface_structure(self):
-        chain = _make_chain(strikes=(90, 100, 110), iv=0.30, expirations=("2025-01-17",))
+        chain = _make_chain(
+            strikes=(90, 100, 110), iv=0.30, expirations=("2025-01-17",)
+        )
         result = build_iv_surface(chain, 100.0)
         assert result["available"] is True
         assert len(result["surface"]) == 6  # 3 calls + 3 puts
@@ -171,14 +173,18 @@ class TestComputeOptionsMetrics:
 
     def test_unusual_flows_detected(self):
         # volume = 500, OI = 100 → ratio = 5.0 > 3x threshold
-        chain = _make_chain(strikes=(100,), oi=100, volume=500, expirations=("2025-01-17",))
+        chain = _make_chain(
+            strikes=(100,), oi=100, volume=500, expirations=("2025-01-17",)
+        )
         result = compute_options_metrics(chain, 100.0)
         assert len(result["unusual_flows"]) > 0
         for flow in result["unusual_flows"]:
             assert flow["volume_oi_ratio"] > 3.0
 
     def test_unusual_flows_not_detected_below_threshold(self):
-        chain = _make_chain(strikes=(100,), oi=500, volume=100, expirations=("2025-01-17",))
+        chain = _make_chain(
+            strikes=(100,), oi=500, volume=100, expirations=("2025-01-17",)
+        )
         result = compute_options_metrics(chain, 100.0)
         assert result["unusual_flows"] == []
 

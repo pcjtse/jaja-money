@@ -103,7 +103,9 @@ class TestCheckSignalChanges:
         from alerts import check_signal_changes
 
         # Old factor = 50, new = 65 → delta = +15 > 10
-        result = check_signal_changes("AAPL", 65, "Moderate", history_fn=_factor_increase)
+        result = check_signal_changes(
+            "AAPL", 65, "Moderate", history_fn=_factor_increase
+        )
         factor_changes = [r for r in result if r["change_type"] == "factor_score"]
         assert len(factor_changes) == 1
         assert factor_changes[0]["delta"] == 15
@@ -111,7 +113,9 @@ class TestCheckSignalChanges:
     def test_detects_large_factor_score_decrease(self):
         from alerts import check_signal_changes
 
-        result = check_signal_changes("AAPL", 45, "Moderate", history_fn=_factor_decrease)
+        result = check_signal_changes(
+            "AAPL", 45, "Moderate", history_fn=_factor_decrease
+        )
         factor_changes = [r for r in result if r["change_type"] == "factor_score"]
         assert len(factor_changes) == 1
         assert factor_changes[0]["delta"] == -15
@@ -135,7 +139,9 @@ class TestCheckSignalChanges:
     def test_detects_risk_level_deterioration(self):
         from alerts import check_signal_changes
 
-        result = check_signal_changes("AAPL", 50, "High", history_fn=_risk_deterioration)
+        result = check_signal_changes(
+            "AAPL", 50, "High", history_fn=_risk_deterioration
+        )
         risk_changes = [r for r in result if r["change_type"] == "risk_level"]
         assert len(risk_changes) == 1
         assert risk_changes[0]["delta"] > 0  # positive = elevated
@@ -152,7 +158,14 @@ class TestCheckSignalChanges:
 
         result = check_signal_changes("AAPL", 80, "Moderate", history_fn=_big_factor)
         for change in result:
-            for key in ("symbol", "change_type", "old_value", "new_value", "delta", "message"):
+            for key in (
+                "symbol",
+                "change_type",
+                "old_value",
+                "new_value",
+                "delta",
+                "message",
+            ):
                 assert key in change
 
     def test_handles_history_fn_exception_gracefully(self):

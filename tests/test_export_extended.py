@@ -55,7 +55,10 @@ class TestAnalysisToPdf:
                     symbol="AAPL",
                     quote={"c": 150.0, "d": 1.0, "dp": 0.67},
                     profile={"name": "Apple Inc.", "finnhubIndustry": "Technology"},
-                    financials={"peBasicExclExtraTTM": 28.0, "marketCapitalization": 2_500_000},
+                    financials={
+                        "peBasicExclExtraTTM": 28.0,
+                        "marketCapitalization": 2_500_000,
+                    },
                     factors=self._sample_factors(),
                     risk=self._sample_risk(),
                     composite_score=68,
@@ -187,7 +190,13 @@ class TestParseBrokerageCSV:
 
         result = parse_brokerage_csv(self._fidelity_csv(), broker="fidelity")
         if result:
-            for key in ("symbol", "quantity", "cost_basis", "current_value", "unrealized_pnl"):
+            for key in (
+                "symbol",
+                "quantity",
+                "cost_basis",
+                "current_value",
+                "unrealized_pnl",
+            ):
                 assert key in result[0]
 
     def test_ibkr_result_has_expected_keys(self):
@@ -195,7 +204,13 @@ class TestParseBrokerageCSV:
 
         result = parse_brokerage_csv(self._ibkr_csv(), broker="ibkr")
         if result:
-            for key in ("symbol", "quantity", "cost_basis", "current_value", "unrealized_pnl"):
+            for key in (
+                "symbol",
+                "quantity",
+                "cost_basis",
+                "current_value",
+                "unrealized_pnl",
+            ):
                 assert key in result[0]
 
     def test_ibkr_symbol_parsed_correctly(self):
