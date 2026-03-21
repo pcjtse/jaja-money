@@ -168,6 +168,270 @@ RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst se
 - **Google Sheets export** — Write results to a Google Sheet via service account
 - **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
 - **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
+- **OpenClaw integration** — Publish as a ClawHub skill, execute trades via Alpaca, and trigger analysis on market events (see below)
+
+---
+
+## OpenClaw Integration
+
+jaja-money can be published to the [ClawHub](https://clawhub.io) skill marketplace and
+wired into OpenClaw agent workflows. The integration adds five capabilities:
+
+| Feature | Module / Endpoint |
+|---------|-------------------|
+| ClawHub skill package | `openclaw_skill.py` |
+| Structured signal API | `POST /signals` |
+| Alpaca trade execution | `broker.py` |
+| Incoming webhook receiver | `POST /openclaw/webhook` |
+| Portfolio rebalancing | `POST /openclaw/rebalance` |
+| Autonomous research agent | `POST /openclaw/agent` |
+| Event-triggered analysis | `openclaw_events.py` |
+| Skill manifest | `GET /openclaw/manifest` |
+
+### 1. ClawHub Skill Package
+
+`openclaw_skill.py` is a self-contained module ready for ClawHub registration.
+Import it directly from an OpenClaw agent or register it via the manifest endpoint.
+
+```python
+from openclaw_skill import analyze, screen, score, get_alerts, research
+
+# Full fundamental + risk analysis
+result = analyze("AAPL")
+# {'symbol': 'AAPL', 'signal': 'BUY', 'confidence': 74, 'factor_score': 72, ...}
+
+# Structured factor/risk score only
+s = score("MSFT")
+# {'symbol': 'MSFT', 'signal': 'HOLD', 'confidence': 50, ...}
+
+# Screen a list of tickers
+hits = screen(["AAPL", "MSFT", "NVDA"], min_factor_score=65, max_risk_score=50)
+
+# Active price/signal alerts
+alerts = get_alerts("AAPL")
+
+# Autonomous multi-step research agent (returns full memo dict)
+memo = research("TSLA", question="What is the bear case?")
+```
+
+Retrieve the full manifest for ClawHub registration:
+
+```bash
+curl http://localhost:8080/openclaw/manifest
+```
+
+### 2. Enhanced REST API — `/signals` and `/openclaw/*` Endpoints
+
+Start the API server:
+
+```bash
+uvicorn server:app --host 0.0.0.0 --port 8080
+# or: python server.py
+```
+
+**`POST /signals`** — batch BUY / HOLD / SELL signals with confidence scores:
+
+```bash
+curl -X POST http://localhost:8080/signals \
+  -H "Content-Type: application/json" \
+  -d '{"symbols": ["AAPL", "MSFT", "NVDA"]}'
+```
+
+```json
+{
+  "signals": [
+    {"symbol": "AAPL", "signal": "BUY", "confidence": 74, "factor_score": 72, "risk_score": 38},
+    {"symbol": "MSFT", "signal": "HOLD", "confidence": 50, "factor_score": 58, "risk_score": 52}
+  ],
+  "count": 2
+}
+```
+
+Signal logic:
+
+| Signal | Condition |
+|--------|-----------|
+| **BUY** | `factor_score ≥ 65` **and** `risk_score ≤ 50` |
+| **SELL** | `factor_score ≤ 35` **or** `risk_score ≥ 75` |
+| **HOLD** | everything else |
+
+**`GET /openclaw/manifest`** — returns the ClawHub skill manifest.
+
+**`POST /openclaw/agent`** — streams the autonomous research agent:
+
+```bash
+curl -X POST http://localhost:8080/openclaw/agent \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL", "question": "What is the bull case?"}'
+```
+
+**`POST /openclaw/rebalance`** — portfolio drift analysis and rebalancing suggestions:
+
+```bash
+curl -X POST http://localhost:8080/openclaw/rebalance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tickers": ["AAPL", "MSFT"],
+    "target_weights": {"AAPL": 0.6, "MSFT": 0.4},
+    "current_weights": {"AAPL": 0.72, "MSFT": 0.28}
+  }'
+```
+
+### 3. Alpaca Broker Integration
+
+`broker.py` connects jaja-money signals to [Alpaca's trading API](https://alpaca.markets).
+
+**Setup:**
+
+```bash
+# Add to your .env file
+ALPACA_API_KEY=your_alpaca_key
+ALPACA_API_SECRET=your_alpaca_secret
+ALPACA_BASE_URL=https://paper-api.alpaca.markets   # paper trading (default)
+# ALPACA_BASE_URL=https://api.alpaca.markets       # live trading
+```
+
+**Usage:**
+
+```python
+from broker import execute_signal, get_positions, get_account, is_configured
+
+# Check credentials are set
+if is_configured():
+    # Execute a factor-driven signal (dry_run=True previews without placing order)
+    result = execute_signal("AAPL", signal="BUY", qty=5, dry_run=True)
+    # {'symbol': 'AAPL', 'signal': 'BUY', 'side': 'buy', 'action': 'dry_run', ...}
+
+    # Place a live order
+    order = execute_signal("AAPL", signal="BUY", qty=5)
+
+    # Inspect account and positions
+    account = get_account()
+    positions = get_positions()
+```
+
+> **Warning:** Set `ALPACA_BASE_URL` to the **paper trading** URL during testing.
+> Live trading moves real money. Always use `dry_run=True` to validate signals first.
+
+**Combining with `score()`:**
+
+```python
+from openclaw_skill import score
+from broker import execute_signal
+
+s = score("AAPL")
+result = execute_signal(
+    "AAPL",
+    signal=s["signal"],
+    qty=10,
+    factor_score=s["factor_score"],
+    risk_score=s["risk_score"],
+    dry_run=False,
+)
+```
+
+### 4. OpenClaw Incoming Webhook Receiver
+
+**`POST /openclaw/webhook`** accepts commands from an OpenClaw agent at runtime.
+
+Supported `event_type` values:
+
+| `event_type` | Required `payload` fields | Action |
+|---|---|---|
+| `analyze_request` | `symbol` | Runs full analysis and returns signal |
+| `alert_request` | `symbol`, `condition`, `threshold` | Creates a price alert |
+| `screen_request` | `tickers` | Runs the screener and returns results |
+
+```bash
+# Trigger analysis from an OpenClaw agent
+curl -X POST http://localhost:8080/openclaw/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "analyze_request",
+    "payload": {"symbol": "NVDA"},
+    "agent_id": "my-openclaw-agent"
+  }'
+
+# Create an alert
+curl -X POST http://localhost:8080/openclaw/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "alert_request",
+    "payload": {"symbol": "AAPL", "condition": "Price Above", "threshold": 220}
+  }'
+```
+
+### 5. Event-Triggered Analysis
+
+`openclaw_events.py` uses APScheduler to automatically fire analysis callbacks
+when market events occur — no manual polling required.
+
+**Supported events:**
+
+| Event type | Trigger condition |
+|---|---|
+| `earnings_approaching` | Earnings date within 3 days |
+| `new_sec_filing` | 10-K, 10-Q, or 8-K filed today |
+| `price_alert_triggered` | Price / factor threshold breached |
+
+**Setup:**
+
+```bash
+# APScheduler is already in requirements.txt
+pip install APScheduler
+```
+
+**Usage:**
+
+```python
+from openclaw_events import (
+    register_event_callback,
+    start_event_scheduler,
+    stop_event_scheduler,
+)
+from broker import execute_signal
+
+def on_earnings(event):
+    """Auto-score the stock when earnings are imminent."""
+    from openclaw_skill import score
+    s = score(event["symbol"])
+    print(f"{event['symbol']} earnings in {event['days_away']}d — signal: {s['signal']}")
+
+def on_price_alert(event):
+    """Execute a signal when a price alert fires."""
+    execute_signal(event["symbol"], signal="SELL", qty=10, dry_run=True)
+
+register_event_callback("earnings_approaching", on_earnings)
+register_event_callback("price_alert_triggered", on_price_alert)
+
+# Monitor AAPL, MSFT, NVDA every 5 minutes
+start_event_scheduler(tickers=["AAPL", "MSFT", "NVDA"], interval_seconds=300)
+```
+
+Configure the scheduler in `config.yaml`:
+
+```yaml
+openclaw:
+  event_scheduler_interval_seconds: 300   # poll every 5 minutes
+  earnings_alert_days_ahead: 3            # fire when earnings < 3 days out
+  alpaca_base_url: "https://paper-api.alpaca.markets"
+  signal_buy_factor_min: 65
+  signal_buy_risk_max: 50
+  signal_sell_factor_max: 35
+  signal_sell_risk_min: 75
+```
+
+### Full Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `FINNHUB_API_KEY` | Yes | Finnhub market data |
+| `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
+| `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
+| `ALPACA_API_KEY` | Broker only | Alpaca trading API key |
+| `ALPACA_API_SECRET` | Broker only | Alpaca trading API secret |
+| `ALPACA_BASE_URL` | Broker only | Alpaca base URL (default: paper trading) |
+| `JAJA_API_PORT` | No | REST API port (default: `8080`) |
 
 ---
 

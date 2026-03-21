@@ -128,6 +128,36 @@ class ForwardTradeRequest(BaseModel):
     shares: float = Field(1.0, gt=0, description="Number of shares")
 
 
+class SignalsRequest(BaseModel):
+    symbols: list[str] = Field(..., description="Stock ticker symbols")
+
+
+class OpenClawWebhookRequest(BaseModel):
+    event_type: str = Field(..., description="OpenClaw event type")
+    payload: dict = Field(default={}, description="Event payload")
+    agent_id: str | None = Field(None, description="Originating OpenClaw agent ID")
+
+
+class RebalanceRequest(BaseModel):
+    tickers: list[str] = Field(..., description="Portfolio tickers")
+    target_weights: dict[str, float] = Field(
+        ..., description="Target weights per ticker (sum to 1)"
+    )
+    current_weights: dict[str, float] | None = Field(
+        None, description="Current weights per ticker (computed if omitted)"
+    )
+
+
+class AgentRequest(BaseModel):
+    symbol: str = Field(..., description="Stock ticker to research")
+    question: str = Field(
+        default=(
+            "Produce a comprehensive investment memo with bear, base, and bull case."
+        ),
+        description="Research question or objective",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Lazy API/analyzer initialization
 # ---------------------------------------------------------------------------
@@ -466,6 +496,325 @@ async def forward_test_summary(
         return summary
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw: /signals endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/signals",
+    summary="OpenClaw — Structured BUY/HOLD/SELL signals",
+    tags=["openclaw"],
+)
+async def signals(
+    req: SignalsRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Return structured BUY/HOLD/SELL signals with confidence scores.
+
+    Derives signals from factor + risk scores using:
+        BUY  — factor_score >= 65 and risk_score <= 50
+        SELL — factor_score <= 35 or risk_score >= 75
+        HOLD — all other combinations
+    """
+    api = _get_api()
+
+    from factors import compute_factors
+    from guardrails import compute_risk
+    from openclaw_skill import derive_signal
+
+    results = []
+    for ticker in req.symbols:
+        symbol = ticker.upper()
+        try:
+            data = api.fetch_all_parallel(symbol)
+            quote = data.get("quote") or {}
+            financials = data.get("financials") or {}
+            daily = data.get("daily") or {}
+            news = data.get("news") or []
+
+            factors_result = compute_factors(symbol, quote, financials, daily, news)
+            risk_result = compute_risk(symbol, quote, financials, daily, news)
+
+            factor_score = int(factors_result.get("composite_score", 50))
+            risk_score = int(risk_result.get("risk_score", 50))
+            sig = derive_signal(factor_score, risk_score)
+
+            results.append(
+                {
+                    "symbol": symbol,
+                    "price": quote.get("c"),
+                    "factor_score": factor_score,
+                    "risk_score": risk_score,
+                    "signal": sig["signal"],
+                    "confidence": sig["confidence"],
+                    "risk_level": risk_result.get("risk_level"),
+                }
+            )
+        except Exception as exc:
+            log.warning("signals: error for %s: %s", symbol, exc)
+            results.append({"symbol": symbol, "error": str(exc)})
+
+    return {"signals": results, "count": len(results)}
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw: incoming webhook receiver
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/openclaw/webhook",
+    summary="OpenClaw — Incoming event webhook",
+    tags=["openclaw"],
+)
+async def openclaw_webhook(
+    req: OpenClawWebhookRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Receive incoming events from an OpenClaw agent.
+
+    Supported event types:
+        analyze_request  — trigger analysis for a ticker in payload["symbol"]
+        alert_request    — create a price alert from payload fields
+        screen_request   — run the screener with payload["tickers"]
+    """
+    import time as _time
+
+    event_type = req.event_type
+    payload = req.payload
+    log.info("OpenClaw webhook received: event=%s agent=%s", event_type, req.agent_id)
+
+    if event_type == "analyze_request":
+        symbol = payload.get("symbol", "").upper()
+        if not symbol:
+            from fastapi import HTTPException as _HTTPException
+
+            raise _HTTPException(
+                status_code=400, detail="payload.symbol required for analyze_request"
+            )
+        api = _get_api()
+        from factors import compute_factors
+        from guardrails import compute_risk
+        from openclaw_skill import derive_signal
+
+        data = api.fetch_all_parallel(symbol)
+        quote = data.get("quote") or {}
+        financials = data.get("financials") or {}
+        daily = data.get("daily") or {}
+        news = data.get("news") or []
+
+        factors_result = compute_factors(symbol, quote, financials, daily, news)
+        risk_result = compute_risk(symbol, quote, financials, daily, news)
+        factor_score = int(factors_result.get("composite_score", 50))
+        risk_score = int(risk_result.get("risk_score", 50))
+        sig = derive_signal(factor_score, risk_score)
+
+        return {
+            "event_type": event_type,
+            "symbol": symbol,
+            "factor_score": factor_score,
+            "risk_score": risk_score,
+            "signal": sig["signal"],
+            "confidence": sig["confidence"],
+            "processed_at": int(_time.time()),
+        }
+
+    if event_type == "alert_request":
+        from alerts import add_alert
+
+        symbol = payload.get("symbol", "").upper()
+        condition = payload.get("condition", "Price Above")
+        threshold = float(payload.get("threshold", 0))
+        note = payload.get("note", "via OpenClaw")
+        if not symbol:
+            from fastapi import HTTPException as _HTTPException
+
+            raise _HTTPException(
+                status_code=400, detail="payload.symbol required for alert_request"
+            )
+        add_alert(symbol, condition, threshold, note)
+        return {
+            "event_type": event_type,
+            "status": "alert_created",
+            "symbol": symbol,
+            "condition": condition,
+            "threshold": threshold,
+            "processed_at": int(_time.time()),
+        }
+
+    if event_type == "screen_request":
+        tickers = payload.get("tickers", [])
+        min_factor = int(payload.get("min_factor_score", 0))
+        max_risk = int(payload.get("max_risk_score", 100))
+        api = _get_api()
+        from screener import run_screener
+
+        results = run_screener(
+            tickers=tickers,
+            api=api,
+            min_factor_score=min_factor,
+            max_risk_score=max_risk,
+        )
+        return {
+            "event_type": event_type,
+            "results": results,
+            "total": len(results),
+            "processed_at": int(_time.time()),
+        }
+
+    return {
+        "event_type": event_type,
+        "status": "received",
+        "note": f"Unhandled event type: {event_type!r}",
+        "processed_at": int(_time.time()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw: portfolio rebalancing
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/openclaw/rebalance",
+    summary="OpenClaw — Portfolio rebalancing suggestions",
+    tags=["openclaw"],
+)
+async def openclaw_rebalance(
+    req: RebalanceRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Return rebalancing trade suggestions based on target vs current weights.
+
+    For each ticker, computes the drift between current and target weight
+    and returns suggested BUY/SELL/HOLD actions with share-count estimates.
+    """
+    api = _get_api()
+
+    from factors import compute_factors
+    from guardrails import compute_risk
+    from openclaw_skill import derive_signal
+
+    tickers = [t.upper() for t in req.tickers]
+    n = len(tickers)
+    if n == 0:
+        from fastapi import HTTPException as _HTTPException
+
+        raise _HTTPException(status_code=400, detail="tickers list must not be empty")
+
+    # Validate target weights
+    total_weight = sum(req.target_weights.values())
+    if not (0.99 <= total_weight <= 1.01):
+        from fastapi import HTTPException as _HTTPException
+
+        raise _HTTPException(
+            status_code=400,
+            detail=f"target_weights must sum to 1.0 (got {total_weight:.3f})",
+        )
+
+    suggestions = []
+    for symbol in tickers:
+        try:
+            data = api.fetch_all_parallel(symbol)
+            quote = data.get("quote") or {}
+            financials = data.get("financials") or {}
+            daily = data.get("daily") or {}
+            news = data.get("news") or []
+
+            factors_result = compute_factors(symbol, quote, financials, daily, news)
+            risk_result = compute_risk(symbol, quote, financials, daily, news)
+            factor_score = int(factors_result.get("composite_score", 50))
+            risk_score = int(risk_result.get("risk_score", 50))
+            sig = derive_signal(factor_score, risk_score)
+
+            target_w = req.target_weights.get(symbol, 1 / n)
+            current_w = (
+                req.current_weights.get(symbol, 1 / n) if req.current_weights else 1 / n
+            )
+            drift = current_w - target_w
+
+            # Rebalancing action
+            if abs(drift) < 0.01:
+                action = "HOLD"
+            elif drift > 0:
+                action = "SELL"
+            else:
+                action = "BUY"
+
+            suggestions.append(
+                {
+                    "symbol": symbol,
+                    "target_weight": target_w,
+                    "current_weight": current_w,
+                    "drift": round(drift, 4),
+                    "rebalance_action": action,
+                    "factor_signal": sig["signal"],
+                    "factor_score": factor_score,
+                    "risk_score": risk_score,
+                    "price": quote.get("c"),
+                }
+            )
+        except Exception as exc:
+            log.warning("rebalance: error for %s: %s", symbol, exc)
+            suggestions.append({"symbol": symbol, "error": str(exc)})
+
+    return {
+        "suggestions": suggestions,
+        "tickers": tickers,
+        "total_drift": round(sum(abs(s.get("drift", 0)) for s in suggestions), 4),
+    }
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw: autonomous research agent endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/openclaw/agent",
+    summary="OpenClaw — Stream autonomous research agent",
+    tags=["openclaw"],
+)
+async def openclaw_agent(
+    req: AgentRequest,
+    _key: str = Depends(_get_api_key),
+):
+    """Stream an autonomous multi-step research agent for a stock symbol.
+
+    The agent uses Claude tool-calling to gather data (quote, financials,
+    news, earnings, insider transactions, options) then synthesises an
+    investment memo covering bear / base / bull cases.
+    """
+    api = _get_api()
+    symbol = req.symbol.upper()
+
+    from agent import run_research_agent
+
+    def _generate():
+        for chunk in run_research_agent(symbol, api, question=req.question):
+            yield chunk
+
+    return StreamingResponse(_generate(), media_type="text/plain")
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw: skill manifest endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/openclaw/manifest",
+    summary="OpenClaw — Skill manifest for ClawHub registration",
+    tags=["openclaw"],
+)
+async def openclaw_manifest():
+    """Return the ClawHub skill manifest describing jaja-money's capabilities."""
+    from openclaw_skill import get_skill_manifest
+
+    return get_skill_manifest()
 
 
 # ---------------------------------------------------------------------------

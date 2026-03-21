@@ -33,3 +33,5 @@ redis
 # P14.3 FastAPI server mode (optional)
 fastapi
 uvicorn[standard]
+httpx
+# OpenClaw integration: Alpaca broker (optional — set ALPACA_API_KEY / ALPACA_API_SECRET)
