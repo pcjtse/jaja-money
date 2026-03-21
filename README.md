@@ -174,8 +174,7 @@ RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst se
 
 ## OpenClaw Integration
 
-jaja-money can be published to the [ClawHub](https://clawhub.io) skill marketplace and
-wired into OpenClaw agent workflows. The skill can run **locally** (importing analysis
+jaja-money can be used with Openclaw. The skill can run **locally** (importing analysis
 modules directly) or in **remote mode** — connecting to any running jaja-money server
 over HTTP via `JAJA_API_URL`.
 
