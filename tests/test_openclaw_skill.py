@@ -17,13 +17,23 @@ import pytest
 
 def _stub_factors_and_guardrails():
     """Install lightweight stubs for factors / guardrails / screener so that
-    tests work even when pandas/numpy are absent."""
+    tests work even when pandas/numpy are absent.
+
+    Tries the real import first; only installs a stub when the import fails
+    (e.g. pandas is missing), so the real module is not shadowed in envs
+    where pandas IS available.
+    """
+    import importlib
+
     for mod_name in ("factors", "guardrails", "screener"):
         if mod_name not in sys.modules:
-            sys.modules[mod_name] = types.ModuleType(mod_name)
+            try:
+                importlib.import_module(mod_name)
+            except (ImportError, ModuleNotFoundError):
+                sys.modules[mod_name] = types.ModuleType(mod_name)
 
-    factors_mod = sys.modules["factors"]
-    if not hasattr(factors_mod, "compute_factors"):
+    factors_mod = sys.modules.get("factors")
+    if factors_mod is not None and not hasattr(factors_mod, "compute_factors"):
         factors_mod.compute_factors = MagicMock(
             return_value={
                 "composite_score": 70,
@@ -32,8 +42,8 @@ def _stub_factors_and_guardrails():
             }
         )
 
-    guardrails_mod = sys.modules["guardrails"]
-    if not hasattr(guardrails_mod, "compute_risk"):
+    guardrails_mod = sys.modules.get("guardrails")
+    if guardrails_mod is not None and not hasattr(guardrails_mod, "compute_risk"):
         guardrails_mod.compute_risk = MagicMock(
             return_value={
                 "risk_score": 40,
@@ -42,8 +52,8 @@ def _stub_factors_and_guardrails():
             }
         )
 
-    screener_mod = sys.modules["screener"]
-    if not hasattr(screener_mod, "run_screener"):
+    screener_mod = sys.modules.get("screener")
+    if screener_mod is not None and not hasattr(screener_mod, "run_screener"):
         screener_mod.run_screener = MagicMock(return_value=[])
 
 
