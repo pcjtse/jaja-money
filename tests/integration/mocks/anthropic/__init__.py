@@ -67,7 +67,7 @@ class _MockStreamManager:
         words = self._text.split()
         chunks = []
         for i in range(0, len(words), 5):
-            chunk_text = " ".join(words[i:i + 5])
+            chunk_text = " ".join(words[i : i + 5])
             if i + 5 < len(words):
                 chunk_text += " "
             chunks.append(_MockContentBlockDelta(chunk_text))

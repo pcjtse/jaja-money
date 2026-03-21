@@ -323,3 +323,204 @@ def test_screen_respects_limit(mock_api):
 
     assert len(result["results"]) == 3
     assert result["total"] == 10
+
+
+# ---------------------------------------------------------------------------
+# JajaMoneyClient — remote HTTP client
+# ---------------------------------------------------------------------------
+
+
+class TestJajaMoneyClient:
+    """Tests for the JajaMoneyClient remote HTTP wrapper."""
+
+    def _make_client(self, base_url="http://localhost:8080", api_key=None):
+        from openclaw_skill import JajaMoneyClient
+
+        return JajaMoneyClient(base_url=base_url, api_key=api_key)
+
+    def test_client_sets_base_url(self):
+        client = self._make_client("http://remote-host:9000")
+        assert client.base_url == "http://remote-host:9000"
+
+    def test_client_strips_trailing_slash(self):
+        client = self._make_client("http://remote-host:9000/")
+        assert client.base_url == "http://remote-host:9000"
+
+    def test_client_sets_api_key_header(self):
+        client = self._make_client(api_key="mysecret")
+        assert client._headers.get("X-API-Key") == "mysecret"
+
+    def test_client_no_api_key_when_none(self):
+        client = self._make_client(api_key=None)
+        assert "X-API-Key" not in client._headers
+
+    def test_client_analyze_calls_post(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"symbol": "AAPL", "factor_score": 70}
+        with patch.object(
+            client._requests, "post", return_value=mock_resp
+        ) as mock_post:
+            result = client.analyze("AAPL")
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args
+        assert "/analyze" in call_kwargs[0][0]
+        assert result["symbol"] == "AAPL"
+
+    def test_client_score_calls_post(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"symbol": "MSFT", "factor_score": 65}
+        with patch.object(
+            client._requests, "post", return_value=mock_resp
+        ) as mock_post:
+            result = client.score("MSFT")
+        mock_post.assert_called_once()
+        assert "/score" in mock_post.call_args[0][0]
+        assert result["symbol"] == "MSFT"
+
+    def test_client_screen_calls_post(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"results": [], "total": 0}
+        with patch.object(
+            client._requests, "post", return_value=mock_resp
+        ) as mock_post:
+            result = client.screen(["AAPL", "MSFT"])
+        mock_post.assert_called_once()
+        assert "/screen" in mock_post.call_args[0][0]
+        assert result["total"] == 0
+
+    def test_client_get_alerts_calls_get(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"active_count": 0, "active": []}
+        with patch.object(client._requests, "get", return_value=mock_resp) as mock_get:
+            result = client.get_alerts()
+        mock_get.assert_called_once()
+        assert "/alerts" in mock_get.call_args[0][0]
+        assert result["active_count"] == 0
+
+    def test_client_get_alerts_with_symbol(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {
+            "active_count": 1,
+            "active": [{"symbol": "AAPL"}],
+        }
+        with patch.object(client._requests, "get", return_value=mock_resp) as mock_get:
+            result = client.get_alerts("AAPL")
+        call_kwargs = mock_get.call_args
+        params = call_kwargs[1].get("params") or call_kwargs.kwargs.get("params", {})
+        assert params.get("symbol") == "AAPL"
+        assert result["active_count"] == 1
+
+    def test_client_signals_calls_post(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"signals": [], "count": 0}
+        with patch.object(
+            client._requests, "post", return_value=mock_resp
+        ) as mock_post:
+            result = client.signals(["AAPL"])
+        assert "/signals" in mock_post.call_args[0][0]
+        assert result["count"] == 0
+
+    def test_client_health_calls_get(self):
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"status": "ok"}
+        with patch.object(client._requests, "get", return_value=mock_resp) as mock_get:
+            result = client.health()
+        assert "/health" in mock_get.call_args[0][0]
+        assert result["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Remote mode via JAJA_API_URL env var
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteMode:
+    """Tests that skill functions delegate to JajaMoneyClient when JAJA_API_URL is set."""
+
+    def test_analyze_delegates_to_remote_client(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
+        from openclaw_skill import analyze, JajaMoneyClient
+
+        expected = {"symbol": "AAPL", "factor_score": 72, "signal": "BUY"}
+        with patch.object(JajaMoneyClient, "analyze", return_value=expected) as mock_m:
+            result = analyze("AAPL")
+        mock_m.assert_called_once_with("AAPL", use_cache=True)
+        assert result == expected
+
+    def test_score_delegates_to_remote_client(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
+        from openclaw_skill import score, JajaMoneyClient
+
+        expected = {"symbol": "MSFT", "factor_score": 65}
+        with patch.object(JajaMoneyClient, "score", return_value=expected) as mock_m:
+            result = score("MSFT")
+        mock_m.assert_called_once_with("MSFT")
+        assert result == expected
+
+    def test_screen_delegates_to_remote_client(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
+        from openclaw_skill import screen, JajaMoneyClient
+
+        expected = {"results": [], "total": 0}
+        with patch.object(JajaMoneyClient, "screen", return_value=expected) as mock_m:
+            result = screen(["AAPL"])
+        mock_m.assert_called_once()
+        assert result == expected
+
+    def test_get_alerts_delegates_to_remote_client(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
+        from openclaw_skill import get_alerts, JajaMoneyClient
+
+        expected = {"active_count": 0, "active": []}
+        with patch.object(
+            JajaMoneyClient, "get_alerts", return_value=expected
+        ) as mock_m:
+            result = get_alerts()
+        mock_m.assert_called_once_with(None)
+        assert result == expected
+
+    def test_research_delegates_to_remote_client(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
+        from openclaw_skill import research, JajaMoneyClient
+
+        expected = {"symbol": "AAPL", "memo": "Investment memo..."}
+        with patch.object(JajaMoneyClient, "research", return_value=expected) as mock_m:
+            result = research("AAPL", question="What is the bear case?")
+        mock_m.assert_called_once()
+        assert result == expected
+
+    def test_no_remote_when_env_not_set(self, monkeypatch):
+        monkeypatch.delenv("JAJA_API_URL", raising=False)
+        from openclaw_skill import _get_remote_client
+
+        assert _get_remote_client() is None
+
+    def test_remote_client_created_when_env_set(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://myserver:8080")
+        from openclaw_skill import _get_remote_client, JajaMoneyClient
+
+        client = _get_remote_client()
+        assert isinstance(client, JajaMoneyClient)
+        assert client.base_url == "http://myserver:8080"
+
+    def test_remote_client_uses_api_key(self, monkeypatch):
+        monkeypatch.setenv("JAJA_API_URL", "http://myserver:8080")
+        monkeypatch.setenv("JAJA_API_KEY", "testkey")
+        from openclaw_skill import _get_remote_client
+
+        client = _get_remote_client()
+        assert client._headers.get("X-API-Key") == "testkey"

@@ -1,4 +1,4 @@
-"""Tests for broker.py — Alpaca broker integration."""
+"""Tests for broker.py — Alpaca broker integration (simulation / read-only mode)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,17 @@ def _make_response(json_data, status_code=200):
     resp.json.return_value = json_data
     resp.raise_for_status.return_value = None
     return resp
+
+
+# ---------------------------------------------------------------------------
+# TRADING_DISABLED constant
+# ---------------------------------------------------------------------------
+
+
+def test_trading_disabled_constant():
+    from broker import TRADING_DISABLED
+
+    assert TRADING_DISABLED is True
 
 
 # ---------------------------------------------------------------------------
@@ -119,109 +130,7 @@ def test_get_positions_empty(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# place_order
-# ---------------------------------------------------------------------------
-
-
-def test_place_order_buy(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
-
-    raw = {
-        "id": "order-123",
-        "symbol": "AAPL",
-        "side": "buy",
-        "qty": "5",
-        "status": "accepted",
-        "type": "market",
-        "submitted_at": "2026-03-21T10:00:00Z",
-    }
-    with patch("broker._requests") as mock_req:
-        mock_req.post.return_value = _make_response(raw)
-        from broker import place_order
-
-        result = place_order("AAPL", side="buy", qty=5)
-
-    assert result["order_id"] == "order-123"
-    assert result["symbol"] == "AAPL"
-    assert result["side"] == "buy"
-
-
-def test_place_order_invalid_side():
-    from broker import place_order
-
-    with pytest.raises(ValueError, match="Invalid order side"):
-        place_order("AAPL", side="hold", qty=1)
-
-
-def test_place_order_limit_requires_price():
-    from broker import place_order
-
-    with pytest.raises(ValueError, match="limit_price required"):
-        place_order("AAPL", side="buy", qty=1, order_type="limit")
-
-
-def test_place_order_limit_with_price(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
-
-    raw = {
-        "id": "order-456",
-        "symbol": "AAPL",
-        "side": "buy",
-        "qty": "1",
-        "status": "new",
-        "type": "limit",
-        "submitted_at": "2026-03-21T10:00:00Z",
-    }
-    with patch("broker._requests") as mock_req:
-        mock_req.post.return_value = _make_response(raw)
-        from broker import place_order
-
-        result = place_order(
-            "AAPL", side="buy", qty=1, order_type="limit", limit_price=145.0
-        )
-
-    assert result["type"] == "limit"
-    # Verify limit_price was included in the POST payload
-    call_args = mock_req.post.call_args
-    payload = call_args.kwargs.get("json") or call_args[1].get("json", {})
-    assert "limit_price" in payload
-
-
-# ---------------------------------------------------------------------------
-# cancel_order
-# ---------------------------------------------------------------------------
-
-
-def test_cancel_order_success(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
-
-    with patch("broker._requests") as mock_req:
-        mock_req.delete.return_value = _make_response({}, status_code=204)
-        from broker import cancel_order
-
-        result = cancel_order("order-123")
-
-    assert result is True
-
-
-def test_cancel_order_failure(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
-
-    with patch("broker._requests") as mock_req:
-        mock_req.delete.side_effect = Exception("Connection refused")
-        from broker import cancel_order
-
-        result = cancel_order("order-999")
-
-    assert result is False
-
-
-# ---------------------------------------------------------------------------
-# execute_signal
+# execute_signal — always simulated, no real orders
 # ---------------------------------------------------------------------------
 
 
@@ -231,63 +140,48 @@ def test_execute_signal_hold_no_order():
     result = execute_signal("AAPL", "HOLD", qty=1)
     assert result["signal"] == "HOLD"
     assert result["action"] == "none"
+    assert result["simulated"] is True
 
 
-def test_execute_signal_dry_run_no_order():
+def test_execute_signal_buy_is_simulation():
+    from broker import execute_signal
+
+    result = execute_signal("AAPL", "BUY", qty=5)
+    assert result["action"] == "simulated"
+    assert result["simulated"] is True
+    assert result["order"] is None
+    assert result["dry_run"] is True
+    assert result["signal"] == "BUY"
+    assert result["side"] == "buy"
+
+
+def test_execute_signal_sell_is_simulation():
+    from broker import execute_signal
+
+    result = execute_signal("TSLA", "SELL", qty=2)
+    assert result["action"] == "simulated"
+    assert result["simulated"] is True
+    assert result["order"] is None
+    assert result["signal"] == "SELL"
+    assert result["side"] == "sell"
+
+
+def test_execute_signal_dry_run_flag_is_simulation():
+    """dry_run flag has no effect — execution is always simulated."""
     from broker import execute_signal
 
     result = execute_signal("AAPL", "BUY", qty=5, dry_run=True)
-    assert result["action"] == "dry_run"
-    assert result["order"] is None
-    assert result["dry_run"] is True
+    assert result["action"] == "simulated"
+    assert result["simulated"] is True
 
 
-def test_execute_signal_buy(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
+def test_execute_signal_with_scores():
+    from broker import execute_signal
 
-    raw = {
-        "id": "order-buy-1",
-        "symbol": "AAPL",
-        "side": "buy",
-        "qty": "3",
-        "status": "accepted",
-        "type": "market",
-        "submitted_at": "2026-03-21T10:00:00Z",
-    }
-    with patch("broker._requests") as mock_req:
-        mock_req.post.return_value = _make_response(raw)
-        from broker import execute_signal
-
-        result = execute_signal("AAPL", "BUY", qty=3, factor_score=72, risk_score=35)
-
-    assert result["action"] == "order_placed"
-    assert result["signal"] == "BUY"
-    assert result["side"] == "buy"
-    assert result["order"]["order_id"] == "order-buy-1"
-
-
-def test_execute_signal_sell(monkeypatch):
-    monkeypatch.setenv("ALPACA_API_KEY", "k")
-    monkeypatch.setenv("ALPACA_API_SECRET", "s")
-
-    raw = {
-        "id": "order-sell-1",
-        "symbol": "TSLA",
-        "side": "sell",
-        "qty": "2",
-        "status": "accepted",
-        "type": "market",
-        "submitted_at": "2026-03-21T10:00:00Z",
-    }
-    with patch("broker._requests") as mock_req:
-        mock_req.post.return_value = _make_response(raw)
-        from broker import execute_signal
-
-        result = execute_signal("TSLA", "SELL", qty=2)
-
-    assert result["action"] == "order_placed"
-    assert result["side"] == "sell"
+    result = execute_signal("AAPL", "BUY", qty=3, factor_score=72, risk_score=35)
+    assert result["factor_score"] == 72
+    assert result["risk_score"] == 35
+    assert result["simulated"] is True
 
 
 def test_execute_signal_invalid_raises():
@@ -295,3 +189,34 @@ def test_execute_signal_invalid_raises():
 
     with pytest.raises(ValueError, match="Unknown signal"):
         execute_signal("AAPL", "STRONG_BUY", qty=1)
+
+
+def test_execute_signal_note_field():
+    from broker import execute_signal
+
+    result = execute_signal("AAPL", "BUY", qty=1)
+    assert "note" in result
+    assert (
+        "simulation" in result["note"].lower() or "disabled" in result["note"].lower()
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ensure place_order and cancel_order no longer exist
+# ---------------------------------------------------------------------------
+
+
+def test_place_order_not_exported():
+    import broker
+
+    assert not hasattr(broker, "place_order"), (
+        "place_order should have been removed; real trading is disabled"
+    )
+
+
+def test_cancel_order_not_exported():
+    import broker
+
+    assert not hasattr(broker, "cancel_order"), (
+        "cancel_order should have been removed; real trading is disabled"
+    )

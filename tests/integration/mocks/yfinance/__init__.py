@@ -22,13 +22,16 @@ class _MockTicker:
         np.random.seed(hash(self.symbol) % 2**32)
         prices = 150 + np.cumsum(np.random.randn(n) * 2)
         prices = np.maximum(prices, 10)
-        return pd.DataFrame({
-            "Open": prices * 0.99,
-            "High": prices * 1.02,
-            "Low": prices * 0.98,
-            "Close": prices,
-            "Volume": np.random.randint(10_000_000, 50_000_000, n),
-        }, index=dates)
+        return pd.DataFrame(
+            {
+                "Open": prices * 0.99,
+                "High": prices * 1.02,
+                "Low": prices * 0.98,
+                "Close": prices,
+                "Volume": np.random.randint(10_000_000, 50_000_000, n),
+            },
+            index=dates,
+        )
 
 
 class _MockDownloadResult:
@@ -40,12 +43,15 @@ class _MockDownloadResult:
         n = 5
         dates = pd.date_range(end=pd.Timestamp.now(), periods=n, freq="B")
         self.empty = False
-        self._df = pd.DataFrame({
-            ("Close", "^VIX"): [18.5] * n,
-            ("Close", "^IRX"): [52.0] * n,
-            ("Close", "^TNX"): [43.0] * n,
-            ("Close", "^TYX"): [48.0] * n,
-        }, index=dates)
+        self._df = pd.DataFrame(
+            {
+                ("Close", "^VIX"): [18.5] * n,
+                ("Close", "^IRX"): [52.0] * n,
+                ("Close", "^TNX"): [43.0] * n,
+                ("Close", "^TYX"): [48.0] * n,
+            },
+            index=dates,
+        )
         self._df.columns = pd.MultiIndex.from_tuples(self._df.columns)
 
     def __getitem__(self, key):
@@ -59,5 +65,7 @@ def Ticker(symbol: str) -> _MockTicker:
     return _MockTicker(symbol)
 
 
-def download(tickers, period: str = "5d", progress: bool = True, auto_adjust: bool = True):
+def download(
+    tickers, period: str = "5d", progress: bool = True, auto_adjust: bool = True
+):
     return _MockDownloadResult()

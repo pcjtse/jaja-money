@@ -174,7 +174,7 @@ class TestFindTaxLossOpportunities:
     def _positions_with_loss(self):
         return {
             "AAPL": {"weight": 0.4, "cost_basis_pct_gain": -12.0},
-            "MSFT": {"weight": 0.3, "cost_basis_pct_gain": 5.0},   # gain
+            "MSFT": {"weight": 0.3, "cost_basis_pct_gain": 5.0},  # gain
             "GOOG": {"weight": 0.3, "cost_basis_pct_gain": -8.0},
         }
 
@@ -185,20 +185,24 @@ class TestFindTaxLossOpportunities:
             {
                 "AAPL": base + rng.normal(0, 0.001, 252),
                 "MSFT": base + rng.normal(0, 0.001, 252),  # highly correlated with AAPL
-                "GOOG": rng.normal(0, 0.01, 252),           # independent
+                "GOOG": rng.normal(0, 0.01, 252),  # independent
             }
         )
 
     def test_returns_list(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        result = find_tax_loss_opportunities(self._positions_with_loss(), self._correlated_returns())
+        result = find_tax_loss_opportunities(
+            self._positions_with_loss(), self._correlated_returns()
+        )
         assert isinstance(result, list)
 
     def test_only_includes_positions_with_losses(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        result = find_tax_loss_opportunities(self._positions_with_loss(), self._correlated_returns())
+        result = find_tax_loss_opportunities(
+            self._positions_with_loss(), self._correlated_returns()
+        )
         tickers = [r["ticker"] for r in result]
         # MSFT has gain (+5%) → should NOT be included
         assert "MSFT" not in tickers
@@ -209,7 +213,9 @@ class TestFindTaxLossOpportunities:
     def test_result_has_required_keys(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        result = find_tax_loss_opportunities(self._positions_with_loss(), self._correlated_returns())
+        result = find_tax_loss_opportunities(
+            self._positions_with_loss(), self._correlated_returns()
+        )
         for r in result:
             assert "ticker" in r
             assert "loss_pct" in r
@@ -223,12 +229,17 @@ class TestFindTaxLossOpportunities:
     def test_empty_returns_df_returns_empty(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        assert find_tax_loss_opportunities(self._positions_with_loss(), pd.DataFrame()) == []
+        assert (
+            find_tax_loss_opportunities(self._positions_with_loss(), pd.DataFrame())
+            == []
+        )
 
     def test_correlated_replacement_found(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        result = find_tax_loss_opportunities(self._positions_with_loss(), self._correlated_returns())
+        result = find_tax_loss_opportunities(
+            self._positions_with_loss(), self._correlated_returns()
+        )
         aapl = next((r for r in result if r["ticker"] == "AAPL"), None)
         if aapl:
             # AAPL and MSFT are highly correlated → MSFT should be suggested
@@ -238,7 +249,9 @@ class TestFindTaxLossOpportunities:
     def test_loss_pct_matches_input(self):
         from portfolio_analysis import find_tax_loss_opportunities
 
-        result = find_tax_loss_opportunities(self._positions_with_loss(), self._correlated_returns())
+        result = find_tax_loss_opportunities(
+            self._positions_with_loss(), self._correlated_returns()
+        )
         aapl = next((r for r in result if r["ticker"] == "AAPL"), None)
         if aapl:
             assert aapl["loss_pct"] == pytest.approx(-12.0)

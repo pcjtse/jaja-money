@@ -194,8 +194,9 @@ class TestDataProviderFallback:
         mock_api.get_quote.side_effect = RuntimeError("timeout")
 
         fake_quote = {"c": 99.0, "d": 0, "dp": 0, "h": 100, "l": 98, "pc": 99}
-        with patch("providers._HAS_YFINANCE", True), patch(
-            "providers._yf_quote", return_value=fake_quote
+        with (
+            patch("providers._HAS_YFINANCE", True),
+            patch("providers._yf_quote", return_value=fake_quote),
         ):
             result = dp.get_quote("AAPL")
 
@@ -205,8 +206,9 @@ class TestDataProviderFallback:
     def test_yfinance_preference_skips_finnhub(self):
         dp, mock_api = _make_provider("yfinance")
         fake_quote = {"c": 42.0, "d": 0, "dp": 0, "h": 43, "l": 41, "pc": 42}
-        with patch("providers._HAS_YFINANCE", True), patch(
-            "providers._yf_quote", return_value=fake_quote
+        with (
+            patch("providers._HAS_YFINANCE", True),
+            patch("providers._yf_quote", return_value=fake_quote),
         ):
             result = dp.get_quote("X")
 
@@ -226,9 +228,11 @@ class TestDataProviderFallback:
         mock_api.get_financials.side_effect = RuntimeError("fh fail")
         fake_av = {"peBasicExclExtraTTM": 25.0, "_av_source": "alpha_vantage"}
 
-        with patch("providers._HAS_YFINANCE", True), patch(
-            "providers._yf_financials", side_effect=RuntimeError("yf fail")
-        ), patch("providers._av_financials", return_value=fake_av):
+        with (
+            patch("providers._HAS_YFINANCE", True),
+            patch("providers._yf_financials", side_effect=RuntimeError("yf fail")),
+            patch("providers._av_financials", return_value=fake_av),
+        ):
             result = dp.get_financials("AAPL")
 
         assert result["_av_source"] == "alpha_vantage"
@@ -281,8 +285,9 @@ class TestAvFinancials:
         }
         fake_resp.raise_for_status = lambda: None
 
-        with patch("providers._HAS_REQUESTS", True), patch(
-            "providers._requests.get", return_value=fake_resp
+        with (
+            patch("providers._HAS_REQUESTS", True),
+            patch("providers._requests.get", return_value=fake_resp),
         ):
             from providers import _av_financials
 
@@ -302,8 +307,9 @@ class TestAvFinancials:
         fake_resp.json.return_value = {}
         fake_resp.raise_for_status = lambda: None
 
-        with patch("providers._HAS_REQUESTS", True), patch(
-            "providers._requests.get", return_value=fake_resp
+        with (
+            patch("providers._HAS_REQUESTS", True),
+            patch("providers._requests.get", return_value=fake_resp),
         ):
             from providers import _av_financials
 

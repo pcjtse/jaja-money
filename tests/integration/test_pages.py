@@ -44,8 +44,8 @@ class TestComparePage:
         """Compare page should show the correct title."""
         title_visible = (
             self.page.locator('h1:has-text("Multi-Stock Comparison")').is_visible()
-            or self.page.locator('text=Multi-Stock Comparison').is_visible()
-            or "Compare" in self.page.inner_text('body')
+            or self.page.locator("text=Multi-Stock Comparison").is_visible()
+            or "Compare" in self.page.inner_text("body")
         )
         assert title_visible
 
@@ -57,7 +57,7 @@ class TestComparePage:
     def test_compare_run_button(self):
         """Compare page should have a Run Comparison button."""
         # Check the page has an input or info message
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Compare", "symbols", "stock"])
 
     def test_compare_with_symbols(self):
@@ -69,7 +69,7 @@ class TestComparePage:
         if run_btn.is_visible():
             run_btn.click()
             self.page.wait_for_timeout(10_000)
-            body_text = self.page.locator('body').inner_text()
+            body_text = self.page.locator("body").inner_text()
             # Should show some comparison results
             assert any(kw in body_text for kw in ["AAPL", "MSFT", "Factor", "Score"])
 
@@ -95,7 +95,7 @@ class TestScreenerPage:
 
     def test_screener_page_loads(self):
         """Screener page should load without errors."""
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Screener", "Screen", "Filter", "Stock"])
 
     def test_screener_has_filters(self):
@@ -131,8 +131,10 @@ class TestPortfolioPage:
     def test_portfolio_page_loads(self):
         """Portfolio page should load and show portfolio input."""
         self.page.wait_for_timeout(3000)
-        body_text = self.page.locator('body').inner_text()
-        assert any(kw in body_text for kw in ["Portfolio", "Ticker", "tickers", "stocks"])
+        body_text = self.page.locator("body").inner_text()
+        assert any(
+            kw in body_text for kw in ["Portfolio", "Ticker", "tickers", "stocks"]
+        )
 
     def test_portfolio_ticker_input(self):
         """Portfolio page should have ticker input."""
@@ -146,8 +148,11 @@ class TestPortfolioPage:
         if run_btn.is_visible():
             run_btn.click()
             self.page.wait_for_timeout(15_000)
-            body_text = self.page.locator('body').inner_text()
-            assert any(kw in body_text for kw in ["Correlation", "Risk", "Portfolio", "Returns"])
+            body_text = self.page.locator("body").inner_text()
+            assert any(
+                kw in body_text
+                for kw in ["Correlation", "Risk", "Portfolio", "Returns"]
+            )
 
     def test_portfolio_screenshot(self):
         """Capture screenshot of portfolio page."""
@@ -172,12 +177,12 @@ class TestSectorsPage:
     def test_sectors_page_loads(self):
         """Sectors page should load correctly."""
         self.page.wait_for_timeout(3000)
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Sector", "Rotation", "ETF", "Industry"])
 
     def test_sectors_load_button(self):
         """Sectors page should have a Load Sector Data button."""
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Load", "Sector", "Data"])
 
     def test_sectors_load_data(self):
@@ -186,9 +191,12 @@ class TestSectorsPage:
         if load_btn.is_visible():
             load_btn.click()
             self.page.wait_for_timeout(20_000)
-            body_text = self.page.locator('body').inner_text()
+            body_text = self.page.locator("body").inner_text()
             # After loading, should show sector data or charts
-            assert any(kw in body_text for kw in ["XLK", "XLF", "XLE", "Technology", "Energy", "Score"])
+            assert any(
+                kw in body_text
+                for kw in ["XLK", "XLF", "XLE", "Technology", "Energy", "Score"]
+            )
 
     def test_sectors_screenshot(self):
         """Capture screenshot of sectors page."""
@@ -213,7 +221,7 @@ class TestBacktestPage:
     def test_backtest_page_loads(self):
         """Backtest page should load with input controls."""
         self.page.wait_for_timeout(3000)
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Backtest", "Strategy", "Signal", "AAPL"])
 
     def test_backtest_symbol_input(self):
@@ -223,7 +231,7 @@ class TestBacktestPage:
 
     def test_backtest_run_button(self):
         """Backtest page should have a Run Backtest button."""
-        body_text = self.page.locator('body').inner_text()
+        body_text = self.page.locator("body").inner_text()
         assert any(kw in body_text for kw in ["Run", "Backtest", "Analyze"])
 
     def test_backtest_run(self):
@@ -232,8 +240,11 @@ class TestBacktestPage:
         if run_btn.is_visible():
             run_btn.click()
             self.page.wait_for_timeout(15_000)
-            body_text = self.page.locator('body').inner_text()
-            assert any(kw in body_text for kw in ["Return", "Sharpe", "Drawdown", "Trade", "Signal"])
+            body_text = self.page.locator("body").inner_text()
+            assert any(
+                kw in body_text
+                for kw in ["Return", "Sharpe", "Drawdown", "Trade", "Signal"]
+            )
 
     def test_backtest_screenshot(self):
         """Capture screenshot of backtest page."""

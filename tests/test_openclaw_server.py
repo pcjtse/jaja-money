@@ -5,7 +5,11 @@ Skips all tests if fastapi or httpx (required for TestClient) are not installed.
 
 from __future__ import annotations
 
+import importlib
 import os
+import sys
+import types
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +17,53 @@ try:
     from fastapi.testclient import TestClient
 except Exception:
     pytest.skip("fastapi[testclient] not available", allow_module_level=True)
+
+
+# ---------------------------------------------------------------------------
+# Pre-stub heavy deps (pandas, numpy) so patch() can find the modules
+# ---------------------------------------------------------------------------
+
+
+def _stub_heavy_deps() -> None:
+    """Install lightweight stubs for modules that require pandas/numpy.
+
+    Tries the real import first; only creates a stub when the real import
+    fails (e.g. pandas not installed), so real modules are never shadowed
+    in environments where they are available.
+    """
+    for mod_name in ("factors", "guardrails", "screener"):
+        if mod_name not in sys.modules:
+            try:
+                importlib.import_module(mod_name)
+            except (ImportError, ModuleNotFoundError):
+                sys.modules[mod_name] = types.ModuleType(mod_name)
+
+    factors_mod = sys.modules.get("factors")
+    if factors_mod is not None and not hasattr(factors_mod, "compute_factors"):
+        factors_mod.compute_factors = MagicMock(
+            return_value={
+                "composite_score": 70,
+                "composite_label": "Buy",
+                "factors": [],
+            }
+        )
+
+    guardrails_mod = sys.modules.get("guardrails")
+    if guardrails_mod is not None and not hasattr(guardrails_mod, "compute_risk"):
+        guardrails_mod.compute_risk = MagicMock(
+            return_value={
+                "risk_score": 40,
+                "risk_level": "Low",
+                "flags": [],
+            }
+        )
+
+    screener_mod = sys.modules.get("screener")
+    if screener_mod is not None and not hasattr(screener_mod, "run_screener"):
+        screener_mod.run_screener = MagicMock(return_value=[])
+
+
+_stub_heavy_deps()
 
 
 # ---------------------------------------------------------------------------
@@ -35,10 +86,12 @@ def client():
 
 def _mock_api():
     """Minimal mock FinnhubAPI for OpenClaw endpoint tests."""
-    import numpy as np
-
     mock = MagicMock()
-    prices = (100 + np.cumsum(np.random.default_rng(42).normal(0, 1, 252))).tolist()
+    # Generate simple price series without numpy
+    import random as _random
+
+    rng = _random.Random(42)
+    prices = [100.0 + sum(rng.gauss(0, 1) for _ in range(i + 1)) for i in range(252)]
     ts = list(range(1_600_000_000, 1_600_000_000 + 252 * 86400, 86400))
 
     mock.get_quote.return_value = {"c": 150.0, "dp": 1.5}
@@ -388,3 +441,143 @@ class TestOpenClawAgent:
             )
 
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# /score endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestScoreEndpoint:
+    def test_score_returns_200(self, client):
+        import server
+
+        server._api_instance = _mock_api()
+        with (
+            patch("factors.compute_factors") as mf,
+            patch("guardrails.compute_risk") as mr,
+        ):
+            mf.return_value = {
+                "composite_score": 70,
+                "composite_label": "Buy",
+                "factors": [],
+            }
+            mr.return_value = {
+                "risk_score": 40,
+                "risk_level": "Low",
+                "flags": [],
+            }
+            response = client.post("/score", json={"symbol": "AAPL"})
+
+        assert response.status_code == 200
+
+    def test_score_has_required_fields(self, client):
+        import server
+
+        server._api_instance = _mock_api()
+        with (
+            patch("factors.compute_factors") as mf,
+            patch("guardrails.compute_risk") as mr,
+        ):
+            mf.return_value = {
+                "composite_score": 70,
+                "composite_label": "Buy",
+                "factors": [],
+            }
+            mr.return_value = {
+                "risk_score": 40,
+                "risk_level": "Low",
+                "flags": [],
+            }
+            response = client.post("/score", json={"symbol": "AAPL"})
+
+        data = response.json()
+        assert data["symbol"] == "AAPL"
+        assert "factor_score" in data
+        assert "risk_score" in data
+        assert "signal" in data
+        assert data["signal"] in ("BUY", "HOLD", "SELL")
+        assert "confidence" in data
+        assert "timestamp" in data
+
+    def test_score_signal_is_buy_when_scores_qualify(self, client):
+        import server
+
+        server._api_instance = _mock_api()
+        with (
+            patch("factors.compute_factors") as mf,
+            patch("guardrails.compute_risk") as mr,
+        ):
+            mf.return_value = {
+                "composite_score": 70,
+                "composite_label": "Buy",
+                "factors": [],
+            }
+            mr.return_value = {
+                "risk_score": 40,
+                "risk_level": "Low",
+                "flags": [],
+            }
+            response = client.post("/score", json={"symbol": "AAPL"})
+
+        assert response.json()["signal"] == "BUY"
+
+
+# ---------------------------------------------------------------------------
+# /alerts endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestAlertsEndpoint:
+    def test_alerts_returns_200(self, client, tmp_path, monkeypatch):
+        import alerts as a
+
+        monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
+
+        response = client.get("/alerts")
+        assert response.status_code == 200
+
+    def test_alerts_empty_by_default(self, client, tmp_path, monkeypatch):
+        import alerts as a
+
+        monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
+
+        response = client.get("/alerts")
+        data = response.json()
+        assert data["active_count"] == 0
+        assert data["triggered_count"] == 0
+        assert data["active"] == []
+
+    def test_alerts_returns_created_alert(self, client, tmp_path, monkeypatch):
+        import alerts as a
+
+        monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
+
+        from alerts import add_alert
+
+        add_alert("AAPL", "Price Above", 200.0)
+
+        response = client.get("/alerts")
+        data = response.json()
+        assert data["active_count"] == 1
+        assert data["active"][0]["symbol"] == "AAPL"
+
+    def test_alerts_filtered_by_symbol(self, client, tmp_path, monkeypatch):
+        import alerts as a
+
+        monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
+        monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
+
+        from alerts import add_alert
+
+        add_alert("AAPL", "Price Above", 200.0)
+        add_alert("MSFT", "Price Below", 300.0)
+
+        response = client.get("/alerts", params={"symbol": "AAPL"})
+        data = response.json()
+        assert data["active_count"] == 1
+        assert data["active"][0]["symbol"] == "AAPL"
+        assert data["symbol"] == "AAPL"

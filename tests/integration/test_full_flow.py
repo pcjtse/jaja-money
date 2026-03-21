@@ -91,7 +91,10 @@ class TestCompleteAnalysisFlow:
         app_page.wait_for_timeout(5000)
 
         body_text = app_page.locator("body").inner_text()
-        assert any(kw in body_text for kw in ["Risk", "Guardrail", "Volatility", "Factor Score"])
+        assert any(
+            kw in body_text
+            for kw in ["Risk", "Guardrail", "Volatility", "Factor Score"]
+        )
 
     def test_chart_is_interactive(self, app_page):
         """The Plotly chart should be rendered and interactive."""
@@ -119,26 +122,34 @@ class TestSidebarInteractions:
 
     def test_cache_expander_opens(self, app_page):
         """Cache & Settings expander should be clickable."""
-        cache_expander = app_page.locator('[data-testid="stExpander"]').filter(
-            has_text="Cache"
-        ).first
+        cache_expander = (
+            app_page.locator('[data-testid="stExpander"]')
+            .filter(has_text="Cache")
+            .first
+        )
         if cache_expander.is_visible():
             cache_expander.click()
             app_page.wait_for_timeout(1000)
             # Expander content should be visible
             expanded_text = cache_expander.inner_text()
-            assert any(kw in expanded_text for kw in ["entries", "MB", "Clear", "Cache"])
+            assert any(
+                kw in expanded_text for kw in ["entries", "MB", "Clear", "Cache"]
+            )
 
     def test_factor_weights_expander(self, app_page):
         """Factor Weights expander should show weight sliders."""
-        weights_expander = app_page.locator('[data-testid="stExpander"]').filter(
-            has_text="Factor Weights"
-        ).first
+        weights_expander = (
+            app_page.locator('[data-testid="stExpander"]')
+            .filter(has_text="Factor Weights")
+            .first
+        )
         if weights_expander.is_visible():
             weights_expander.click()
             app_page.wait_for_timeout(1000)
             expanded_text = weights_expander.inner_text()
-            assert any(kw in expanded_text for kw in ["Valuation", "Trend", "RSI", "MACD"])
+            assert any(
+                kw in expanded_text for kw in ["Valuation", "Trend", "RSI", "MACD"]
+            )
 
     def test_dark_mode_toggle(self, app_page):
         """Dark mode button should toggle when clicked."""
@@ -146,7 +157,9 @@ class TestSidebarInteractions:
         initial_text = sidebar.inner_text()
 
         # Find and click dark mode button
-        dark_btn = sidebar.locator('button:has-text("Dark Mode"), button:has-text("Light Mode")').first
+        dark_btn = sidebar.locator(
+            'button:has-text("Dark Mode"), button:has-text("Light Mode")'
+        ).first
         if dark_btn.is_visible():
             dark_btn.click()
             app_page.wait_for_timeout(2000)
@@ -183,13 +196,19 @@ class TestMetricsValidation:
     def test_no_error_alerts(self):
         """Analysis should complete without showing error alerts."""
         # Check for Streamlit error/exception messages
-        error_containers = self.page.locator('[data-testid="stAlert"][data-baseweb="notification"]')
+        error_containers = self.page.locator(
+            '[data-testid="stAlert"][data-baseweb="notification"]'
+        )
         # Filter to only error-level alerts (not warnings/info)
         error_count = 0
         for i in range(error_containers.count()):
             alert = error_containers.nth(i)
             alert_text = alert.inner_text()
-            if "Error" in alert_text or "Exception" in alert_text or "Traceback" in alert_text:
+            if (
+                "Error" in alert_text
+                or "Exception" in alert_text
+                or "Traceback" in alert_text
+            ):
                 error_count += 1
 
         assert error_count == 0, f"Found {error_count} error alerts in the analysis"

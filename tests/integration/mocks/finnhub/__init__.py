@@ -10,6 +10,7 @@ import time
 # Shared mock data helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_candles(symbol: str, n: int = 200) -> dict:
     """Generate fake daily candle data."""
     import random
@@ -126,16 +127,65 @@ _MOCK_NEWS = [
 ]
 
 _MOCK_RECOMMENDATIONS = [
-    {"buy": 28, "hold": 8, "sell": 2, "strongBuy": 15, "strongSell": 0, "period": "2024-01-01"},
-    {"buy": 25, "hold": 10, "sell": 3, "strongBuy": 12, "strongSell": 1, "period": "2023-10-01"},
-    {"buy": 22, "hold": 12, "sell": 4, "strongBuy": 10, "strongSell": 0, "period": "2023-07-01"},
+    {
+        "buy": 28,
+        "hold": 8,
+        "sell": 2,
+        "strongBuy": 15,
+        "strongSell": 0,
+        "period": "2024-01-01",
+    },
+    {
+        "buy": 25,
+        "hold": 10,
+        "sell": 3,
+        "strongBuy": 12,
+        "strongSell": 1,
+        "period": "2023-10-01",
+    },
+    {
+        "buy": 22,
+        "hold": 12,
+        "sell": 4,
+        "strongBuy": 10,
+        "strongSell": 0,
+        "period": "2023-07-01",
+    },
 ]
 
 _MOCK_EARNINGS = [
-    {"actual": 1.52, "estimate": 1.43, "period": "2024-06-30", "symbol": "AAPL", "surprise": 0.09, "surprisePercent": 6.29},
-    {"actual": 2.18, "estimate": 2.10, "period": "2024-03-31", "symbol": "AAPL", "surprise": 0.08, "surprisePercent": 3.81},
-    {"actual": 2.18, "estimate": 2.11, "period": "2023-12-31", "symbol": "AAPL", "surprise": 0.07, "surprisePercent": 3.32},
-    {"actual": 1.26, "estimate": 1.19, "period": "2023-09-30", "symbol": "AAPL", "surprise": 0.07, "surprisePercent": 5.88},
+    {
+        "actual": 1.52,
+        "estimate": 1.43,
+        "period": "2024-06-30",
+        "symbol": "AAPL",
+        "surprise": 0.09,
+        "surprisePercent": 6.29,
+    },
+    {
+        "actual": 2.18,
+        "estimate": 2.10,
+        "period": "2024-03-31",
+        "symbol": "AAPL",
+        "surprise": 0.08,
+        "surprisePercent": 3.81,
+    },
+    {
+        "actual": 2.18,
+        "estimate": 2.11,
+        "period": "2023-12-31",
+        "symbol": "AAPL",
+        "surprise": 0.07,
+        "surprisePercent": 3.32,
+    },
+    {
+        "actual": 1.26,
+        "estimate": 1.19,
+        "period": "2023-09-30",
+        "symbol": "AAPL",
+        "surprise": 0.07,
+        "surprisePercent": 5.88,
+    },
 ]
 
 _MOCK_PEERS = ["MSFT", "GOOGL", "META", "AMZN", "NVDA"]
@@ -150,6 +200,7 @@ class Client:
 
     def quote(self, symbol: str) -> dict:
         import random
+
         random.seed(hash(symbol) % 2**32)
         base_price = random.uniform(50, 500)
         change = random.uniform(-5, 5)
@@ -166,17 +217,28 @@ class Client:
 
     def company_profile2(self, symbol: str = "") -> dict:
         sectors = {
-            "AAPL": "Technology", "MSFT": "Technology", "GOOGL": "Technology",
-            "AMZN": "Consumer Cyclical", "META": "Technology", "NVDA": "Technology",
-            "JPM": "Financial Services", "BAC": "Financial Services",
-            "XOM": "Energy", "CVX": "Energy",
-            "JNJ": "Healthcare", "PFE": "Healthcare",
+            "AAPL": "Technology",
+            "MSFT": "Technology",
+            "GOOGL": "Technology",
+            "AMZN": "Consumer Cyclical",
+            "META": "Technology",
+            "NVDA": "Technology",
+            "JPM": "Financial Services",
+            "BAC": "Financial Services",
+            "XOM": "Energy",
+            "CVX": "Energy",
+            "JNJ": "Healthcare",
+            "PFE": "Healthcare",
         }
         names = {
-            "AAPL": "Apple Inc.", "MSFT": "Microsoft Corporation",
-            "GOOGL": "Alphabet Inc.", "AMZN": "Amazon.com Inc.",
-            "META": "Meta Platforms Inc.", "NVDA": "NVIDIA Corporation",
-            "JPM": "JPMorgan Chase & Co.", "BAC": "Bank of America Corporation",
+            "AAPL": "Apple Inc.",
+            "MSFT": "Microsoft Corporation",
+            "GOOGL": "Alphabet Inc.",
+            "AMZN": "Amazon.com Inc.",
+            "META": "Meta Platforms Inc.",
+            "NVDA": "NVIDIA Corporation",
+            "JPM": "JPMorgan Chase & Co.",
+            "BAC": "Bank of America Corporation",
         }
         return {
             "name": names.get(symbol, f"{symbol} Corporation"),
@@ -195,6 +257,7 @@ class Client:
 
     def company_basic_financials(self, symbol: str, metric_type: str = "all") -> dict:
         import random
+
         random.seed(hash(symbol) % 2**32 + 1)
         return {
             "symbol": symbol,
@@ -253,30 +316,63 @@ class Client:
 
     def recommendation_trends(self, symbol: str) -> list:
         return [
-            {"buy": 25, "hold": 8, "sell": 2, "strongBuy": 12, "strongSell": 0, "period": "2024-01-01"},
-            {"buy": 22, "hold": 10, "sell": 3, "strongBuy": 10, "strongSell": 1, "period": "2023-10-01"},
-            {"buy": 20, "hold": 12, "sell": 4, "strongBuy": 8, "strongSell": 0, "period": "2023-07-01"},
+            {
+                "buy": 25,
+                "hold": 8,
+                "sell": 2,
+                "strongBuy": 12,
+                "strongSell": 0,
+                "period": "2024-01-01",
+            },
+            {
+                "buy": 22,
+                "hold": 10,
+                "sell": 3,
+                "strongBuy": 10,
+                "strongSell": 1,
+                "period": "2023-10-01",
+            },
+            {
+                "buy": 20,
+                "hold": 12,
+                "sell": 4,
+                "strongBuy": 8,
+                "strongSell": 0,
+                "period": "2023-07-01",
+            },
         ]
 
     def company_earnings(self, symbol: str, limit: int = 4) -> list:
         import random
+
         random.seed(hash(symbol) % 2**32 + 2)
         results = []
-        periods = ["2024-06-30", "2024-03-31", "2023-12-31", "2023-09-30",
-                   "2023-06-30", "2023-03-31", "2022-12-31", "2022-09-30",
-                   "2022-06-30", "2022-03-31"]
+        periods = [
+            "2024-06-30",
+            "2024-03-31",
+            "2023-12-31",
+            "2023-09-30",
+            "2023-06-30",
+            "2023-03-31",
+            "2022-12-31",
+            "2022-09-30",
+            "2022-06-30",
+            "2022-03-31",
+        ]
         for period in periods[:limit]:
             est = round(random.uniform(1.0, 3.0), 2)
             surprise = round(random.uniform(-0.1, 0.2), 2)
             actual = round(est + surprise, 2)
-            results.append({
-                "actual": actual,
-                "estimate": est,
-                "period": period,
-                "symbol": symbol,
-                "surprise": round(surprise, 2),
-                "surprisePercent": round(surprise / est * 100, 2),
-            })
+            results.append(
+                {
+                    "actual": actual,
+                    "estimate": est,
+                    "period": period,
+                    "symbol": symbol,
+                    "surprise": round(surprise, 2),
+                    "surprisePercent": round(surprise / est * 100, 2),
+                }
+            )
         return results
 
     def company_peers(self, symbol: str) -> list:
@@ -296,14 +392,19 @@ class Client:
     def stock_transcript(self, transcript_id: str) -> dict:
         return {}
 
-    def earnings_calendar(self, _from: str = "", to: str = "", symbol: str = "") -> dict:
+    def earnings_calendar(
+        self, _from: str = "", to: str = "", symbol: str = ""
+    ) -> dict:
         return {"earningsCalendar": []}
 
-    def stock_insider_transactions(self, symbol: str, _from: str = "", to: str = "") -> dict:
+    def stock_insider_transactions(
+        self, symbol: str, _from: str = "", to: str = ""
+    ) -> dict:
         return {"data": []}
 
     def stock_price_target(self, symbol: str) -> dict:
         import random
+
         random.seed(hash(symbol) % 2**32 + 3)
         base = random.uniform(100, 300)
         return {

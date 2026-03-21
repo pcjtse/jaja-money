@@ -173,8 +173,14 @@ class TestPairsSignal:
         from pairs import pairs_signal
 
         # Using entry=1.0, exit=0.2
-        assert pairs_signal(1.5, entry_threshold=1.0, exit_threshold=0.2) == "long_B_short_A"
-        assert pairs_signal(-1.5, entry_threshold=1.0, exit_threshold=0.2) == "long_A_short_B"
+        assert (
+            pairs_signal(1.5, entry_threshold=1.0, exit_threshold=0.2)
+            == "long_B_short_A"
+        )
+        assert (
+            pairs_signal(-1.5, entry_threshold=1.0, exit_threshold=0.2)
+            == "long_A_short_B"
+        )
         assert pairs_signal(0.1, entry_threshold=1.0, exit_threshold=0.2) == "exit"
 
 
@@ -280,7 +286,9 @@ class TestComputePeadDrift:
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": 10.0}]
-        result = compute_pead_drift("AAPL", earnings, close, dates, min_surprise_pct=5.0)
+        result = compute_pead_drift(
+            "AAPL", earnings, close, dates, min_surprise_pct=5.0
+        )
         assert result.signal == "Long (PEAD Beat)"
 
     def test_big_miss_gives_short_signal(self):
@@ -288,7 +296,9 @@ class TestComputePeadDrift:
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": -10.0}]
-        result = compute_pead_drift("AAPL", earnings, close, dates, min_surprise_pct=5.0)
+        result = compute_pead_drift(
+            "AAPL", earnings, close, dates, min_surprise_pct=5.0
+        )
         assert result.signal == "Short Signal (PEAD Miss)"
 
     def test_inline_gives_neutral(self):
@@ -296,7 +306,9 @@ class TestComputePeadDrift:
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": 2.0}]
-        result = compute_pead_drift("AAPL", earnings, close, dates, min_surprise_pct=5.0)
+        result = compute_pead_drift(
+            "AAPL", earnings, close, dates, min_surprise_pct=5.0
+        )
         assert result.signal == "Neutral"
 
     def test_drift_direction_classification(self):
