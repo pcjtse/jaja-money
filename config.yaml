@@ -107,3 +107,17 @@ api_server:
 # "sdk"  — use the anthropic Python SDK (requires ANTHROPIC_API_KEY)
 # "cli"  — use the Claude Code CLI binary (uses your existing claude session/credentials)
 ai_backend: "sdk"
+
+# OpenClaw integration settings
+openclaw:
+  skill_name: "jaja-money"
+  # Set ALPACA_API_KEY / ALPACA_API_SECRET env vars for broker integration
+  alpaca_base_url: "https://paper-api.alpaca.markets"  # switch to live URL for real trading
+  # Signal thresholds for BUY/SELL decisions
+  signal_buy_factor_min: 65
+  signal_buy_risk_max: 50
+  signal_sell_factor_max: 35
+  signal_sell_risk_min: 75
+  # Event scheduler settings
+  event_scheduler_interval_seconds: 300
+  earnings_alert_days_ahead: 3
