@@ -28,20 +28,16 @@ def _enter_symbol_and_analyze(page, symbol: str):
     symbol_input.press("Enter")
 
     # Wait for Streamlit to finish the rerun triggered by Enter before clicking
-    page.wait_for_timeout(2000)
+    page.wait_for_timeout(3000)
 
     analyze_btn = page.locator(
         '[data-testid="stSidebar"] button:has-text("Analyze")'
     ).first
     analyze_btn.click()
 
-    # Wait for analysis results — the header is rendered via st.markdown with
-    # unsafe_allow_html inside a styled <h1>, so use a broad text check on the
-    # main area rather than a strict text= selector.
-    page.locator('[data-testid="stMain"]').or_(page.locator("body")).first.wait_for(
-        state="visible", timeout=5_000
-    )
-    # Wait for the Stock Quote header which appears right after page_header
+    # Wait for the Stock Quote header which confirms analysis rendered.
+    # We avoid matching the custom page_header HTML (unsafe_allow_html)
+    # since Playwright text= selectors can't reliably match it.
     page.wait_for_selector("text=Stock Quote", timeout=45_000)
     page.wait_for_timeout(2000)
 
