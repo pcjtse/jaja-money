@@ -1,0 +1,1 @@
+"""jaja-money skill scripts."""

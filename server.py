@@ -523,7 +523,7 @@ async def score_endpoint(
     try:
         from factors import compute_factors
         from guardrails import compute_risk
-        from openclaw_skill import derive_signal
+        from jaja_money_skill.scripts.jaja_skill import derive_signal
 
         quote = api.get_quote(symbol)
         financials = api.get_financials(symbol)
@@ -615,7 +615,7 @@ async def signals(
 
     from factors import compute_factors
     from guardrails import compute_risk
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     results = []
     for ticker in req.symbols:
@@ -690,7 +690,7 @@ async def openclaw_webhook(
         api = _get_api()
         from factors import compute_factors
         from guardrails import compute_risk
-        from openclaw_skill import derive_signal
+        from jaja_money_skill.scripts.jaja_skill import derive_signal
 
         data = api.fetch_all_parallel(symbol)
         quote = data.get("quote") or {}
@@ -788,7 +788,7 @@ async def openclaw_rebalance(
 
     from factors import compute_factors
     from guardrails import compute_risk
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     tickers = [t.upper() for t in req.tickers]
     n = len(tickers)
@@ -904,7 +904,7 @@ async def openclaw_agent(
 )
 async def openclaw_manifest():
     """Return the ClawHub skill manifest describing jaja-money's capabilities."""
-    from openclaw_skill import get_skill_manifest
+    from jaja_money_skill.scripts.jaja_skill import get_skill_manifest
 
     return get_skill_manifest()
 

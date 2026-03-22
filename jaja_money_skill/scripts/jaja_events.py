@@ -1,7 +1,7 @@
-"""OpenClaw Event-Triggered Analysis.
+"""Event-Triggered Analysis for jaja-money skill.
 
 Hooks APScheduler into jaja-money's data sources to automatically trigger
-analysis callbacks when market events occur:
+analysis callbacks when market events occur.
 
 Events monitored:
     earnings_approaching   — earnings date within 3 days
@@ -9,7 +9,7 @@ Events monitored:
     price_alert_triggered  — price / factor threshold breached
 
 Usage:
-    from openclaw_events import (
+    from jaja_money_skill.scripts.jaja_events import (
         start_event_scheduler,
         stop_event_scheduler,
         register_event_callback,
@@ -66,13 +66,6 @@ def register_event_callback(event_type: str, callback: Callable) -> None:
     event_type : one of "earnings_approaching", "new_sec_filing",
                  "price_alert_triggered"
     callback   : callable(event_dict) invoked when the event fires
-
-    Example
-    -------
-    def on_earnings(event):
-        print(f"Earnings soon for {event['symbol']}: {event['date']}")
-
-    register_event_callback("earnings_approaching", on_earnings)
     """
     if event_type not in _event_callbacks:
         raise ValueError(
@@ -114,12 +107,12 @@ def start_event_scheduler(
     """
     global _scheduler
     if not _HAS_APSCHEDULER:
-        log.warning("APScheduler not installed; OpenClaw event scheduler unavailable")
+        log.warning("APScheduler not installed; event scheduler unavailable")
         return False
 
     with _scheduler_lock:
         if _scheduler is not None and _scheduler.running:
-            log.info("OpenClaw event scheduler already running")
+            log.info("Event scheduler already running")
             return True
 
         watch_tickers = tickers or _default_tickers()
@@ -130,12 +123,12 @@ def start_event_scheduler(
             "interval",
             seconds=interval_seconds,
             args=[watch_tickers],
-            id="openclaw_event_poll",
+            id="jaja_event_poll",
             replace_existing=True,
         )
         _scheduler.start()
         log.info(
-            "OpenClaw event scheduler started — monitoring %d tickers every %ds",
+            "Event scheduler started — monitoring %d tickers every %ds",
             len(watch_tickers),
             interval_seconds,
         )
@@ -143,17 +136,17 @@ def start_event_scheduler(
 
 
 def stop_event_scheduler() -> None:
-    """Stop the OpenClaw event scheduler."""
+    """Stop the event scheduler."""
     global _scheduler
     with _scheduler_lock:
         if _scheduler is not None and _scheduler.running:
             _scheduler.shutdown(wait=False)
             _scheduler = None
-            log.info("OpenClaw event scheduler stopped")
+            log.info("Event scheduler stopped")
 
 
 def is_scheduler_running() -> bool:
-    """Return True if the OpenClaw event scheduler is running."""
+    """Return True if the event scheduler is running."""
     return _scheduler is not None and _scheduler.running
 
 
@@ -163,10 +156,7 @@ def is_scheduler_running() -> bool:
 
 
 def check_earnings_events(tickers: list[str], api=None) -> list[dict]:
-    """Check for tickers with earnings within the next 3 days.
-
-    Returns a list of event dicts.
-    """
+    """Check for tickers with earnings within the next 3 days."""
     events: list[dict] = []
     if api is None:
         try:
@@ -211,10 +201,7 @@ def check_earnings_events(tickers: list[str], api=None) -> list[dict]:
 
 
 def check_sec_filing_events(tickers: list[str]) -> list[dict]:
-    """Check for new SEC filings (10-K, 10-Q, 8-K) filed today.
-
-    Returns a list of event dicts.
-    """
+    """Check for new SEC filings (10-K, 10-Q, 8-K) filed today."""
     events: list[dict] = []
     try:
         from edgar import get_recent_filings
@@ -252,10 +239,7 @@ def check_sec_filing_events(tickers: list[str]) -> list[dict]:
 
 
 def check_price_alert_events(tickers: list[str], api=None) -> list[dict]:
-    """Evaluate price alerts for all monitored tickers.
-
-    Returns a list of triggered alert event dicts.
-    """
+    """Evaluate price alerts for all monitored tickers."""
     events: list[dict] = []
     if api is None:
         try:
@@ -320,7 +304,7 @@ def _fire_callbacks(event_type: str, events: list[dict]) -> None:
 
 def _check_all_events(tickers: list[str]) -> None:
     """Poll all event sources and fire callbacks. Called by APScheduler."""
-    log.debug("OpenClaw event poll: checking %d tickers", len(tickers))
+    log.debug("Event poll: checking %d tickers", len(tickers))
     earnings_events = check_earnings_events(tickers)
     sec_events = check_sec_filing_events(tickers)
     price_events = check_price_alert_events(tickers)

@@ -1,4 +1,4 @@
-"""Tests for openclaw_skill.py — OpenClaw Skill Package."""
+"""Tests for jaja-money skill package — Agent Skill functions."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def mock_api():
 
 
 def test_skill_manifest_has_required_fields():
-    from openclaw_skill import SKILL_MANIFEST
+    from jaja_money_skill.scripts.jaja_skill import SKILL_MANIFEST
 
     assert SKILL_MANIFEST["name"] == "jaja-money"
     assert "version" in SKILL_MANIFEST
@@ -106,14 +106,14 @@ def test_skill_manifest_has_required_fields():
 
 
 def test_skill_manifest_functions():
-    from openclaw_skill import SKILL_MANIFEST
+    from jaja_money_skill.scripts.jaja_skill import SKILL_MANIFEST
 
     expected = {"analyze", "screen", "score", "get_alerts", "research"}
     assert set(SKILL_MANIFEST["functions"].keys()) == expected
 
 
 def test_get_skill_manifest_returns_manifest():
-    from openclaw_skill import get_skill_manifest, SKILL_MANIFEST
+    from jaja_money_skill.scripts.jaja_skill import get_skill_manifest, SKILL_MANIFEST
 
     result = get_skill_manifest()
     assert result is SKILL_MANIFEST
@@ -125,7 +125,7 @@ def test_get_skill_manifest_returns_manifest():
 
 
 def test_derive_signal_buy():
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     result = derive_signal(factor_score=70, risk_score=40)
     assert result["signal"] == "BUY"
@@ -133,21 +133,21 @@ def test_derive_signal_buy():
 
 
 def test_derive_signal_sell_low_factor():
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     result = derive_signal(factor_score=30, risk_score=40)
     assert result["signal"] == "SELL"
 
 
 def test_derive_signal_sell_high_risk():
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     result = derive_signal(factor_score=60, risk_score=80)
     assert result["signal"] == "SELL"
 
 
 def test_derive_signal_hold():
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     result = derive_signal(factor_score=55, risk_score=55)
     assert result["signal"] == "HOLD"
@@ -155,7 +155,7 @@ def test_derive_signal_hold():
 
 
 def test_derive_signal_confidence_capped_at_100():
-    from openclaw_skill import derive_signal
+    from jaja_money_skill.scripts.jaja_skill import derive_signal
 
     result = derive_signal(factor_score=100, risk_score=0)
     assert result["confidence"] <= 100
@@ -167,7 +167,7 @@ def test_derive_signal_confidence_capped_at_100():
 
 
 def test_analyze_returns_expected_keys(mock_api):
-    from openclaw_skill import analyze
+    from jaja_money_skill.scripts.jaja_skill import analyze
 
     sys.modules["factors"].compute_factors = MagicMock(
         return_value={
@@ -183,7 +183,7 @@ def test_analyze_returns_expected_keys(mock_api):
             "flags": [],
         }
     )
-    with patch("openclaw_skill._get_api", return_value=mock_api):
+    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
         result = analyze("AAPL")
 
     assert result["symbol"] == "AAPL"
@@ -195,7 +195,7 @@ def test_analyze_returns_expected_keys(mock_api):
 
 
 def test_analyze_upcases_ticker(mock_api):
-    from openclaw_skill import analyze
+    from jaja_money_skill.scripts.jaja_skill import analyze
 
     sys.modules["factors"].compute_factors = MagicMock(
         return_value={
@@ -211,7 +211,7 @@ def test_analyze_upcases_ticker(mock_api):
             "flags": [],
         }
     )
-    with patch("openclaw_skill._get_api", return_value=mock_api):
+    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
         result = analyze("aapl")
 
     assert result["symbol"] == "AAPL"
@@ -223,7 +223,7 @@ def test_analyze_upcases_ticker(mock_api):
 
 
 def test_score_returns_signal(mock_api):
-    from openclaw_skill import score
+    from jaja_money_skill.scripts.jaja_skill import score
 
     sys.modules["factors"].compute_factors = MagicMock(
         return_value={
@@ -239,7 +239,7 @@ def test_score_returns_signal(mock_api):
             "flags": [],
         }
     )
-    with patch("openclaw_skill._get_api", return_value=mock_api):
+    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
         result = score("MSFT")
 
     assert result["symbol"] == "MSFT"
@@ -263,7 +263,7 @@ def test_get_alerts_no_symbol(tmp_path, monkeypatch):
     add_alert("AAPL", "Price Above", 200.0)
     add_alert("MSFT", "Price Below", 300.0)
 
-    from openclaw_skill import get_alerts
+    from jaja_money_skill.scripts.jaja_skill import get_alerts
 
     result = get_alerts()
     assert result["active_count"] == 2
@@ -282,7 +282,7 @@ def test_get_alerts_filtered_by_symbol(tmp_path, monkeypatch):
     add_alert("AAPL", "Price Above", 200.0)
     add_alert("MSFT", "Price Below", 300.0)
 
-    from openclaw_skill import get_alerts
+    from jaja_money_skill.scripts.jaja_skill import get_alerts
 
     result = get_alerts("AAPL")
     assert result["active_count"] == 1
@@ -295,7 +295,7 @@ def test_get_alerts_filtered_by_symbol(tmp_path, monkeypatch):
 
 
 def test_screen_returns_results_and_total(mock_api):
-    from openclaw_skill import screen
+    from jaja_money_skill.scripts.jaja_skill import screen
 
     sys.modules["screener"].run_screener = MagicMock(
         return_value=[
@@ -303,7 +303,7 @@ def test_screen_returns_results_and_total(mock_api):
             {"symbol": "MSFT", "factor_score": 68},
         ]
     )
-    with patch("openclaw_skill._get_api", return_value=mock_api):
+    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
         result = screen(["AAPL", "MSFT"])
 
     assert result["total"] == 2
@@ -313,12 +313,12 @@ def test_screen_returns_results_and_total(mock_api):
 
 
 def test_screen_respects_limit(mock_api):
-    from openclaw_skill import screen
+    from jaja_money_skill.scripts.jaja_skill import screen
 
     sys.modules["screener"].run_screener = MagicMock(
         return_value=[{"symbol": f"T{i}"} for i in range(10)]
     )
-    with patch("openclaw_skill._get_api", return_value=mock_api):
+    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
         result = screen(["T0", "T1", "T2", "T3", "T4"], limit=3)
 
     assert len(result["results"]) == 3
@@ -334,7 +334,7 @@ class TestJajaMoneyClient:
     """Tests for the JajaMoneyClient remote HTTP wrapper."""
 
     def _make_client(self, base_url="http://localhost:8080", api_key=None):
-        from openclaw_skill import JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         return JajaMoneyClient(base_url=base_url, api_key=api_key)
 
@@ -453,7 +453,8 @@ class TestRemoteMode:
 
     def test_analyze_delegates_to_remote_client(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
-        from openclaw_skill import analyze, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import analyze
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         expected = {"symbol": "AAPL", "factor_score": 72, "signal": "BUY"}
         with patch.object(JajaMoneyClient, "analyze", return_value=expected) as mock_m:
@@ -463,7 +464,8 @@ class TestRemoteMode:
 
     def test_score_delegates_to_remote_client(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
-        from openclaw_skill import score, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import score
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         expected = {"symbol": "MSFT", "factor_score": 65}
         with patch.object(JajaMoneyClient, "score", return_value=expected) as mock_m:
@@ -473,7 +475,8 @@ class TestRemoteMode:
 
     def test_screen_delegates_to_remote_client(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
-        from openclaw_skill import screen, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import screen
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         expected = {"results": [], "total": 0}
         with patch.object(JajaMoneyClient, "screen", return_value=expected) as mock_m:
@@ -483,7 +486,8 @@ class TestRemoteMode:
 
     def test_get_alerts_delegates_to_remote_client(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
-        from openclaw_skill import get_alerts, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import get_alerts
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         expected = {"active_count": 0, "active": []}
         with patch.object(
@@ -495,7 +499,8 @@ class TestRemoteMode:
 
     def test_research_delegates_to_remote_client(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://remote:8080")
-        from openclaw_skill import research, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import research
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         expected = {"symbol": "AAPL", "memo": "Investment memo..."}
         with patch.object(JajaMoneyClient, "research", return_value=expected) as mock_m:
@@ -505,13 +510,14 @@ class TestRemoteMode:
 
     def test_no_remote_when_env_not_set(self, monkeypatch):
         monkeypatch.delenv("JAJA_API_URL", raising=False)
-        from openclaw_skill import _get_remote_client
+        from jaja_money_skill.scripts.jaja_skill import _get_remote_client
 
         assert _get_remote_client() is None
 
     def test_remote_client_created_when_env_set(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://myserver:8080")
-        from openclaw_skill import _get_remote_client, JajaMoneyClient
+        from jaja_money_skill.scripts.jaja_skill import _get_remote_client
+        from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
         client = _get_remote_client()
         assert isinstance(client, JajaMoneyClient)
@@ -520,7 +526,7 @@ class TestRemoteMode:
     def test_remote_client_uses_api_key(self, monkeypatch):
         monkeypatch.setenv("JAJA_API_URL", "http://myserver:8080")
         monkeypatch.setenv("JAJA_API_KEY", "testkey")
-        from openclaw_skill import _get_remote_client
+        from jaja_money_skill.scripts.jaja_skill import _get_remote_client
 
         client = _get_remote_client()
         assert client._headers.get("X-API-Key") == "testkey"
