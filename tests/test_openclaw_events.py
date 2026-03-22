@@ -195,14 +195,24 @@ def test_check_sec_filing_events_no_edgar():
 
     from jaja_money_skill.scripts.jaja_events import check_sec_filing_events
 
+    # Ensure edgar is imported first so we can safely remove and restore it
+    try:
+        import src.data.edgar  # noqa: F401
+    except ImportError:
+        pass
+    saved = sys.modules.get("src.data.edgar")
+
     # Temporarily remove edgar from sys.modules so the import inside the
     # function raises ImportError and the function returns []
-    original = sys.modules.pop("src.data.edgar", None)
+    sys.modules.pop("src.data.edgar", None)
     try:
         events = check_sec_filing_events(["AAPL"])
     finally:
-        if original is not None:
-            sys.modules["src.data.edgar"] = original
+        # Always restore to avoid polluting sys.modules for later tests
+        if saved is not None:
+            sys.modules["src.data.edgar"] = saved
+        else:
+            sys.modules.pop("src.data.edgar", None)
 
     assert isinstance(events, list)
 
