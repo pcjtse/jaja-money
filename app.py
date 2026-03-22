@@ -32,7 +32,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 
-from api import FinnhubAPI
+from api import get_api, MOCK_MODE
 from analyzer import (
     build_data_prompt,
     stream_fundamental_analysis,
@@ -131,6 +131,14 @@ st.set_page_config(
 )
 inject_css()
 
+# Mock mode banner
+if MOCK_MODE:
+    st.info(
+        "**Mock Data Mode** — Using synthetic data for local testing. "
+        "No API keys required. Set `MOCK_DATA=0` or unset to use live data.",
+        icon="🧪",
+    )
+
 # ---------------------------------------------------------------------------
 # Local technical indicator helpers
 # ---------------------------------------------------------------------------
@@ -174,102 +182,102 @@ def calc_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
 
 @st.cache_data(ttl=300)
 def fetch_quote(symbol: str) -> dict:
-    return FinnhubAPI().get_quote(symbol)
+    return get_api().get_quote(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_profile(symbol: str) -> dict:
-    return FinnhubAPI().get_profile(symbol)
+    return get_api().get_profile(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_financials(symbol: str) -> dict:
-    return FinnhubAPI().get_financials(symbol)
+    return get_api().get_financials(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_daily(symbol: str) -> dict:
-    return FinnhubAPI().get_daily(symbol)
+    return get_api().get_daily(symbol)
 
 
 @st.cache_data(ttl=900)
 def fetch_news(symbol: str) -> list:
-    return FinnhubAPI().get_news(symbol)
+    return get_api().get_news(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_recommendations(symbol: str) -> list:
-    return FinnhubAPI().get_recommendations(symbol)
+    return get_api().get_recommendations(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_earnings(symbol: str) -> list:
-    return FinnhubAPI().get_earnings(symbol)
+    return get_api().get_earnings(symbol)
 
 
 @st.cache_data(ttl=300)
 def fetch_peers(symbol: str) -> list:
-    return FinnhubAPI().get_peers(symbol)
+    return get_api().get_peers(symbol)
 
 
 @st.cache_data(ttl=600)
 def fetch_option_metrics(symbol: str) -> dict:
-    return FinnhubAPI().get_option_metrics(symbol)
+    return get_api().get_option_metrics(symbol)
 
 
 @st.cache_data(ttl=86400)
 def fetch_transcripts_list(symbol: str) -> list:
-    return FinnhubAPI().get_transcripts_list(symbol)
+    return get_api().get_transcripts_list(symbol)
 
 
 @st.cache_data(ttl=86400 * 7)
 def fetch_transcript(tid: str) -> dict:
-    return FinnhubAPI().get_transcript(tid)
+    return get_api().get_transcript(tid)
 
 
 @st.cache_data(ttl=3600 * 6)
 def fetch_earnings_calendar(symbol: str) -> dict:
-    return FinnhubAPI().get_earnings_calendar(symbol)
+    return get_api().get_earnings_calendar(symbol)
 
 
 @st.cache_data(ttl=3600 * 12)
 def fetch_insider_transactions(symbol: str) -> list:
-    return FinnhubAPI().get_insider_transactions(symbol)
+    return get_api().get_insider_transactions(symbol)
 
 
 @st.cache_data(ttl=3600 * 6)
 def fetch_short_interest(symbol: str) -> dict:
-    return FinnhubAPI().get_short_interest(symbol)
+    return get_api().get_short_interest(symbol)
 
 
 @st.cache_data(ttl=3600 * 24)
 def fetch_macro_context() -> dict:
-    return FinnhubAPI().get_macro_context()
+    return get_api().get_macro_context()
 
 
 @st.cache_data(ttl=3600 * 12)
 def fetch_estimate_revisions(symbol: str) -> dict:
-    return FinnhubAPI().get_estimate_revisions(symbol)
+    return get_api().get_estimate_revisions(symbol)
 
 
 @st.cache_data(ttl=3600)
 def fetch_weekly(symbol: str) -> dict:
-    return FinnhubAPI().get_weekly(symbol)
+    return get_api().get_weekly(symbol)
 
 
 @st.cache_data(ttl=86400)
 def fetch_monthly(symbol: str) -> dict:
-    return FinnhubAPI().get_monthly(symbol)
+    return get_api().get_monthly(symbol)
 
 
 @st.cache_data(ttl=86400)
 def fetch_analyst_price_targets(symbol: str) -> dict:
-    return FinnhubAPI().get_analyst_price_targets(symbol)
+    return get_api().get_analyst_price_targets(symbol)
 
 
 @st.cache_data(ttl=86400)
 def fetch_earnings_history(symbol: str) -> list:
-    return FinnhubAPI().get_earnings_history(symbol)
+    return get_api().get_earnings_history(symbol)
 
 
 # ---------------------------------------------------------------------------
@@ -1129,8 +1137,8 @@ except Exception as e:
 with st.expander("Options IV Surface & Advanced Metrics (P16.3)", expanded=False):
     try:
         _opt_raw = (
-            FinnhubAPI().get_option_chain(symbol)
-            if hasattr(FinnhubAPI(), "get_option_chain")
+            get_api().get_option_chain(symbol)
+            if hasattr(get_api(), "get_option_chain")
             else {}
         )
         if _opt_raw and price:
@@ -1572,7 +1580,7 @@ try:
         _vix_val = _macro.get("vix")
         _yield_spread = _macro.get("spread_2y10y", 0)
         try:
-            _spy_data = FinnhubAPI().get_daily("SPY")
+            _spy_data = get_api().get_daily("SPY")
             if _spy_data and _spy_data.get("c"):
                 _spy_close = pd.Series(_spy_data["c"])
         except Exception:

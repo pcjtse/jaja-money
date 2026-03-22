@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from api import FinnhubAPI
+from api import get_api, MOCK_MODE
 from sectors import get_sector_data, classify_rotation_phase
 from analyzer import stream_sector_rotation_narrative
 
@@ -21,8 +21,11 @@ page_header(
     icon="🔄",
 )
 
+if MOCK_MODE:
+    st.info("**Mock Data Mode** — Using synthetic data.", icon="🧪")
+
 if st.button("Load Sector Data", type="primary"):
-    api = FinnhubAPI()
+    api = get_api()
 
     with st.spinner("Fetching sector ETF data... (11 API calls)"):
         data = get_sector_data(api)

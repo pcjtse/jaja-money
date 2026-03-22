@@ -246,10 +246,10 @@ class DataProvider:
         self._source_used = "finnhub"
 
         # Lazy import to avoid circular dep
-        from api import FinnhubAPI
+        from api import get_api
 
         try:
-            self._finnhub = FinnhubAPI()
+            self._finnhub = get_api()
             self._has_finnhub = True
         except ValueError:
             self._has_finnhub = False

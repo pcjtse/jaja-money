@@ -160,9 +160,9 @@ def check_earnings_events(tickers: list[str], api=None) -> list[dict]:
     events: list[dict] = []
     if api is None:
         try:
-            from api import FinnhubAPI
+            from api import get_api
 
-            api = FinnhubAPI()
+            api = get_api()
         except Exception as exc:
             log.warning("check_earnings_events: could not init API: %s", exc)
             return events
@@ -243,9 +243,9 @@ def check_price_alert_events(tickers: list[str], api=None) -> list[dict]:
     events: list[dict] = []
     if api is None:
         try:
-            from api import FinnhubAPI
+            from api import get_api
 
-            api = FinnhubAPI()
+            api = get_api()
         except Exception as exc:
             log.warning("check_price_alert_events: could not init API: %s", exc)
             return events

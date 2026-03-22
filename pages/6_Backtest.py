@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 
-from api import FinnhubAPI
+from api import get_api, MOCK_MODE
 from backtest import run_backtest, run_walk_forward, run_parameter_sweep
 from analyzer import stream_backtest_narrative
 
@@ -25,6 +25,9 @@ page_header(
 # -------------------------------------------------------------------------
 # Inputs
 # -------------------------------------------------------------------------
+if MOCK_MODE:
+    st.info("**Mock Data Mode** — Using synthetic data.", icon="🧪")
+
 col1, col2, col3 = st.columns(3)
 symbol = col1.text_input("Stock Symbol", value="AAPL").strip().upper()
 entry_threshold = col2.slider("Entry signal threshold (Buy when ≥)", 50, 85, 65)
@@ -92,7 +95,7 @@ if st.button("Run Backtest", type="primary"):
         st.error("Please enter a symbol.")
         st.stop()
 
-    api = FinnhubAPI()
+    api = get_api()
 
     with st.spinner(f"Fetching {lookback} of price data for {symbol}..."):
         try:

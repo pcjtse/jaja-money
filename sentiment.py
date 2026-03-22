@@ -1,15 +1,29 @@
+import os
+import random
+
 import streamlit as st
-from transformers import pipeline
 
 from log_setup import get_logger
 
+try:
+    from transformers import pipeline as _transformers_pipeline
+except ImportError:
+    _transformers_pipeline = None  # type: ignore[assignment]
+
 log = get_logger(__name__)
+
+_MOCK_MODE = os.getenv("MOCK_DATA", "").strip().lower() in ("1", "true", "yes")
 
 
 @st.cache_resource(show_spinner=False)
 def _load_finbert():
     """Load FinBERT once and reuse across all Streamlit reruns."""
-    return pipeline(
+    if _transformers_pipeline is None:
+        raise ImportError(
+            "The `transformers` package is not installed. "
+            "Run `pip install transformers torch` or set MOCK_DATA=1."
+        )
+    return _transformers_pipeline(
         "text-classification",
         model="ProsusAI/finbert",
         top_k=None,  # return all three label scores
@@ -18,14 +32,39 @@ def _load_finbert():
     )
 
 
+def _mock_score_articles(articles: list) -> list[dict]:
+    """Return plausible mock sentiment scores for local testing."""
+    rng = random.Random(42)
+    results = []
+    positive_keywords = {"strong", "beat", "upgrade", "bull", "high", "grow", "expan"}
+    negative_keywords = {"weak", "miss", "downgrad", "bear", "low", "declin", "risk"}
+    for article in articles:
+        headline = article.get("headline", "").lower()
+        if any(kw in headline for kw in positive_keywords):
+            label = "positive"
+        elif any(kw in headline for kw in negative_keywords):
+            label = "negative"
+        else:
+            label = rng.choice(
+                ["positive", "positive", "neutral", "neutral", "negative"]
+            )
+        results.append({"label": label, "score": round(rng.uniform(0.7, 0.98), 4)})
+    return results
+
+
 def score_articles(articles: list) -> list[dict]:
     """Score each article headline with FinBERT.
 
     Returns a list parallel to `articles`, each entry:
         {"label": "positive"|"negative"|"neutral", "score": float}
+
+    In mock mode (MOCK_DATA=1), returns plausible synthetic scores.
     """
     if not articles:
         return []
+
+    if _MOCK_MODE:
+        return _mock_score_articles(articles)
 
     pipe = _load_finbert()
     results = []

@@ -3,7 +3,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 
-from api import FinnhubAPI
+from api import get_api, MOCK_MODE
 from comparison import compare_tickers, comparison_dataframe
 
 from theme import inject_css, page_header
@@ -15,6 +15,9 @@ page_header(
     subtitle="Compare up to 5 stocks side-by-side across factor scores, risk, and key metrics.",
     icon="⚖️",
 )
+
+if MOCK_MODE:
+    st.info("**Mock Data Mode** — Using synthetic data.", icon="🧪")
 
 # --- Input ---
 raw_input = st.text_input(
@@ -38,7 +41,7 @@ if len(symbols) > 5:
     symbols = symbols[:5]
 
 if st.button("Run Comparison", type="primary"):
-    api = FinnhubAPI()
+    api = get_api()
 
     results = []
     with st.spinner(f"Analyzing {', '.join(symbols)}..."):
@@ -95,6 +98,10 @@ if st.button("Run Comparison", type="primary"):
 
     # --- Radar chart overlay ---
     st.subheader("Factor Profile Overlay")
+    # Guard against empty factors list
+    if not results[0].get("factors"):
+        st.warning("No factor data available for radar chart.")
+        st.stop()
     factor_names = [f["name"] for f in results[0]["factors"]]
     factor_names_closed = factor_names + [factor_names[0]]
 

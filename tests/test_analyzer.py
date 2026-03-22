@@ -350,6 +350,10 @@ def test_stream_forward_looking_analysis_yields_chunks():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    os.getenv("MOCK_DATA", "").lower() in ("1", "true", "yes"),
+    reason="Mock mode returns MockAIBackend instead of raising",
+)
 def test_get_client_raises_without_key(monkeypatch):
     from analyzer import _get_client
 
@@ -358,6 +362,10 @@ def test_get_client_raises_without_key(monkeypatch):
         _get_client()
 
 
+@pytest.mark.skipif(
+    os.getenv("MOCK_DATA", "").lower() in ("1", "true", "yes"),
+    reason="Mock mode returns MockAIBackend instead of raising",
+)
 def test_get_client_raises_on_placeholder(monkeypatch):
     from analyzer import _get_client
 

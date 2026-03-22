@@ -184,9 +184,9 @@ def _get_remote_client():
 
 def _get_api():
     """Return a FinnhubAPI instance (local mode only)."""
-    from api import FinnhubAPI
+    from api import get_api
 
-    return FinnhubAPI()
+    return get_api()
 
 
 # ---------------------------------------------------------------------------

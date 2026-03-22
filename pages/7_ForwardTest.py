@@ -129,15 +129,21 @@ if open_positions:
     symbols_needed = list({p["symbol"] for p in open_positions})
     with st.spinner("Fetching live quotes..."):
         try:
-            from api import FinnhubAPI
+            from api import get_api
 
-            _api = FinnhubAPI()
+            _api = get_api()
+            _fetch_errors = []
             for sym in symbols_needed:
                 try:
                     q = _api.get_quote(sym)
                     live_prices[sym] = q.get("c", 0)
-                except Exception:
-                    pass
+                except Exception as _qe:
+                    _fetch_errors.append(f"{sym}: {_qe}")
+            if _fetch_errors:
+                st.warning(
+                    f"Could not fetch live quotes for: {', '.join(_fetch_errors)}. "
+                    "P&L may use entry prices instead."
+                )
         except Exception:
             pass
 

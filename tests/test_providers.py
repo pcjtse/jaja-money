@@ -14,11 +14,11 @@ from unittest.mock import MagicMock, patch
 def _make_provider(pref="auto"):
     """Create a DataProvider with a mocked FinnhubAPI.
 
-    DataProvider imports FinnhubAPI lazily inside __init__ via `from api import FinnhubAPI`,
+    DataProvider imports get_api lazily inside __init__ via `from api import get_api`,
     so we patch the symbol in the `api` module namespace.
     """
     mock_api = MagicMock()
-    with patch("api.FinnhubAPI", return_value=mock_api):
+    with patch("api.get_api", return_value=mock_api):
         from providers import DataProvider
 
         dp = DataProvider(source_preference=pref)
