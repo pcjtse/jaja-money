@@ -3,7 +3,7 @@
 import pytest
 import pandas as pd
 
-from portfolio import (
+from src.trading.portfolio import (
     suggest_position,
     RISK_TOLERANCES,
     HORIZONS,

@@ -4,7 +4,7 @@ import time
 
 
 def test_token_bucket_basic():
-    from rate_limiter import TokenBucketRateLimiter
+    from src.core.rate_limiter import TokenBucketRateLimiter
 
     rl = TokenBucketRateLimiter(max_tokens=5, refill_period=60.0, name="test")
     # Should be able to acquire 5 tokens immediately
@@ -15,7 +15,7 @@ def test_token_bucket_basic():
 
 
 def test_token_bucket_refill():
-    from rate_limiter import TokenBucketRateLimiter
+    from src.core.rate_limiter import TokenBucketRateLimiter
 
     rl = TokenBucketRateLimiter(max_tokens=10, refill_period=1.0, name="test_refill")
     # Drain all tokens
@@ -28,7 +28,7 @@ def test_token_bucket_refill():
 
 
 def test_acquire_blocking():
-    from rate_limiter import TokenBucketRateLimiter
+    from src.core.rate_limiter import TokenBucketRateLimiter
 
     rl = TokenBucketRateLimiter(max_tokens=2, refill_period=1.0, name="test_block")
     assert rl.acquire(timeout=1.0) is True
@@ -41,7 +41,7 @@ def test_acquire_blocking():
 
 
 def test_acquire_timeout():
-    from rate_limiter import TokenBucketRateLimiter
+    from src.core.rate_limiter import TokenBucketRateLimiter
 
     rl = TokenBucketRateLimiter(max_tokens=1, refill_period=60.0, name="test_timeout")
     rl.try_acquire()  # drain
@@ -50,7 +50,7 @@ def test_acquire_timeout():
 
 
 def test_available_tokens():
-    from rate_limiter import TokenBucketRateLimiter
+    from src.core.rate_limiter import TokenBucketRateLimiter
 
     rl = TokenBucketRateLimiter(max_tokens=10, refill_period=60.0, name="test_avail")
     assert rl.available_tokens == 10.0
@@ -59,7 +59,7 @@ def test_available_tokens():
 
 
 def test_module_level_singletons():
-    from rate_limiter import finnhub_limiter, anthropic_limiter
+    from src.core.rate_limiter import finnhub_limiter, anthropic_limiter
 
     assert finnhub_limiter.max_tokens == 55
     assert anthropic_limiter.max_tokens == 40

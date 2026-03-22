@@ -28,7 +28,7 @@ import threading
 import time
 from typing import Callable
 
-from log_setup import get_logger
+from src.core.log_setup import get_logger
 
 log = get_logger(__name__)
 
@@ -160,7 +160,7 @@ def check_earnings_events(tickers: list[str], api=None) -> list[dict]:
     events: list[dict] = []
     if api is None:
         try:
-            from api import get_api
+            from src.data.api import get_api
 
             api = get_api()
         except Exception as exc:
@@ -204,7 +204,7 @@ def check_sec_filing_events(tickers: list[str]) -> list[dict]:
     """Check for new SEC filings (10-K, 10-Q, 8-K) filed today."""
     events: list[dict] = []
     try:
-        from edgar import get_recent_filings
+        from src.data.edgar import get_recent_filings
     except ImportError:
         log.debug("check_sec_filing_events: edgar module not available")
         return events
@@ -243,7 +243,7 @@ def check_price_alert_events(tickers: list[str], api=None) -> list[dict]:
     events: list[dict] = []
     if api is None:
         try:
-            from api import get_api
+            from src.data.api import get_api
 
             api = get_api()
         except Exception as exc:
@@ -257,7 +257,7 @@ def check_price_alert_events(tickers: list[str], api=None) -> list[dict]:
             if price is None:
                 continue
 
-            from alerts import check_alerts
+            from src.ui.alerts import check_alerts
 
             triggered = check_alerts(
                 symbol, price=price, factor_score=None, risk_score=None
@@ -317,7 +317,7 @@ def _check_all_events(tickers: list[str]) -> None:
 def _default_tickers() -> list[str]:
     """Return the default ticker universe from config."""
     try:
-        from config import cfg
+        from src.core.config import cfg
 
         return cfg.get("screener", {}).get("default_universe", [])
     except Exception:

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from digest import (
+from src.services.digest import (
     _build_html,
     _generate_ticker_section,
     generate_digest,
@@ -38,8 +38,8 @@ def mock_api():
 def tmp_digest_dir(tmp_path, monkeypatch):
     digest_dir = tmp_path / "digests"
     digest_dir.mkdir()
-    monkeypatch.setattr("digest._DIGEST_DIR", digest_dir)
-    monkeypatch.setattr("digest._DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.services.digest._DIGEST_DIR", digest_dir)
+    monkeypatch.setattr("src.services.digest._DATA_DIR", tmp_path)
     return digest_dir
 
 
@@ -65,7 +65,7 @@ def test_build_html_structure():
 
 
 def test_generate_ticker_section_success(mock_api):
-    with patch("digest.anthropic") as mock_anthropic:
+    with patch("src.services.digest.anthropic") as mock_anthropic:
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
         mock_response = MagicMock()
@@ -127,14 +127,17 @@ def test_read_digest_html_missing(tmp_path):
 
 
 def test_generate_digest_empty_watchlist(tmp_digest_dir):
-    with patch("digest.get_watchlist", return_value=[]):
+    with patch("src.services.digest.get_watchlist", return_value=[]):
         result = generate_digest(MagicMock())
     assert result is None
 
 
 def test_generate_digest_creates_file(tmp_digest_dir, mock_api):
-    with patch("digest.get_watchlist", return_value=[{"symbol": "AAPL"}]):
-        with patch("digest._generate_ticker_section", return_value="<div>AAPL</div>"):
+    with patch("src.services.digest.get_watchlist", return_value=[{"symbol": "AAPL"}]):
+        with patch(
+            "src.services.digest._generate_ticker_section",
+            return_value="<div>AAPL</div>",
+        ):
             result = generate_digest(mock_api)
 
     assert result is not None

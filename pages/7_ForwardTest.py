@@ -11,9 +11,9 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-import forward_test as ft
+import src.analysis.forward_test as ft
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(
     page_title="Forward Test",

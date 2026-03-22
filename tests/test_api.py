@@ -21,7 +21,7 @@ def _make_api():
     with patch("finnhub.Client") as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
-        from api import FinnhubAPI
+        from src.data.api import FinnhubAPI
 
         api = FinnhubAPI.__new__(FinnhubAPI)
         api.client = mock_client
@@ -36,7 +36,7 @@ def _make_api():
 def test_init_requires_api_key(monkeypatch):
     monkeypatch.setenv("FINNHUB_API_KEY", "")
     with patch("finnhub.Client"):
-        import api as _api_mod
+        import src.data.api as _api_mod
 
         with pytest.raises(ValueError, match="FINNHUB_API_KEY"):
             _api_mod.FinnhubAPI()
@@ -46,7 +46,7 @@ def test_init_succeeds_with_key(monkeypatch):
     monkeypatch.setenv("FINNHUB_API_KEY", "valid_key")
     with patch("finnhub.Client") as mock_cls:
         mock_cls.return_value = MagicMock()
-        from api import FinnhubAPI
+        from src.data.api import FinnhubAPI
 
         api = FinnhubAPI()
         assert api.client is not None
@@ -273,9 +273,9 @@ def test_cached_stores_and_retrieves(tmp_path):
         call_count += 1
         return {"value": 42}
 
-    from cache import DiskCache
+    from src.core.cache import DiskCache
 
-    with patch("api._disk_cache", DiskCache(cache_dir=str(tmp_path))):
+    with patch("src.data.api._disk_cache", DiskCache(cache_dir=str(tmp_path))):
         r1 = api._cached("test:key", _fn, ttl=60)
         r2 = api._cached("test:key", _fn, ttl=60)
 

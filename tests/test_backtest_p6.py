@@ -41,7 +41,7 @@ def _make_df(n=300, trend="up", seed=42):
 
 
 def test_backtest_result_has_gross_return_field():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(_make_df(300), "TEST", lookback_years=1)
     assert hasattr(result, "gross_return_pct")
@@ -49,7 +49,7 @@ def test_backtest_result_has_gross_return_field():
 
 
 def test_backtest_result_has_total_cost_field():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(_make_df(300), "TEST", lookback_years=1)
     assert hasattr(result, "total_cost_pct")
@@ -57,14 +57,14 @@ def test_backtest_result_has_total_cost_field():
 
 
 def test_backtest_result_has_is_insample_field():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(_make_df(300), "TEST", lookback_years=1, is_insample=True)
     assert result.is_insample is True
 
 
 def test_backtest_is_insample_false():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(_make_df(300), "TEST", lookback_years=1, is_insample=False)
     assert result.is_insample is False
@@ -72,7 +72,7 @@ def test_backtest_is_insample_false():
 
 def test_gross_return_at_least_net_return():
     """Gross return should be >= net return (costs are never negative)."""
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(
         _make_df(400, "up"),
@@ -88,7 +88,7 @@ def test_gross_return_at_least_net_return():
 
 def test_zero_cost_gross_equals_net():
     """With zero commission and slippage, gross ≈ net return."""
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     result = run_backtest(
         _make_df(400, "up"),
@@ -104,7 +104,7 @@ def test_zero_cost_gross_equals_net():
 
 def test_higher_costs_reduce_net_return():
     """Higher transaction costs should reduce net return."""
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(400, "up", seed=7)
     result_low = run_backtest(
@@ -132,7 +132,7 @@ def test_higher_costs_reduce_net_return():
 
 def test_total_cost_grows_with_trades():
     """More trades → more total transaction cost."""
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(400, "up", seed=10)
     # Aggressive thresholds → more trades
@@ -162,7 +162,7 @@ def test_total_cost_grows_with_trades():
 
 
 def test_walk_forward_returns_tuple():
-    from backtest import run_walk_forward
+    from src.analysis.backtest import run_walk_forward
 
     df = _make_df(400)
     result = run_walk_forward(df, "TEST")
@@ -171,7 +171,7 @@ def test_walk_forward_returns_tuple():
 
 
 def test_walk_forward_both_results_are_backtest_results():
-    from backtest import run_walk_forward, BacktestResult
+    from src.analysis.backtest import run_walk_forward, BacktestResult
 
     df = _make_df(400)
     in_r, out_r = run_walk_forward(df, "TEST")
@@ -180,7 +180,7 @@ def test_walk_forward_both_results_are_backtest_results():
 
 
 def test_walk_forward_insample_flag():
-    from backtest import run_walk_forward
+    from src.analysis.backtest import run_walk_forward
 
     df = _make_df(400)
     in_r, out_r = run_walk_forward(df, "TEST")
@@ -189,7 +189,7 @@ def test_walk_forward_insample_flag():
 
 
 def test_walk_forward_requires_min_data():
-    from backtest import run_walk_forward
+    from src.analysis.backtest import run_walk_forward
 
     df = _make_df(30)  # too few rows
     with pytest.raises(ValueError, match="Insufficient"):
@@ -198,7 +198,7 @@ def test_walk_forward_requires_min_data():
 
 def test_walk_forward_in_out_both_have_valid_dates():
     """Both in-sample and out-of-sample results should have non-empty date fields."""
-    from backtest import run_walk_forward
+    from src.analysis.backtest import run_walk_forward
 
     df = _make_df(400)
     in_r, out_r = run_walk_forward(df, "TEST")
@@ -207,7 +207,7 @@ def test_walk_forward_in_out_both_have_valid_dates():
 
 
 def test_walk_forward_custom_split():
-    from backtest import run_walk_forward
+    from src.analysis.backtest import run_walk_forward
 
     df = _make_df(400)
     in_r, out_r = run_walk_forward(df, "TEST", insample_pct=0.60)
@@ -221,7 +221,7 @@ def test_walk_forward_custom_split():
 
 
 def test_parameter_sweep_returns_expected_keys():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     result = run_parameter_sweep(df, "TEST", lookback_years=1)
@@ -232,7 +232,7 @@ def test_parameter_sweep_returns_expected_keys():
 
 
 def test_parameter_sweep_best_params_structure():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     result = run_parameter_sweep(df, "TEST", lookback_years=1)
@@ -244,7 +244,7 @@ def test_parameter_sweep_best_params_structure():
 
 
 def test_parameter_sweep_best_entry_exit_valid():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     result = run_parameter_sweep(df, "TEST", lookback_years=1)
@@ -254,7 +254,7 @@ def test_parameter_sweep_best_entry_exit_valid():
 
 
 def test_parameter_sweep_grid_is_dataframe():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
     import pandas as pd
 
     df = _make_df(300)
@@ -264,7 +264,7 @@ def test_parameter_sweep_grid_is_dataframe():
 
 
 def test_parameter_sweep_boundary_warning_is_bool():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     result = run_parameter_sweep(df, "TEST", lookback_years=1)
@@ -272,7 +272,7 @@ def test_parameter_sweep_boundary_warning_is_bool():
 
 
 def test_parameter_sweep_custom_ranges():
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     result = run_parameter_sweep(
@@ -284,7 +284,7 @@ def test_parameter_sweep_custom_ranges():
 
 def test_parameter_sweep_invalid_combos_skipped():
     """Entry ≤ exit combos should be skipped (return None in grid)."""
-    from backtest import run_parameter_sweep
+    from src.analysis.backtest import run_parameter_sweep
 
     df = _make_df(300)
     # Use entry=40, exit=45 → exit > entry → should be skipped (None)

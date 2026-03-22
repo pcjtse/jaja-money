@@ -12,7 +12,7 @@ def _make_close(n=252, drift=0.0002):
 
 
 def test_sector_momentum_score_structure():
-    from sectors import sector_momentum_score
+    from src.trading.sectors import sector_momentum_score
 
     close = _make_close(252)
     result = sector_momentum_score(close)
@@ -26,7 +26,7 @@ def test_sector_momentum_score_structure():
 
 
 def test_sector_momentum_insufficient_data():
-    from sectors import sector_momentum_score
+    from src.trading.sectors import sector_momentum_score
 
     close = pd.Series([100, 101, 102])
     result = sector_momentum_score(close)
@@ -34,7 +34,7 @@ def test_sector_momentum_insufficient_data():
 
 
 def test_uptrending_sector_high_score():
-    from sectors import sector_momentum_score
+    from src.trading.sectors import sector_momentum_score
 
     close = _make_close(252, drift=0.003)  # strong uptrend
     result = sector_momentum_score(close)
@@ -42,7 +42,7 @@ def test_uptrending_sector_high_score():
 
 
 def test_downtrending_sector_low_score():
-    from sectors import sector_momentum_score
+    from src.trading.sectors import sector_momentum_score
 
     close = _make_close(252, drift=-0.003)  # strong downtrend
     result = sector_momentum_score(close)
@@ -50,25 +50,25 @@ def test_downtrending_sector_low_score():
 
 
 def test_classify_rotation_phase_leading():
-    from sectors import classify_rotation_phase
+    from src.trading.sectors import classify_rotation_phase
 
     assert classify_rotation_phase(75, 3.0, 5.0) == "Leading"
 
 
 def test_classify_rotation_phase_lagging():
-    from sectors import classify_rotation_phase
+    from src.trading.sectors import classify_rotation_phase
 
     assert classify_rotation_phase(25, -3.0, -5.0) == "Lagging"
 
 
 def test_classify_rotation_phase_neutral():
-    from sectors import classify_rotation_phase
+    from src.trading.sectors import classify_rotation_phase
 
     assert classify_rotation_phase(50, 0.5, 1.0) == "Neutral"
 
 
 def test_classify_rotation_phase_improving():
-    from sectors import classify_rotation_phase
+    from src.trading.sectors import classify_rotation_phase
 
     # High score, good 1M but weak 3M → Improving
     assert classify_rotation_phase(75, 3.0, -2.0) == "Improving"

@@ -5,7 +5,7 @@ only the pure-logic helpers are covered here.
 """
 
 import pytest
-from sentiment import aggregate_sentiment
+from src.data.sentiment import aggregate_sentiment
 
 
 # ---------------------------------------------------------------------------

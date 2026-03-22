@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture
 def dc(tmp_path):
-    from cache import DiskCache
+    from src.core.cache import DiskCache
 
     return DiskCache(cache_dir=tmp_path)
 
@@ -18,13 +18,13 @@ def test_set_and_get(dc):
 
 
 def test_miss_returns_sentinel(dc):
-    from cache import CACHE_MISS
+    from src.core.cache import CACHE_MISS
 
     assert dc.get("nonexistent") is CACHE_MISS
 
 
 def test_ttl_expiry(dc):
-    from cache import CACHE_MISS
+    from src.core.cache import CACHE_MISS
 
     dc.set("key_expire", "hello", ttl=0)
     time.sleep(0.05)
@@ -32,7 +32,7 @@ def test_ttl_expiry(dc):
 
 
 def test_delete(dc):
-    from cache import CACHE_MISS
+    from src.core.cache import CACHE_MISS
 
     dc.set("key_del", "value", ttl=60)
     dc.delete("key_del")
@@ -40,7 +40,7 @@ def test_delete(dc):
 
 
 def test_clear(dc):
-    from cache import CACHE_MISS
+    from src.core.cache import CACHE_MISS
 
     dc.set("a", 1, ttl=60)
     dc.set("b", 2, ttl=60)
@@ -65,7 +65,7 @@ def test_overwrite(dc):
 
 
 def test_various_value_types(dc):
-    from cache import CACHE_MISS
+    from src.core.cache import CACHE_MISS
 
     dc.set("int", 42, ttl=60)
     dc.set("list", [1, 2, 3], ttl=60)

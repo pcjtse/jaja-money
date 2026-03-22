@@ -3,10 +3,10 @@
 import streamlit as st
 import plotly.graph_objects as go
 
-from api import get_api, MOCK_MODE
-from comparison import compare_tickers, comparison_dataframe
+from src.data.api import get_api, MOCK_MODE
+from src.analysis.comparison import compare_tickers, comparison_dataframe
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(page_title="Compare Stocks", page_icon="⚖️", layout="wide")
 inject_css()

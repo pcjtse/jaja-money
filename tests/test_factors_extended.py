@@ -32,7 +32,7 @@ def _make_ohlcv(n=100, start=100.0):
 
 
 def test_bollinger_bands_structure():
-    from factors import calc_bollinger_bands
+    from src.analysis.factors import calc_bollinger_bands
 
     df = _make_ohlcv(100)
     result = calc_bollinger_bands(df["Close"], window=20)
@@ -45,7 +45,7 @@ def test_bollinger_bands_structure():
 
 
 def test_bollinger_upper_above_lower():
-    from factors import calc_bollinger_bands
+    from src.analysis.factors import calc_bollinger_bands
 
     df = _make_ohlcv(100)
     bb = calc_bollinger_bands(df["Close"])
@@ -55,14 +55,14 @@ def test_bollinger_upper_above_lower():
 
 
 def test_bollinger_insufficient_data():
-    from factors import calc_bollinger_bands
+    from src.analysis.factors import calc_bollinger_bands
 
     close = pd.Series([100, 101, 102])
     assert calc_bollinger_bands(close, window=20) is None
 
 
 def test_bollinger_pct_b_range():
-    from factors import calc_bollinger_bands
+    from src.analysis.factors import calc_bollinger_bands
 
     df = _make_ohlcv(200)
     bb = calc_bollinger_bands(df["Close"])
@@ -71,7 +71,7 @@ def test_bollinger_pct_b_range():
 
 
 def test_bollinger_series_length():
-    from factors import calc_bollinger_bands
+    from src.analysis.factors import calc_bollinger_bands
 
     df = _make_ohlcv(100)
     bb = calc_bollinger_bands(df["Close"], window=20)
@@ -86,7 +86,7 @@ def test_bollinger_series_length():
 
 
 def test_obv_returns_series():
-    from factors import calc_obv
+    from src.analysis.factors import calc_obv
 
     df = _make_ohlcv(100)
     obv = calc_obv(df["Close"], df["Volume"])
@@ -96,14 +96,14 @@ def test_obv_returns_series():
 
 
 def test_obv_none_when_no_volume():
-    from factors import calc_obv
+    from src.analysis.factors import calc_obv
 
     close = pd.Series([100, 101, 102])
     assert calc_obv(close, None) is None
 
 
 def test_obv_none_when_length_mismatch():
-    from factors import calc_obv
+    from src.analysis.factors import calc_obv
 
     close = pd.Series([100, 101, 102])
     vol = pd.Series([1000, 2000])  # different length
@@ -111,7 +111,7 @@ def test_obv_none_when_length_mismatch():
 
 
 def test_obv_rising_on_updays():
-    from factors import calc_obv
+    from src.analysis.factors import calc_obv
 
     # All up days → OBV should be monotonically increasing
     close = pd.Series([100, 101, 102, 103, 104])
@@ -126,7 +126,7 @@ def test_obv_rising_on_updays():
 
 
 def test_vwap_returns_float():
-    from factors import calc_vwap
+    from src.analysis.factors import calc_vwap
 
     df = _make_ohlcv(100)
     vwap = calc_vwap(df)
@@ -136,21 +136,21 @@ def test_vwap_returns_float():
 
 
 def test_vwap_none_on_empty():
-    from factors import calc_vwap
+    from src.analysis.factors import calc_vwap
 
     assert calc_vwap(None) is None
     assert calc_vwap(pd.DataFrame()) is None
 
 
 def test_vwap_none_on_missing_columns():
-    from factors import calc_vwap
+    from src.analysis.factors import calc_vwap
 
     df = pd.DataFrame({"Close": [100, 101]})
     assert calc_vwap(df) is None
 
 
 def test_vwap_near_typical_price():
-    from factors import calc_vwap
+    from src.analysis.factors import calc_vwap
 
     # Flat OHLCV → VWAP should be close to the price
     n = 20

@@ -158,9 +158,9 @@ def test_check_sec_filing_events_fires_for_today():
 
     # Patch edgar module so the local import inside check_sec_filing_events
     # returns our mock filing
-    edgar_stub = types.ModuleType("edgar")
+    edgar_stub = types.ModuleType("src.data.edgar")
     edgar_stub.get_recent_filings = MagicMock(return_value=[mock_filing])
-    with patch.dict(sys.modules, {"edgar": edgar_stub}):
+    with patch.dict(sys.modules, {"src.data.edgar": edgar_stub}):
         events = check_sec_filing_events(["AAPL"])
 
     assert len(events) == 1
@@ -181,9 +181,9 @@ def test_check_sec_filing_events_skips_old_filings():
         "primaryDocument": "",
     }
 
-    edgar_stub = types.ModuleType("edgar")
+    edgar_stub = types.ModuleType("src.data.edgar")
     edgar_stub.get_recent_filings = MagicMock(return_value=[old_filing])
-    with patch.dict(sys.modules, {"edgar": edgar_stub}):
+    with patch.dict(sys.modules, {"src.data.edgar": edgar_stub}):
         events = check_sec_filing_events(["AAPL"])
 
     assert events == []
@@ -197,12 +197,12 @@ def test_check_sec_filing_events_no_edgar():
 
     # Temporarily remove edgar from sys.modules so the import inside the
     # function raises ImportError and the function returns []
-    original = sys.modules.pop("edgar", None)
+    original = sys.modules.pop("src.data.edgar", None)
     try:
         events = check_sec_filing_events(["AAPL"])
     finally:
         if original is not None:
-            sys.modules["edgar"] = original
+            sys.modules["src.data.edgar"] = original
 
     assert isinstance(events, list)
 
@@ -213,12 +213,12 @@ def test_check_sec_filing_events_no_edgar():
 
 
 def test_check_price_alert_events_fires_triggered(tmp_path, monkeypatch):
-    import alerts as a
+    import src.ui.alerts as a
 
     monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-    from alerts import add_alert
+    from src.ui.alerts import add_alert
 
     add_alert("AAPL", "Price Above", 150.0)
 
@@ -236,12 +236,12 @@ def test_check_price_alert_events_fires_triggered(tmp_path, monkeypatch):
 
 
 def test_check_price_alert_events_no_fire_below_threshold(tmp_path, monkeypatch):
-    import alerts as a
+    import src.ui.alerts as a
 
     monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-    from alerts import add_alert
+    from src.ui.alerts import add_alert
 
     add_alert("AAPL", "Price Above", 200.0)
 

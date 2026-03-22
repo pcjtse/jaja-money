@@ -31,14 +31,19 @@ def _stub_heavy_deps() -> None:
     fails (e.g. pandas not installed), so real modules are never shadowed
     in environments where they are available.
     """
-    for mod_name in ("factors", "guardrails", "screener"):
-        if mod_name not in sys.modules:
+    mod_mapping = {
+        "factors": "src.analysis.factors",
+        "guardrails": "src.analysis.guardrails",
+        "screener": "src.trading.screener",
+    }
+    for mod_name, full_name in mod_mapping.items():
+        if full_name not in sys.modules:
             try:
-                importlib.import_module(mod_name)
+                importlib.import_module(full_name)
             except (ImportError, ModuleNotFoundError):
-                sys.modules[mod_name] = types.ModuleType(mod_name)
+                sys.modules[full_name] = types.ModuleType(full_name)
 
-    factors_mod = sys.modules.get("factors")
+    factors_mod = sys.modules.get("src.analysis.factors")
     if factors_mod is not None and not hasattr(factors_mod, "compute_factors"):
         factors_mod.compute_factors = MagicMock(
             return_value={
@@ -48,7 +53,7 @@ def _stub_heavy_deps() -> None:
             }
         )
 
-    guardrails_mod = sys.modules.get("guardrails")
+    guardrails_mod = sys.modules.get("src.analysis.guardrails")
     if guardrails_mod is not None and not hasattr(guardrails_mod, "compute_risk"):
         guardrails_mod.compute_risk = MagicMock(
             return_value={
@@ -58,7 +63,7 @@ def _stub_heavy_deps() -> None:
             }
         )
 
-    screener_mod = sys.modules.get("screener")
+    screener_mod = sys.modules.get("src.trading.screener")
     if screener_mod is not None and not hasattr(screener_mod, "run_screener"):
         screener_mod.run_screener = MagicMock(return_value=[])
 
@@ -75,7 +80,7 @@ _stub_heavy_deps()
 def client():
     os.environ.pop("JAJA_API_KEY", None)
 
-    import server
+    import src.services.server as server
 
     server._api_instance = None
     server._api_error = None
@@ -115,12 +120,12 @@ def _mock_api():
 
 class TestSignalsEndpoint:
     def test_signals_returns_200(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -137,12 +142,12 @@ class TestSignalsEndpoint:
         assert response.status_code == 200
 
     def test_signals_returns_list(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -161,12 +166,12 @@ class TestSignalsEndpoint:
         assert data["count"] == 2
 
     def test_signals_has_signal_field(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -225,12 +230,12 @@ class TestOpenClawWebhook:
         assert data["status"] == "received"
 
     def test_webhook_analyze_request(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 72,
@@ -264,7 +269,7 @@ class TestOpenClawWebhook:
         assert response.status_code == 400
 
     def test_webhook_alert_request(self, client, tmp_path, monkeypatch):
-        import alerts as a
+        import src.ui.alerts as a
 
         monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
         monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
@@ -297,10 +302,10 @@ class TestOpenClawWebhook:
         assert response.status_code == 400
 
     def test_webhook_screen_request(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
-        with patch("screener.run_screener") as mock_screener:
+        with patch("src.trading.screener.run_screener") as mock_screener:
             mock_screener.return_value = [{"symbol": "AAPL", "factor_score": 72}]
             response = client.post(
                 "/openclaw/webhook",
@@ -326,12 +331,12 @@ class TestOpenClawWebhook:
 
 class TestOpenClawRebalance:
     def test_rebalance_returns_suggestions(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 65,
@@ -376,12 +381,12 @@ class TestOpenClawRebalance:
 
     def test_rebalance_drift_action_overweight(self, client):
         """Ticker with current > target should get SELL action."""
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 50,
@@ -413,10 +418,10 @@ class TestOpenClawRebalance:
 
 class TestOpenClawAgent:
     def test_agent_returns_200_streaming(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
-        with patch("agent.run_research_agent") as mock_agent:
+        with patch("src.services.agent.run_research_agent") as mock_agent:
             mock_agent.return_value = iter(["Research result for AAPL"])
             response = client.post(
                 "/openclaw/agent",
@@ -430,10 +435,10 @@ class TestOpenClawAgent:
         assert "text" in response.headers.get("content-type", "")
 
     def test_agent_default_question(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
-        with patch("agent.run_research_agent") as mock_agent:
+        with patch("src.services.agent.run_research_agent") as mock_agent:
             mock_agent.return_value = iter(["Investment memo for AAPL"])
             response = client.post(
                 "/openclaw/agent",
@@ -450,12 +455,12 @@ class TestOpenClawAgent:
 
 class TestScoreEndpoint:
     def test_score_returns_200(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -472,12 +477,12 @@ class TestScoreEndpoint:
         assert response.status_code == 200
 
     def test_score_has_required_fields(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -501,12 +506,12 @@ class TestScoreEndpoint:
         assert "timestamp" in data
 
     def test_score_signal_is_buy_when_scores_qualify(self, client):
-        import server
+        import src.services.server as server
 
         server._api_instance = _mock_api()
         with (
-            patch("factors.compute_factors") as mf,
-            patch("guardrails.compute_risk") as mr,
+            patch("src.analysis.factors.compute_factors") as mf,
+            patch("src.analysis.guardrails.compute_risk") as mr,
         ):
             mf.return_value = {
                 "composite_score": 70,
@@ -530,7 +535,7 @@ class TestScoreEndpoint:
 
 class TestAlertsEndpoint:
     def test_alerts_returns_200(self, client, tmp_path, monkeypatch):
-        import alerts as a
+        import src.ui.alerts as a
 
         monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
         monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
@@ -539,7 +544,7 @@ class TestAlertsEndpoint:
         assert response.status_code == 200
 
     def test_alerts_empty_by_default(self, client, tmp_path, monkeypatch):
-        import alerts as a
+        import src.ui.alerts as a
 
         monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
         monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
@@ -551,12 +556,12 @@ class TestAlertsEndpoint:
         assert data["active"] == []
 
     def test_alerts_returns_created_alert(self, client, tmp_path, monkeypatch):
-        import alerts as a
+        import src.ui.alerts as a
 
         monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
         monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-        from alerts import add_alert
+        from src.ui.alerts import add_alert
 
         add_alert("AAPL", "Price Above", 200.0)
 
@@ -566,12 +571,12 @@ class TestAlertsEndpoint:
         assert data["active"][0]["symbol"] == "AAPL"
 
     def test_alerts_filtered_by_symbol(self, client, tmp_path, monkeypatch):
-        import alerts as a
+        import src.ui.alerts as a
 
         monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
         monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-        from alerts import add_alert
+        from src.ui.alerts import add_alert
 
         add_alert("AAPL", "Price Above", 200.0)
         add_alert("MSFT", "Price Below", 300.0)

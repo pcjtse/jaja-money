@@ -13,7 +13,7 @@ Covers:
 import pandas as pd
 import numpy as np
 
-from guardrails import _detect_vol_regime, _build_flags, compute_risk
+from src.analysis.guardrails import _detect_vol_regime, _build_flags, compute_risk
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 
-from edgar import (
+from src.data.edgar import (
     _strip_html,
     chunk_text,
     fetch_filing_text,
@@ -50,7 +50,7 @@ def test_chunk_text_long():
 
 
 def test_get_cik_not_found():
-    with patch("edgar.requests.get") as mock_get:
+    with patch("src.data.edgar.requests.get") as mock_get:
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "0": {"cik_str": 1, "ticker": "AAPL", "title": "Apple Inc."}
@@ -63,14 +63,14 @@ def test_get_cik_not_found():
 
 
 def test_get_cik_request_failure():
-    with patch("edgar.requests.get") as mock_get:
+    with patch("src.data.edgar.requests.get") as mock_get:
         mock_get.side_effect = Exception("Network error")
         cik = get_cik("AAPL")
         assert cik is None
 
 
 def test_get_recent_filings_no_cik():
-    with patch("edgar.get_cik", return_value=None):
+    with patch("src.data.edgar.get_cik", return_value=None):
         filings = get_recent_filings("INVALID")
     assert filings == []
 
@@ -91,8 +91,8 @@ def test_get_recent_filings_success():
         }
     }
 
-    with patch("edgar.get_cik", return_value="0000320193"):
-        with patch("edgar.requests.get") as mock_get:
+    with patch("src.data.edgar.get_cik", return_value="0000320193"):
+        with patch("src.data.edgar.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.json.return_value = mock_submissions
             mock_response.raise_for_status = MagicMock()
@@ -106,7 +106,7 @@ def test_get_recent_filings_success():
 
 def test_fetch_filing_text_failure():
     filing = {"url": "https://invalid.sec.gov/test.htm"}
-    with patch("edgar.requests.get") as mock_get:
+    with patch("src.data.edgar.requests.get") as mock_get:
         mock_get.side_effect = Exception("Connection failed")
         text = fetch_filing_text(filing)
     assert text == ""
@@ -116,7 +116,7 @@ def test_fetch_filing_text_html():
     html_content = "<html><body><p>Annual report text here</p></body></html>"
     filing = {"url": "https://sec.gov/test.htm"}
 
-    with patch("edgar.requests.get") as mock_get:
+    with patch("src.data.edgar.requests.get") as mock_get:
         mock_response = MagicMock()
         mock_response.text = html_content
         mock_response.raise_for_status = MagicMock()
@@ -146,7 +146,7 @@ def test_stream_filing_analysis_with_text():
     mock_stream.text_stream = iter(["Analysis ", "complete."])
     mock_client.messages.stream.return_value = mock_stream
 
-    with patch("edgar.anthropic") as mock_anthropic_mod:
+    with patch("src.data.edgar.anthropic") as mock_anthropic_mod:
         mock_anthropic_mod.Anthropic.return_value = mock_client
         chunks = list(stream_filing_analysis("AAPL", filing, text))
 

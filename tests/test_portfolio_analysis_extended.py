@@ -24,21 +24,21 @@ def _make_returns(tickers=("AAPL", "MSFT", "GOOG"), n=252, seed=42):
 
 class TestComputeRiskParityWeights:
     def test_weights_sum_to_one(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         returns = _make_returns()
         weights = compute_risk_parity_weights(returns)
         assert sum(weights.values()) == pytest.approx(1.0, abs=0.01)
 
     def test_all_weights_positive(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         returns = _make_returns()
         weights = compute_risk_parity_weights(returns)
         assert all(w > 0 for w in weights.values())
 
     def test_returns_all_tickers(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         tickers = ("AAPL", "MSFT", "GOOG")
         returns = _make_returns(tickers=tickers)
@@ -46,19 +46,19 @@ class TestComputeRiskParityWeights:
         assert set(weights.keys()) == set(tickers)
 
     def test_empty_returns_returns_empty_dict(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         result = compute_risk_parity_weights(pd.DataFrame())
         assert result == {}
 
     def test_none_returns_empty_dict(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         result = compute_risk_parity_weights(None)
         assert result == {}
 
     def test_low_vol_ticker_gets_higher_weight(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         # AAPL has very low vol → should get more weight
         n = 252
@@ -73,7 +73,7 @@ class TestComputeRiskParityWeights:
         assert weights["LOW_VOL"] > weights["HIGH_VOL"]
 
     def test_equal_weight_fallback_when_zero_vol(self):
-        from portfolio_analysis import compute_risk_parity_weights
+        from src.analysis.portfolio_analysis import compute_risk_parity_weights
 
         # Flat returns → zero std → fallback to equal weights
         data = pd.DataFrame(
@@ -101,13 +101,13 @@ class TestRunStressTests:
         }
 
     def test_returns_list_of_scenarios(self):
-        from portfolio_analysis import run_stress_tests, STRESS_SCENARIOS
+        from src.analysis.portfolio_analysis import run_stress_tests, STRESS_SCENARIOS
 
         results = run_stress_tests(self._positions(), 100_000)
         assert len(results) == len(STRESS_SCENARIOS)
 
     def test_each_result_has_required_keys(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         results = run_stress_tests(self._positions(), 100_000)
         for r in results:
@@ -117,7 +117,7 @@ class TestRunStressTests:
             assert "by_position" in r
 
     def test_losses_are_negative(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         results = run_stress_tests(self._positions(), 100_000)
         for r in results:
@@ -125,7 +125,7 @@ class TestRunStressTests:
             assert r["portfolio_loss_pct"] < 0
 
     def test_dollar_loss_matches_pct_times_value(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         total = 100_000
         results = run_stress_tests(self._positions(), total)
@@ -134,17 +134,17 @@ class TestRunStressTests:
             assert r["portfolio_loss_dollar"] == pytest.approx(expected, abs=1.0)
 
     def test_empty_positions_returns_empty(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         assert run_stress_tests({}, 100_000) == []
 
     def test_zero_value_returns_empty(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         assert run_stress_tests(self._positions(), 0) == []
 
     def test_by_position_sums_to_portfolio_loss(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         results = run_stress_tests(self._positions(), 100_000)
         pos = self._positions()
@@ -156,7 +156,7 @@ class TestRunStressTests:
             assert r["portfolio_loss_pct"] == pytest.approx(summed, abs=0.001)
 
     def test_sector_matched_to_scenario(self):
-        from portfolio_analysis import run_stress_tests
+        from src.analysis.portfolio_analysis import run_stress_tests
 
         positions = {"AAPL": {"weight": 1.0, "sector": "Technology"}}
         results = run_stress_tests(positions, 100_000)
@@ -190,7 +190,7 @@ class TestFindTaxLossOpportunities:
         )
 
     def test_returns_list(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         result = find_tax_loss_opportunities(
             self._positions_with_loss(), self._correlated_returns()
@@ -198,7 +198,7 @@ class TestFindTaxLossOpportunities:
         assert isinstance(result, list)
 
     def test_only_includes_positions_with_losses(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         result = find_tax_loss_opportunities(
             self._positions_with_loss(), self._correlated_returns()
@@ -211,7 +211,7 @@ class TestFindTaxLossOpportunities:
         assert "GOOG" in tickers
 
     def test_result_has_required_keys(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         result = find_tax_loss_opportunities(
             self._positions_with_loss(), self._correlated_returns()
@@ -222,12 +222,12 @@ class TestFindTaxLossOpportunities:
             assert "message" in r
 
     def test_empty_positions_returns_empty(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         assert find_tax_loss_opportunities({}, self._correlated_returns()) == []
 
     def test_empty_returns_df_returns_empty(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         assert (
             find_tax_loss_opportunities(self._positions_with_loss(), pd.DataFrame())
@@ -235,7 +235,7 @@ class TestFindTaxLossOpportunities:
         )
 
     def test_correlated_replacement_found(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         result = find_tax_loss_opportunities(
             self._positions_with_loss(), self._correlated_returns()
@@ -247,7 +247,7 @@ class TestFindTaxLossOpportunities:
                 assert aapl["correlation"] >= 0.70
 
     def test_loss_pct_matches_input(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         result = find_tax_loss_opportunities(
             self._positions_with_loss(), self._correlated_returns()
@@ -257,7 +257,7 @@ class TestFindTaxLossOpportunities:
             assert aapl["loss_pct"] == pytest.approx(-12.0)
 
     def test_no_losses_returns_empty(self):
-        from portfolio_analysis import find_tax_loss_opportunities
+        from src.analysis.portfolio_analysis import find_tax_loss_opportunities
 
         positions = {
             "AAPL": {"weight": 0.5, "cost_basis_pct_gain": 10.0},
@@ -274,7 +274,7 @@ class TestFindTaxLossOpportunities:
 
 class TestComputePortfolioDrift:
     def test_returns_list(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.45}, "MSFT": {"current_weight": 0.30}}
         targets = {"AAPL": 0.40, "MSFT": 0.35}
@@ -282,7 +282,7 @@ class TestComputePortfolioDrift:
         assert isinstance(result, list)
 
     def test_drift_calculated_correctly(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.45}}
         targets = {"AAPL": 0.40}
@@ -291,7 +291,7 @@ class TestComputePortfolioDrift:
         assert aapl["drift"] == pytest.approx(0.05, abs=0.001)
 
     def test_drifted_flag_set_when_above_5pct(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.46}}
         targets = {"AAPL": 0.40}
@@ -299,7 +299,7 @@ class TestComputePortfolioDrift:
         assert result[0]["drifted"] is True
 
     def test_drifted_flag_false_when_within_tolerance(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.42}}
         targets = {"AAPL": 0.40}
@@ -307,7 +307,7 @@ class TestComputePortfolioDrift:
         assert result[0]["drifted"] is False
 
     def test_sorted_by_abs_drift_descending(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {
             "A": {"current_weight": 0.50},
@@ -319,13 +319,13 @@ class TestComputePortfolioDrift:
         assert drifts == sorted(drifts, reverse=True)
 
     def test_empty_inputs_return_empty(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         assert compute_portfolio_drift({}, {}) == []
         assert compute_portfolio_drift(None, {}) == []
 
     def test_includes_tickers_in_targets_but_not_positions(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.60}}
         targets = {"AAPL": 0.50, "MSFT": 0.30}
@@ -334,7 +334,7 @@ class TestComputePortfolioDrift:
         assert "MSFT" in tickers
 
     def test_current_and_target_weights_in_result(self):
-        from portfolio_analysis import compute_portfolio_drift
+        from src.analysis.portfolio_analysis import compute_portfolio_drift
 
         positions = {"AAPL": {"current_weight": 0.45}}
         targets = {"AAPL": 0.40}

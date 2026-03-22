@@ -10,7 +10,7 @@ Covers:
 import pytest
 import pandas as pd
 
-from factors import (
+from src.analysis.factors import (
     _get_sector_pe_median,
     _factor_valuation_sector_adjusted,
     _factor_dividend_yield,

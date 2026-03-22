@@ -48,7 +48,7 @@ class TestAnalysisToPdf:
         from unittest.mock import patch
 
         with patch.dict(sys.modules, {"reportlab": None, "reportlab.lib": None}):
-            from export import analysis_to_pdf
+            from src.ui.export import analysis_to_pdf
 
             with pytest.raises(RuntimeError, match="reportlab"):
                 analysis_to_pdf(
@@ -67,7 +67,7 @@ class TestAnalysisToPdf:
 
     def test_returns_bytes_when_reportlab_available(self):
         pytest.importorskip("reportlab")
-        from export import analysis_to_pdf
+        from src.ui.export import analysis_to_pdf
 
         result = analysis_to_pdf(
             symbol="AAPL",
@@ -84,7 +84,7 @@ class TestAnalysisToPdf:
 
     def test_pdf_starts_with_pdf_magic_bytes(self):
         pytest.importorskip("reportlab")
-        from export import analysis_to_pdf
+        from src.ui.export import analysis_to_pdf
 
         result = analysis_to_pdf(
             symbol="TSLA",
@@ -100,7 +100,7 @@ class TestAnalysisToPdf:
 
     def test_handles_none_profile_and_financials(self):
         pytest.importorskip("reportlab")
-        from export import analysis_to_pdf
+        from src.ui.export import analysis_to_pdf
 
         # Should not raise even with None profile/financials
         result = analysis_to_pdf(
@@ -168,25 +168,25 @@ class TestParseBrokerageCSV:
         )
 
     def test_schwab_auto_detection(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._schwab_csv(), broker="auto")
         assert isinstance(result, list)
 
     def test_fidelity_returns_list(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._fidelity_csv(), broker="fidelity")
         assert isinstance(result, list)
 
     def test_ibkr_returns_list(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._ibkr_csv(), broker="ibkr")
         assert isinstance(result, list)
 
     def test_fidelity_result_has_expected_keys(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._fidelity_csv(), broker="fidelity")
         if result:
@@ -200,7 +200,7 @@ class TestParseBrokerageCSV:
                 assert key in result[0]
 
     def test_ibkr_result_has_expected_keys(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._ibkr_csv(), broker="ibkr")
         if result:
@@ -214,27 +214,27 @@ class TestParseBrokerageCSV:
                 assert key in result[0]
 
     def test_ibkr_symbol_parsed_correctly(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._ibkr_csv(), broker="ibkr")
         symbols = [r["symbol"] for r in result]
         assert "AAPL" in symbols
 
     def test_ibkr_unrealized_pnl_is_numeric(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(self._ibkr_csv(), broker="ibkr")
         for r in result:
             assert isinstance(r["unrealized_pnl"], (int, float))
 
     def test_empty_csv_returns_empty_list(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         result = parse_brokerage_csv(b"", broker="fidelity")
         assert result == []
 
     def test_unknown_broker_returns_list(self):
-        from export import parse_brokerage_csv
+        from src.ui.export import parse_brokerage_csv
 
         # Should not raise; tries generic parser and returns list
         result = parse_brokerage_csv(b"col1,col2\nval1,val2", broker="unknown_broker")
@@ -248,34 +248,34 @@ class TestParseBrokerageCSV:
 
 class TestParseFloat:
     def test_valid_float_string(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         assert _parse_float("1500.00") == pytest.approx(1500.0)
 
     def test_none_returns_none(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         assert _parse_float(None) is None
 
     def test_empty_string_returns_none(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         assert _parse_float("") is None
 
     def test_string_with_commas(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         # "1,500.00" might fail gracefully → None
         result = _parse_float("1500.00")
         assert result is not None
 
     def test_none_string(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         assert _parse_float("None") is None
 
     def test_negative_value(self):
-        from export import _parse_float
+        from src.ui.export import _parse_float
 
         result = _parse_float("-150.50")
         assert result == pytest.approx(-150.50)
@@ -288,7 +288,7 @@ class TestParseFloat:
 
 class TestExportToGoogleSheets:
     def test_returns_error_without_credentials_path(self):
-        from export import export_to_google_sheets
+        from src.ui.export import export_to_google_sheets
 
         result = export_to_google_sheets(
             symbol="AAPL",

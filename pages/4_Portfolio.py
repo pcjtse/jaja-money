@@ -4,8 +4,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from api import get_api, MOCK_MODE
-from portfolio_analysis import (
+from src.data.api import get_api, MOCK_MODE
+from src.analysis.portfolio_analysis import (
     analyze_portfolio,
     compute_risk_parity_weights,
     run_stress_tests,
@@ -13,7 +13,7 @@ from portfolio_analysis import (
     compute_portfolio_drift,
 )
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(page_title="Portfolio Analysis", page_icon="💼", layout="wide")
 inject_css()

@@ -3,7 +3,7 @@
 import pytest
 import pandas as pd
 
-from factors import (
+from src.analysis.factors import (
     _clamp,
     _macd_histograms,
     _sma,

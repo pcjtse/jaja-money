@@ -5,11 +5,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 
-from api import get_api, MOCK_MODE
-from backtest import run_backtest, run_walk_forward, run_parameter_sweep
-from analyzer import stream_backtest_narrative
+from src.data.api import get_api, MOCK_MODE
+from src.analysis.backtest import run_backtest, run_walk_forward, run_parameter_sweep
+from src.analysis.analyzer import stream_backtest_narrative
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(page_title="Backtest", page_icon="📊", layout="wide")
 inject_css()
