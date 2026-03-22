@@ -350,25 +350,21 @@ def test_stream_forward_looking_analysis_yields_chunks():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(
-    os.getenv("MOCK_DATA", "").lower() in ("1", "true", "yes"),
-    reason="Mock mode returns MockAIBackend instead of raising",
-)
 def test_get_client_raises_without_key(monkeypatch):
+    import api as _api
     from analyzer import _get_client
 
+    monkeypatch.setattr(_api, "MOCK_MODE", False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         _get_client()
 
 
-@pytest.mark.skipif(
-    os.getenv("MOCK_DATA", "").lower() in ("1", "true", "yes"),
-    reason="Mock mode returns MockAIBackend instead of raising",
-)
 def test_get_client_raises_on_placeholder(monkeypatch):
+    import api as _api
     from analyzer import _get_client
 
+    monkeypatch.setattr(_api, "MOCK_MODE", False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "your_anthropic_api_key_here")
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         _get_client()
