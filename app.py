@@ -363,7 +363,7 @@ with st.sidebar:
 
     # P4.5: Factor weight settings
     with st.expander("⚙️ Factor Weights"):
-        from config import cfg
+        from src.core.config import cfg
 
         current_weights = dict(cfg.factor_weights)
         weight_keys = [
@@ -1297,7 +1297,7 @@ with st.expander("Social Sentiment — Reddit & StockTwits (P16.1)", expanded=Fa
     if st.button("Fetch Social Sentiment", key="social_fetch"):
         with st.spinner("Fetching Reddit & StockTwits data..."):
             try:
-                from sentiment import _load_finbert
+                from src.data.sentiment import _load_finbert
 
                 _reddit = fetch_reddit_mentions(symbol, limit=25)
                 _stwits = fetch_stocktwits_messages(symbol, limit=25)
