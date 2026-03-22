@@ -3,11 +3,13 @@
 Stores pickled values in ~/.jaja-money/cache/.  Falls back gracefully
 to no-op if the cache directory can't be created or a read/write fails.
 
+Uses a sentinel value to distinguish "not in cache" from "cached None".
+
 Usage:
-    from cache import DiskCache
+    from cache import DiskCache, CACHE_MISS
     dc = DiskCache()
     dc.set("quote:AAPL", data, ttl=300)
-    val = dc.get("quote:AAPL")   # None if expired / missing
+    val = dc.get("quote:AAPL")   # CACHE_MISS if expired / missing
 """
 
 from __future__ import annotations
@@ -22,6 +24,10 @@ from config import cfg
 from log_setup import get_logger
 
 log = get_logger(__name__)
+
+# Sentinel to distinguish "key not found / expired" from a cached None value
+_CACHE_MISS = object()
+CACHE_MISS = _CACHE_MISS
 
 
 class DiskCache:
@@ -49,23 +55,23 @@ class DiskCache:
     # ------------------------------------------------------------------
 
     def get(self, key: str) -> Any:
-        """Return cached value or None if missing / expired."""
+        """Return cached value or CACHE_MISS sentinel if missing / expired."""
         if not self._enabled:
-            return None
+            return _CACHE_MISS
         path = self._key_to_path(key)
         try:
             if not path.exists():
-                return None
+                return _CACHE_MISS
             with open(path, "rb") as f:
                 expires_at, value = pickle.load(f)
             if time.time() > expires_at:
                 path.unlink(missing_ok=True)
-                return None
+                return _CACHE_MISS
             log.debug("Cache hit: %s", key)
             return value
         except Exception as exc:
             log.debug("Cache read error for %s: %s", key, exc)
-            return None
+            return _CACHE_MISS
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Store value with TTL (seconds).  Default TTL from config."""
@@ -149,18 +155,18 @@ class RedisCacheBackend:
             log.warning("Redis connection failed (%s): %s", self._url, exc)
 
     def get(self, key: str) -> Any:
-        """Return cached value or None."""
+        """Return cached value or CACHE_MISS sentinel."""
         if not self._enabled:
-            return None
+            return _CACHE_MISS
         try:
             data = self._client.get(key)
             if data is None:
-                return None
+                return _CACHE_MISS
             log.debug("Redis cache hit: %s", key)
             return pickle.loads(data)
         except Exception as exc:
             log.debug("Redis get error for %s: %s", key, exc)
-            return None
+            return _CACHE_MISS
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Store value with TTL."""

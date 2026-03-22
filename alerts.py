@@ -220,8 +220,10 @@ def _poll_all_alerts() -> None:
     symbols = {a["symbol"] for a in active}
     for sym in symbols:
         try:
+            from cache import CACHE_MISS
+
             quote = cache.get(f"quote:{sym}")
-            if not quote:
+            if quote is CACHE_MISS or not quote:
                 continue
             price = quote.get("c")
             triggered = check_alerts(sym, price, None, None)

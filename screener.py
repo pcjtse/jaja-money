@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 from config import cfg
@@ -204,19 +203,26 @@ def delete_screen_template(name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _quick_analyze(symbol: str) -> dict | None:
+def _quick_analyze(symbol: str, api=None) -> dict | None:
     """Fetch minimal data and compute factor + risk score for one ticker.
 
     Returns a dict or None on failure.  Uses a shorter TTL for caching
     to allow fresh screening runs.
+
+    Parameters
+    ----------
+    symbol : stock ticker symbol
+    api    : shared FinnhubAPI instance (avoids creating one per ticker)
     """
-    from api import FinnhubAPI
     from factors import compute_factors, composite_score, composite_label_color
     from guardrails import compute_risk
     import pandas as pd
 
     try:
-        api = FinnhubAPI()
+        if api is None:
+            from api import FinnhubAPI
+
+            api = FinnhubAPI()
 
         quote = api.get_quote(symbol)
         price = float(quote.get("c") or 0)
@@ -346,19 +352,23 @@ def run_screen(
 ) -> list[dict]:
     """Run a screen over `tickers`, return filtered + sorted results.
 
-    Uses a simple sequential loop with rate-limit sleep to respect
-    Finnhub's 60 req/min free tier.
+    Rate limiting is handled by the centralized token-bucket limiter
+    inside FinnhubAPI._cached(), so per-worker sleeps are unnecessary.
+    A single shared FinnhubAPI instance is used across all workers.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from api import FinnhubAPI
 
     results = []
     log.info(
         "Starting screen: %d tickers, %d filters", len(tickers), len(filters or [])
     )
 
+    # Share a single API instance so all workers share the rate limiter
+    shared_api = FinnhubAPI()
+
     def _worker(sym):
-        time.sleep(delay_between)
-        return _quick_analyze(sym)
+        return _quick_analyze(sym, api=shared_api)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_worker, t): t for t in tickers}
@@ -619,7 +629,6 @@ def compute_cross_sectional_momentum(
     import pandas as _pd
 
     def _fetch_returns(symbol: str) -> dict | None:
-        time.sleep(delay_between)
         try:
             daily = api.get_daily(symbol, years=1.5)
             close = _pd.Series(daily["c"])

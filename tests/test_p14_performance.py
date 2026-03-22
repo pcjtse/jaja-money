@@ -103,11 +103,13 @@ class TestRedisCacheBackend:
             cache = RedisCacheBackend(redis_url="redis://invalid:6379/0")
             assert cache._enabled is False
 
-    def test_redis_get_returns_none_when_disabled(self):
+    def test_redis_get_returns_sentinel_when_disabled(self):
+        from cache import CACHE_MISS
+
         cache = RedisCacheBackend.__new__(RedisCacheBackend)
         cache._enabled = False
         cache._client = None
-        assert cache.get("any_key") is None
+        assert cache.get("any_key") is CACHE_MISS
 
     def test_redis_set_noop_when_disabled(self):
         cache = RedisCacheBackend.__new__(RedisCacheBackend)

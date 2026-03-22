@@ -64,9 +64,16 @@ def generate_digest(api, force: bool = False) -> str | None:
 
     log.info("Generating digest for %d tickers: %s", len(tickers), tickers)
 
+    # Reuse a single Anthropic client across all tickers (avoid per-ticker init)
+    try:
+        _shared_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    except Exception as exc:
+        log.warning("Digest: could not init Anthropic client: %s", exc)
+        _shared_client = None
+
     sections: list[str] = []
     for symbol in tickers:
-        section = _generate_ticker_section(symbol, api)
+        section = _generate_ticker_section(symbol, api, claude_client=_shared_client)
         if section:
             sections.append(section)
 
@@ -85,8 +92,17 @@ def generate_digest(api, force: bool = False) -> str | None:
     return str(out_path)
 
 
-def _generate_ticker_section(symbol: str, api) -> str | None:
-    """Fetch data and generate a Claude narrative for one ticker."""
+def _generate_ticker_section(symbol: str, api, claude_client=None) -> str | None:
+    """Fetch data and generate a Claude narrative for one ticker.
+
+    Parameters
+    ----------
+    symbol       : stock ticker symbol
+    api          : FinnhubAPI instance
+    claude_client: shared anthropic.Anthropic client (avoids per-ticker init)
+    """
+    from rate_limiter import anthropic_limiter
+
     try:
         quote = api.get_quote(symbol)
         news = api.get_news(symbol, days=1)
@@ -115,7 +131,10 @@ Write a concise 2-3 sentence briefing suitable for a morning email digest. Be fa
 Do not make up price targets or ratings. Focus on what changed and why it matters."""
 
     try:
-        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        client = claude_client or anthropic.Anthropic(
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+        anthropic_limiter.acquire()
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=200,
