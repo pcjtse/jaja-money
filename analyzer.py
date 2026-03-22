@@ -338,13 +338,68 @@ but non-specialist reader.\
 """
 
 
+class MockAIBackend:
+    """Returns canned analysis text for local testing without an AI API key.
+
+    Activated when ``MOCK_DATA=1`` is set in the environment.
+    """
+
+    def stream(self, *, model, max_tokens, messages, system=None, **_kw):
+        """Yield mock text chunks based on the prompt content."""
+        from api import MOCK_MODE
+
+        if not MOCK_MODE:
+            raise RuntimeError("MockAIBackend used outside mock mode")
+
+        # Try to detect the symbol from the prompt
+        prompt_text = " ".join(m.get("content", "") for m in messages)
+
+        # Check for known tickers in the prompt
+        from mock_data import MOCK_PROFILES
+
+        symbol = None
+        for ticker in MOCK_PROFILES:
+            if ticker in prompt_text:
+                symbol = ticker
+                break
+
+        if symbol:
+            from mock_data import get_mock_analysis_text, get_mock_sentiment_text
+
+            if system and "sentiment" in system.lower():
+                text = get_mock_sentiment_text(symbol)
+            else:
+                text = get_mock_analysis_text(symbol)
+        else:
+            text = (
+                "## Analysis\n\n"
+                "This is a mock analysis response for local testing. "
+                "Set a real ANTHROPIC_API_KEY to get AI-powered analysis.\n\n"
+                "The factor scores and technical indicators shown are computed "
+                "from the mock price data and are fully functional."
+            )
+
+        # Yield in chunks to simulate streaming
+        chunk_size = 50
+        for i in range(0, len(text), chunk_size):
+            yield text[i : i + chunk_size]
+
+
 def _get_client():
     """Return the active AI backend client.
 
     Returns a ``ClaudeCodeCLIBackend`` when ``ai_backend: cli`` is configured
     and the ``claude`` binary is available; otherwise returns an
     ``anthropic.Anthropic`` SDK client (requires ``ANTHROPIC_API_KEY``).
+
+    In mock mode (``MOCK_DATA=1``), returns a ``MockAIBackend``.
     """
+    from api import MOCK_MODE
+
+    if MOCK_MODE:
+        log.info("Using MockAIBackend (MOCK_DATA mode)")
+        return MockAIBackend()
+
     if _AI_BACKEND == "cli":
         if _cli_available():
             log.debug("Using Claude Code CLI backend")
@@ -385,6 +440,14 @@ def _iter_text_stream(
     Extra kwargs (e.g. ``thinking``) are forwarded to the SDK and silently
     ignored by the CLI backend.
     """
+    if isinstance(client, MockAIBackend):
+        yield from client.stream(
+            model=model,
+            max_tokens=max_tokens,
+            messages=messages,
+            system=system,
+        )
+        return
     if isinstance(client, ClaudeCodeCLIBackend):
         yield from client.stream(
             model=model,
@@ -413,6 +476,12 @@ def _create_text(
     **kwargs,
 ) -> str:
     """Return the full text response from either the SDK or CLI backend (non-streaming)."""
+    if isinstance(client, MockAIBackend):
+        return "".join(
+            client.stream(
+                model=model, max_tokens=max_tokens, messages=messages, system=system
+            )
+        )
     if isinstance(client, ClaudeCodeCLIBackend):
         return "".join(
             client.stream(

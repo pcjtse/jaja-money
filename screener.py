@@ -220,9 +220,9 @@ def _quick_analyze(symbol: str, api=None) -> dict | None:
 
     try:
         if api is None:
-            from api import FinnhubAPI
+            from api import get_api
 
-            api = FinnhubAPI()
+            api = get_api()
 
         quote = api.get_quote(symbol)
         price = float(quote.get("c") or 0)
@@ -357,7 +357,7 @@ def run_screen(
     A single shared FinnhubAPI instance is used across all workers.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from api import FinnhubAPI
+    from api import get_api
 
     results = []
     log.info(
@@ -365,7 +365,7 @@ def run_screen(
     )
 
     # Share a single API instance so all workers share the rate limiter
-    shared_api = FinnhubAPI()
+    shared_api = get_api()
 
     def _worker(sym):
         return _quick_analyze(sym, api=shared_api)

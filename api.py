@@ -7,21 +7,30 @@ Enhanced with:
 - Structured logging (P4.3)
 - Centralized rate limiting (audit fix)
 - Retry with exponential backoff on transient errors (audit fix)
+- Mock data mode for local testing (set MOCK_DATA=1)
 """
 
 from __future__ import annotations
 
 import os
 import time
-import finnhub
+
 from dotenv import load_dotenv
 
-from cache import get_cache, CACHE_MISS
-from config import cfg
-from log_setup import get_logger
-from rate_limiter import finnhub_limiter
-
 load_dotenv()
+
+# Mock mode flag — set MOCK_DATA=1 to use synthetic data without API keys
+MOCK_MODE = os.getenv("MOCK_DATA", "").strip().lower() in ("1", "true", "yes")
+
+try:
+    import finnhub
+except ImportError:
+    finnhub = None  # type: ignore[assignment]
+
+from cache import get_cache, CACHE_MISS  # noqa: E402
+from config import cfg  # noqa: E402
+from log_setup import get_logger  # noqa: E402
+from rate_limiter import finnhub_limiter  # noqa: E402
 
 log = get_logger(__name__)
 _disk_cache = get_cache()
@@ -39,6 +48,11 @@ def _is_retryable(exc: Exception) -> bool:
 
 class FinnhubAPI:
     def __init__(self):
+        if finnhub is None:
+            raise ImportError(
+                "The `finnhub-python` package is not installed. "
+                "Run `pip install finnhub-python` or set MOCK_DATA=1 for local testing."
+            )
         api_key = os.getenv("FINNHUB_API_KEY")
         if not api_key or api_key == "your_api_key_here":
             raise ValueError(
@@ -840,3 +854,185 @@ def _timed_call(fn):
     t0 = _time.monotonic()
     result = fn()
     return result, _time.monotonic() - t0
+
+
+# ---------------------------------------------------------------------------
+# Mock mode: synthetic data for local testing without API keys
+# ---------------------------------------------------------------------------
+
+
+class MockFinnhubAPI:
+    """Drop-in replacement for FinnhubAPI that returns realistic mock data.
+
+    Activate by setting the MOCK_DATA=1 environment variable.
+    """
+
+    def __init__(self):
+        from mock_data import get_mock_profile  # noqa: F401
+
+        log.info("MockFinnhubAPI initialised — using synthetic data")
+
+    def get_quote(self, symbol: str) -> dict:
+        from mock_data import get_mock_quote
+
+        return get_mock_quote(symbol)
+
+    def get_profile(self, symbol: str) -> dict:
+        from mock_data import get_mock_profile
+
+        return get_mock_profile(symbol)
+
+    def get_financials(self, symbol: str) -> dict:
+        from mock_data import get_mock_financials
+
+        return get_mock_financials(symbol)
+
+    def get_daily(self, symbol: str, years: int = 2) -> dict:
+        from mock_data import get_mock_daily
+
+        return get_mock_daily(symbol, years)
+
+    def get_weekly(self, symbol: str, years: int = 3) -> dict:
+        from mock_data import get_mock_weekly
+
+        return get_mock_weekly(symbol, years)
+
+    def get_monthly(self, symbol: str, years: int = 5) -> dict:
+        from mock_data import get_mock_monthly
+
+        return get_mock_monthly(symbol, years)
+
+    def get_news(self, symbol: str, days: int = 7) -> list:
+        from mock_data import get_mock_news
+
+        return get_mock_news(symbol, days)
+
+    def get_recommendations(self, symbol: str) -> list:
+        from mock_data import get_mock_recommendations
+
+        return get_mock_recommendations(symbol)
+
+    def get_earnings(self, symbol: str, limit: int = 4) -> list:
+        from mock_data import get_mock_earnings
+
+        return get_mock_earnings(symbol, limit)
+
+    def get_peers(self, symbol: str) -> list:
+        from mock_data import get_mock_peers
+
+        return get_mock_peers(symbol)
+
+    def get_option_chain(self, symbol: str) -> dict:
+        from mock_data import get_mock_option_chain
+
+        return get_mock_option_chain(symbol)
+
+    def get_option_metrics(self, symbol: str) -> dict:
+        chain = self.get_option_chain(symbol)
+        if not chain or not chain.get("data"):
+            return {"available": False}
+        nearest = chain["data"][0]
+        options_list = nearest.get("options", {})
+        calls = options_list.get("CALL", [])
+        puts = options_list.get("PUT", [])
+        total_call_vol = sum(c.get("volume", 0) or 0 for c in calls)
+        total_put_vol = sum(p.get("volume", 0) or 0 for p in puts)
+        pc_ratio = (total_put_vol / total_call_vol) if total_call_vol > 0 else None
+        all_ivs = [
+            o.get("impliedVolatility", 0) or 0
+            for o in (calls + puts)
+            if o.get("impliedVolatility")
+        ]
+        avg_iv = (sum(all_ivs) / len(all_ivs) * 100) if all_ivs else None
+        return {
+            "available": True,
+            "expiry": nearest.get("expirationDate", ""),
+            "put_call_ratio": round(pc_ratio, 3) if pc_ratio else None,
+            "avg_iv_pct": round(avg_iv, 1) if avg_iv else None,
+            "total_call_volume": total_call_vol,
+            "total_put_volume": total_put_vol,
+        }
+
+    def get_transcripts_list(self, symbol: str) -> list:
+        from mock_data import get_mock_transcripts_list
+
+        return get_mock_transcripts_list(symbol)
+
+    def get_transcript(self, transcript_id: str) -> dict:
+        from mock_data import get_mock_transcript
+
+        return get_mock_transcript(transcript_id)
+
+    def get_earnings_calendar(
+        self,
+        symbol: str,
+        option_chain: dict | None = None,
+        quote: dict | None = None,
+    ) -> dict:
+        from mock_data import get_mock_earnings_calendar
+
+        return get_mock_earnings_calendar(symbol)
+
+    def get_insider_transactions(self, symbol: str) -> list:
+        from mock_data import get_mock_insider_transactions
+
+        return get_mock_insider_transactions(symbol)
+
+    def get_short_interest(self, symbol: str) -> dict:
+        from mock_data import get_mock_short_interest
+
+        return get_mock_short_interest(symbol)
+
+    def get_macro_context(self) -> dict:
+        from mock_data import get_mock_macro_context
+
+        return get_mock_macro_context()
+
+    def get_risk_free_rate(self) -> float:
+        return self.get_macro_context().get("risk_free_rate", 0.05)
+
+    def get_estimate_revisions(self, symbol: str) -> dict:
+        from mock_data import get_mock_estimate_revisions
+
+        return get_mock_estimate_revisions(symbol)
+
+    def get_analyst_price_targets(self, symbol: str) -> dict:
+        from mock_data import get_mock_analyst_price_targets
+
+        return get_mock_analyst_price_targets(symbol)
+
+    def get_earnings_history(self, symbol: str) -> list:
+        from mock_data import get_mock_earnings_history
+
+        return get_mock_earnings_history(symbol)
+
+    def get_dividends(self, symbol: str, years: int = 5) -> dict:
+        from mock_data import get_mock_dividends
+
+        return get_mock_dividends(symbol)
+
+    def fetch_all_parallel(self, symbol: str) -> dict:
+        """Mock parallel fetch — just calls each method sequentially."""
+        import time as _time
+
+        t0 = _time.monotonic()
+        results = {
+            "quote": self.get_quote(symbol),
+            "profile": self.get_profile(symbol),
+            "financials": self.get_financials(symbol),
+            "daily": self.get_daily(symbol, years=2),
+            "news": self.get_news(symbol, days=7),
+            "insider": self.get_insider_transactions(symbol),
+            "recommendations": self.get_recommendations(symbol),
+            "earnings": self.get_earnings(symbol, limit=8),
+        }
+        elapsed = _time.monotonic() - t0
+        results["latency_breakdown"] = {"_total": round(elapsed, 3)}
+        return results
+
+
+def get_api() -> FinnhubAPI | MockFinnhubAPI:
+    """Factory: return MockFinnhubAPI when MOCK_DATA is set, else FinnhubAPI."""
+    if MOCK_MODE:
+        return MockFinnhubAPI()
+    return FinnhubAPI()

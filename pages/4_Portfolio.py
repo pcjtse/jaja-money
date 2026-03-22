@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from api import FinnhubAPI
+from api import get_api, MOCK_MODE
 from portfolio_analysis import (
     analyze_portfolio,
     compute_risk_parity_weights,
@@ -22,6 +22,9 @@ page_header(
     subtitle="Enter a multi-stock portfolio to compute correlation, risk, and diversification metrics.",
     icon="💼",
 )
+
+if MOCK_MODE:
+    st.info("**Mock Data Mode** — Using synthetic data.", icon="🧪")
 
 # -------------------------------------------------------------------------
 # Portfolio input
@@ -74,6 +77,11 @@ else:
         weights_pct.append(w)
 
 total_w = sum(weights_pct)
+if total_w == 0:
+    st.error(
+        "All weights are zero. Please assign positive weights to at least one ticker."
+    )
+    st.stop()
 if abs(total_w - 100) > 0.5:
     st.warning(
         f"Weights sum to {total_w:.1f}% (should be 100%). They will be normalized."
@@ -86,7 +94,7 @@ weights = [w / total_w for w in weights_pct]
 # Run analysis
 # -------------------------------------------------------------------------
 if st.button("Analyze Portfolio", type="primary"):
-    api = FinnhubAPI()
+    api = get_api()
 
     with st.spinner("Fetching data and computing portfolio metrics..."):
         try:

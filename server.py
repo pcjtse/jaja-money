@@ -204,9 +204,9 @@ def _get_api():
         )
     if _api_instance is None:
         try:
-            from api import FinnhubAPI
+            from api import get_api
 
-            _api_instance = FinnhubAPI()
+            _api_instance = get_api()
         except Exception as exc:
             _api_error = str(exc)
             raise HTTPException(
