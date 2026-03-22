@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clean_db(tmp_path, monkeypatch):
     """Redirect both history and forward_test to a fresh temp DB."""
-    import history as h
+    import src.data.history as h
 
     monkeypatch.setattr(h, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(h, "_DB_FILE", tmp_path / "history.db")
@@ -28,7 +28,7 @@ def _clean_db(tmp_path, monkeypatch):
 
 
 def test_create_portfolio_returns_id():
-    from forward_test import create_portfolio
+    from src.analysis.forward_test import create_portfolio
 
     pid = create_portfolio("My Portfolio")
     assert isinstance(pid, int)
@@ -36,13 +36,13 @@ def test_create_portfolio_returns_id():
 
 
 def test_list_portfolios_empty():
-    from forward_test import list_portfolios
+    from src.analysis.forward_test import list_portfolios
 
     assert list_portfolios() == []
 
 
 def test_list_portfolios_after_create():
-    from forward_test import create_portfolio, list_portfolios
+    from src.analysis.forward_test import create_portfolio, list_portfolios
 
     create_portfolio("Alpha")
     create_portfolio("Beta")
@@ -54,7 +54,11 @@ def test_list_portfolios_after_create():
 
 
 def test_rename_portfolio():
-    from forward_test import create_portfolio, rename_portfolio, list_portfolios
+    from src.analysis.forward_test import (
+        create_portfolio,
+        rename_portfolio,
+        list_portfolios,
+    )
 
     pid = create_portfolio("Old Name")
     result = rename_portfolio(pid, "New Name")
@@ -64,7 +68,11 @@ def test_rename_portfolio():
 
 
 def test_delete_portfolio():
-    from forward_test import create_portfolio, delete_portfolio, list_portfolios
+    from src.analysis.forward_test import (
+        create_portfolio,
+        delete_portfolio,
+        list_portfolios,
+    )
 
     pid = create_portfolio("To Delete")
     assert len(list_portfolios()) == 1
@@ -74,7 +82,7 @@ def test_delete_portfolio():
 
 
 def test_delete_portfolio_cascades_trades():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         delete_portfolio,
@@ -94,7 +102,7 @@ def test_delete_portfolio_cascades_trades():
 
 
 def test_add_position_returns_trade_id():
-    from forward_test import create_portfolio, add_position
+    from src.analysis.forward_test import create_portfolio, add_position
 
     pid = create_portfolio("P1")
     tid = add_position(pid, "AAPL", 150.0)
@@ -103,7 +111,11 @@ def test_add_position_returns_trade_id():
 
 
 def test_add_position_symbol_normalised():
-    from forward_test import create_portfolio, add_position, get_open_positions
+    from src.analysis.forward_test import (
+        create_portfolio,
+        add_position,
+        get_open_positions,
+    )
 
     pid = create_portfolio("P2")
     add_position(pid, "aapl", 150.0)
@@ -112,7 +124,11 @@ def test_add_position_symbol_normalised():
 
 
 def test_add_position_stores_scores():
-    from forward_test import create_portfolio, add_position, get_open_positions
+    from src.analysis.forward_test import (
+        create_portfolio,
+        add_position,
+        get_open_positions,
+    )
 
     pid = create_portfolio("P3")
     add_position(pid, "MSFT", 300.0, factor_score=75, risk_score=25)
@@ -122,14 +138,14 @@ def test_add_position_stores_scores():
 
 
 def test_get_open_positions_empty():
-    from forward_test import create_portfolio, get_open_positions
+    from src.analysis.forward_test import create_portfolio, get_open_positions
 
     pid = create_portfolio("Empty")
     assert get_open_positions(pid) == []
 
 
 def test_close_position():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         close_position,
@@ -152,7 +168,7 @@ def test_close_position():
 
 
 def test_close_position_negative_pnl():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         close_position,
@@ -167,7 +183,11 @@ def test_close_position_negative_pnl():
 
 
 def test_multiple_positions():
-    from forward_test import create_portfolio, add_position, get_open_positions
+    from src.analysis.forward_test import (
+        create_portfolio,
+        add_position,
+        get_open_positions,
+    )
 
     pid = create_portfolio("Multi")
     add_position(pid, "AAPL", 150.0)
@@ -185,7 +205,7 @@ def test_multiple_positions():
 
 
 def test_snapshot_portfolio_writes_history():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         snapshot_portfolio,
@@ -202,7 +222,7 @@ def test_snapshot_portfolio_writes_history():
 
 
 def test_snapshot_fallback_to_entry_price():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         snapshot_portfolio,
@@ -219,7 +239,7 @@ def test_snapshot_fallback_to_entry_price():
 
 
 def test_snapshot_upsert_same_day():
-    from forward_test import (
+    from src.analysis.forward_test import (
         create_portfolio,
         add_position,
         snapshot_portfolio,
@@ -237,7 +257,7 @@ def test_snapshot_upsert_same_day():
 
 
 def test_equity_curve_empty_no_snapshots():
-    from forward_test import create_portfolio, get_equity_curve
+    from src.analysis.forward_test import create_portfolio, get_equity_curve
 
     pid = create_portfolio("No Snapshots")
     assert get_equity_curve(pid) == []
@@ -249,7 +269,7 @@ def test_equity_curve_empty_no_snapshots():
 
 
 def test_calc_stats_empty_curve():
-    from forward_test import _calc_stats
+    from src.analysis.forward_test import _calc_stats
 
     stats = _calc_stats([], [])
     assert stats["total_return_pct"] == 0.0
@@ -258,14 +278,14 @@ def test_calc_stats_empty_curve():
 
 
 def test_calc_stats_single_point():
-    from forward_test import _calc_stats
+    from src.analysis.forward_test import _calc_stats
 
     stats = _calc_stats([{"date": "2026-01-01", "total_value": 1000.0}], [])
     assert stats["total_return_pct"] == 0.0
 
 
 def test_calc_stats_positive_return():
-    from forward_test import _calc_stats
+    from src.analysis.forward_test import _calc_stats
 
     curve = [
         {"date": "2026-01-01", "total_value": 1000.0},
@@ -276,7 +296,7 @@ def test_calc_stats_positive_return():
 
 
 def test_calc_stats_win_rate():
-    from forward_test import _calc_stats
+    from src.analysis.forward_test import _calc_stats
 
     closed = [
         {"pnl_pct": 10.0},
@@ -294,7 +314,7 @@ def test_calc_stats_win_rate():
 
 
 def test_calc_stats_max_drawdown():
-    from forward_test import _calc_stats
+    from src.analysis.forward_test import _calc_stats
 
     curve = [
         {"date": "2026-01-01", "total_value": 1000.0},
@@ -312,7 +332,11 @@ def test_calc_stats_max_drawdown():
 
 
 def test_get_portfolio_summary_structure():
-    from forward_test import create_portfolio, add_position, get_portfolio_summary
+    from src.analysis.forward_test import (
+        create_portfolio,
+        add_position,
+        get_portfolio_summary,
+    )
 
     pid = create_portfolio("Summary Test")
     add_position(pid, "AAPL", 150.0, factor_score=70, risk_score=30)
@@ -327,7 +351,7 @@ def test_get_portfolio_summary_structure():
 
 
 def test_get_portfolio_summary_unknown_id():
-    from forward_test import get_portfolio_summary
+    from src.analysis.forward_test import get_portfolio_summary
 
     summary = get_portfolio_summary(99999)
     assert summary["name"] == "Unknown"
@@ -341,7 +365,7 @@ def test_get_portfolio_summary_unknown_id():
 
 def test_ensure_paper_tables_idempotent():
     """Calling _ensure_paper_tables multiple times should not raise."""
-    import history as h
+    import src.data.history as h
 
     h._ensure_paper_tables()
     h._ensure_paper_tables()  # second call is a no-op
@@ -349,7 +373,7 @@ def test_ensure_paper_tables_idempotent():
 
 def test_paper_portfolio_table_exists():
     """Verify the paper_portfolio table was created."""
-    import history as h
+    import src.data.history as h
 
     with h._connect() as conn:
         tables = conn.execute(

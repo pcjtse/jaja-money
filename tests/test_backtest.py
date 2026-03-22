@@ -28,7 +28,7 @@ def _make_df(n=300, trend="up"):
 
 
 def test_basic_backtest_runs():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(300, "up")
     result = run_backtest(
@@ -39,7 +39,7 @@ def test_basic_backtest_runs():
 
 
 def test_backtest_returns_result_structure():
-    from backtest import run_backtest, BacktestResult
+    from src.analysis.backtest import run_backtest, BacktestResult
 
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)
@@ -52,7 +52,7 @@ def test_backtest_returns_result_structure():
 
 
 def test_backtest_requires_minimum_data():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(30)  # Too little data
     with pytest.raises(ValueError, match="Insufficient"):
@@ -60,7 +60,7 @@ def test_backtest_requires_minimum_data():
 
 
 def test_equity_curve_starts_at_one():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)
@@ -68,7 +68,7 @@ def test_equity_curve_starts_at_one():
 
 
 def test_trades_are_coherent():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(400, "up")
     result = run_backtest(
@@ -85,7 +85,7 @@ def test_trades_are_coherent():
 
 
 def test_win_rate_matches_trades():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(400)
     result = run_backtest(df, "TEST", lookback_years=1)
@@ -96,7 +96,7 @@ def test_win_rate_matches_trades():
 
 
 def test_sharpe_is_numeric_or_none():
-    from backtest import run_backtest
+    from src.analysis.backtest import run_backtest
 
     df = _make_df(300)
     result = run_backtest(df, "TEST", lookback_years=1)

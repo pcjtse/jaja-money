@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ui_prefs import (
+from src.ui.ui_prefs import (
     SECTION_LABELS,
     TOUR_STEPS,
     _DEFAULT_SECTIONS,
@@ -23,7 +23,7 @@ from ui_prefs import (
     set_section_visibility,
     update_pref,
 )
-from history import (
+from src.data.history import (
     delete_snapshot,
     diff_snapshots,
     list_snapshots,
@@ -39,8 +39,8 @@ from history import (
 
 @pytest.fixture
 def tmp_prefs(tmp_path, monkeypatch):
-    monkeypatch.setattr("ui_prefs._DATA_DIR", tmp_path)
-    monkeypatch.setattr("ui_prefs._PREFS_FILE", tmp_path / "ui_prefs.json")
+    monkeypatch.setattr("src.ui.ui_prefs._DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.ui.ui_prefs._PREFS_FILE", tmp_path / "ui_prefs.json")
     return tmp_path
 
 
@@ -48,8 +48,8 @@ def tmp_prefs(tmp_path, monkeypatch):
 def tmp_snapshots(tmp_path, monkeypatch):
     snap_dir = tmp_path / "snapshots"
     snap_dir.mkdir()
-    monkeypatch.setattr("history._DATA_DIR", tmp_path)
-    monkeypatch.setattr("history._SNAPSHOTS_DIR", snap_dir)
+    monkeypatch.setattr("src.data.history._DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.data.history._SNAPSHOTS_DIR", snap_dir)
     return snap_dir
 
 

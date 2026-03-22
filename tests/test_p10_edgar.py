@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-
-from edgar import (
+import src.data.edgar as edgar_mod
+from src.data.edgar import (
     _strip_html,
     chunk_text,
-    fetch_filing_text,
-    get_cik,
-    get_recent_filings,
-    stream_filing_analysis,
 )
 
 
@@ -50,28 +46,28 @@ def test_chunk_text_long():
 
 
 def test_get_cik_not_found():
-    with patch("edgar.requests.get") as mock_get:
+    with patch.object(edgar_mod, "requests") as mock_requests:
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "0": {"cik_str": 1, "ticker": "AAPL", "title": "Apple Inc."}
         }
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+        mock_requests.get.return_value = mock_response
 
-        cik = get_cik("AAPL")
+        cik = edgar_mod.get_cik("AAPL")
         assert cik == "0000000001"
 
 
 def test_get_cik_request_failure():
-    with patch("edgar.requests.get") as mock_get:
-        mock_get.side_effect = Exception("Network error")
-        cik = get_cik("AAPL")
+    with patch.object(edgar_mod, "requests") as mock_requests:
+        mock_requests.get.side_effect = Exception("Network error")
+        cik = edgar_mod.get_cik("AAPL")
         assert cik is None
 
 
 def test_get_recent_filings_no_cik():
-    with patch("edgar.get_cik", return_value=None):
-        filings = get_recent_filings("INVALID")
+    with patch.object(edgar_mod, "get_cik", return_value=None):
+        filings = edgar_mod.get_recent_filings("INVALID")
     assert filings == []
 
 
@@ -91,14 +87,14 @@ def test_get_recent_filings_success():
         }
     }
 
-    with patch("edgar.get_cik", return_value="0000320193"):
-        with patch("edgar.requests.get") as mock_get:
+    with patch.object(edgar_mod, "get_cik", return_value="0000320193"):
+        with patch.object(edgar_mod, "requests") as mock_requests:
             mock_response = MagicMock()
             mock_response.json.return_value = mock_submissions
             mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
+            mock_requests.get.return_value = mock_response
 
-            filings = get_recent_filings("AAPL", form_types=["10-K", "10-Q"])
+            filings = edgar_mod.get_recent_filings("AAPL", form_types=["10-K", "10-Q"])
 
     assert len(filings) == 2
     assert filings[0]["form"] == "10-K"
@@ -106,9 +102,9 @@ def test_get_recent_filings_success():
 
 def test_fetch_filing_text_failure():
     filing = {"url": "https://invalid.sec.gov/test.htm"}
-    with patch("edgar.requests.get") as mock_get:
-        mock_get.side_effect = Exception("Connection failed")
-        text = fetch_filing_text(filing)
+    with patch.object(edgar_mod, "requests") as mock_requests:
+        mock_requests.get.side_effect = Exception("Connection failed")
+        text = edgar_mod.fetch_filing_text(filing)
     assert text == ""
 
 
@@ -116,13 +112,13 @@ def test_fetch_filing_text_html():
     html_content = "<html><body><p>Annual report text here</p></body></html>"
     filing = {"url": "https://sec.gov/test.htm"}
 
-    with patch("edgar.requests.get") as mock_get:
+    with patch.object(edgar_mod, "requests") as mock_requests:
         mock_response = MagicMock()
         mock_response.text = html_content
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+        mock_requests.get.return_value = mock_response
 
-        text = fetch_filing_text(filing, max_chars=1000)
+        text = edgar_mod.fetch_filing_text(filing, max_chars=1000)
 
     assert "Annual report text here" in text
     assert "<html>" not in text
@@ -130,7 +126,7 @@ def test_fetch_filing_text_html():
 
 def test_stream_filing_analysis_no_text():
     filing = {"form": "10-K", "filingDate": "2024-01-01"}
-    chunks = list(stream_filing_analysis("AAPL", filing, ""))
+    chunks = list(edgar_mod.stream_filing_analysis("AAPL", filing, ""))
     assert len(chunks) == 1
     assert "No filing text" in chunks[0]
 
@@ -146,9 +142,9 @@ def test_stream_filing_analysis_with_text():
     mock_stream.text_stream = iter(["Analysis ", "complete."])
     mock_client.messages.stream.return_value = mock_stream
 
-    with patch("edgar.anthropic") as mock_anthropic_mod:
+    with patch.object(edgar_mod, "anthropic") as mock_anthropic_mod:
         mock_anthropic_mod.Anthropic.return_value = mock_client
-        chunks = list(stream_filing_analysis("AAPL", filing, text))
+        chunks = list(edgar_mod.stream_filing_analysis("AAPL", filing, text))
 
     assert len(chunks) > 0
     assert "".join(chunks) == "Analysis complete."

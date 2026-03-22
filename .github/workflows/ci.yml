@@ -47,21 +47,21 @@ jobs:
         run: |
           pytest tests/ -v \
             --ignore=tests/integration \
-            --cov=factors \
-            --cov=guardrails \
-            --cov=portfolio \
-            --cov=sentiment \
-            --cov=watchlist \
-            --cov=history \
-            --cov=backtest \
-            --cov=screener \
-            --cov=sectors \
-            --cov=portfolio_analysis \
-            --cov=comparison \
-            --cov=alerts \
-            --cov=export \
-            --cov=cache \
-            --cov=config \
+            --cov=src.analysis.factors \
+            --cov=src.analysis.guardrails \
+            --cov=src.trading.portfolio \
+            --cov=src.data.sentiment \
+            --cov=src.trading.watchlist \
+            --cov=src.data.history \
+            --cov=src.analysis.backtest \
+            --cov=src.trading.screener \
+            --cov=src.trading.sectors \
+            --cov=src.analysis.portfolio_analysis \
+            --cov=src.analysis.comparison \
+            --cov=src.ui.alerts \
+            --cov=src.ui.export \
+            --cov=src.core.cache \
+            --cov=src.core.config \
             --cov-report=term-missing \
             --cov-fail-under=50
 

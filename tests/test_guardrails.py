@@ -3,7 +3,7 @@
 import pytest
 import pandas as pd
 
-from guardrails import (
+from src.analysis.guardrails import (
     _hist_vol,
     _rsi,
     _sma,

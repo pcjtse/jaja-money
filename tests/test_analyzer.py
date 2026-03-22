@@ -88,7 +88,7 @@ SAMPLE_RISK = {
 
 
 def test_build_data_prompt_contains_symbol():
-    from analyzer import build_data_prompt
+    from src.analysis.analyzer import build_data_prompt
 
     prompt = build_data_prompt(
         symbol="AAPL",
@@ -105,7 +105,7 @@ def test_build_data_prompt_contains_symbol():
 
 
 def test_build_data_prompt_contains_price():
-    from analyzer import build_data_prompt
+    from src.analysis.analyzer import build_data_prompt
 
     prompt = build_data_prompt(
         symbol="AAPL",
@@ -122,7 +122,7 @@ def test_build_data_prompt_contains_price():
 
 
 def test_build_data_prompt_handles_missing_profile():
-    from analyzer import build_data_prompt
+    from src.analysis.analyzer import build_data_prompt
 
     prompt = build_data_prompt(
         symbol="AAPL",
@@ -140,7 +140,7 @@ def test_build_data_prompt_handles_missing_profile():
 
 
 def test_build_data_prompt_includes_peers():
-    from analyzer import build_data_prompt
+    from src.analysis.analyzer import build_data_prompt
 
     prompt = build_data_prompt(
         symbol="AAPL",
@@ -157,7 +157,7 @@ def test_build_data_prompt_includes_peers():
 
 
 def test_build_data_prompt_includes_news_headline():
-    from analyzer import build_data_prompt
+    from src.analysis.analyzer import build_data_prompt
 
     prompt = build_data_prompt(
         symbol="AAPL",
@@ -179,7 +179,7 @@ def test_build_data_prompt_includes_news_headline():
 
 
 def test_build_chat_system_prompt_contains_symbol():
-    from analyzer import build_chat_system_prompt
+    from src.analysis.analyzer import build_chat_system_prompt
 
     prompt = build_chat_system_prompt(
         symbol="AAPL",
@@ -196,7 +196,7 @@ def test_build_chat_system_prompt_contains_symbol():
 
 
 def test_build_chat_system_prompt_contains_score():
-    from analyzer import build_chat_system_prompt
+    from src.analysis.analyzer import build_chat_system_prompt
 
     prompt = build_chat_system_prompt(
         symbol="AAPL",
@@ -213,7 +213,7 @@ def test_build_chat_system_prompt_contains_score():
 
 
 def test_build_chat_system_prompt_handles_no_profile():
-    from analyzer import build_chat_system_prompt
+    from src.analysis.analyzer import build_chat_system_prompt
 
     prompt = build_chat_system_prompt(
         symbol="TSLA",
@@ -252,24 +252,24 @@ def _make_mock_stream(chunks: list[str]):
 
 
 def test_stream_fundamental_analysis_yields_chunks():
-    from analyzer import stream_fundamental_analysis
+    from src.analysis.analyzer import stream_fundamental_analysis
 
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["Hello ", "world!"])
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         chunks = list(stream_fundamental_analysis("test prompt", use_cache=False))
     assert chunks == ["Hello ", "world!"]
 
 
 def test_stream_fundamental_analysis_skips_non_text_events():
-    from analyzer import stream_fundamental_analysis
+    from src.analysis.analyzer import stream_fundamental_analysis
 
     # text_stream already filters out non-text events at the SDK level;
     # verify that only the text yielded by text_stream reaches callers.
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["Some text"])
 
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         chunks = list(stream_fundamental_analysis("prompt"))
     assert chunks == ["Some text"]
 
@@ -280,7 +280,7 @@ def test_stream_fundamental_analysis_skips_non_text_events():
 
 
 def test_parse_nl_screen_returns_filters():
-    from analyzer import parse_nl_screen
+    from src.analysis.analyzer import parse_nl_screen
 
     response_text = '{"filters": [{"dimension": "factor_score", "operator": ">", "value": 65, "label": "Strong factor"}], "description": "High factor scores"}'
     mock_response = MagicMock()
@@ -289,7 +289,7 @@ def test_parse_nl_screen_returns_filters():
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_response
 
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         result = parse_nl_screen("find strong stocks")
 
     assert "filters" in result
@@ -297,7 +297,7 @@ def test_parse_nl_screen_returns_filters():
 
 
 def test_parse_nl_screen_handles_invalid_json():
-    from analyzer import parse_nl_screen
+    from src.analysis.analyzer import parse_nl_screen
 
     mock_response = MagicMock()
     mock_response.content = [MagicMock(text="not valid json at all")]
@@ -305,14 +305,14 @@ def test_parse_nl_screen_handles_invalid_json():
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_response
 
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         result = parse_nl_screen("anything")
 
     assert result["filters"] == []
 
 
 def test_parse_nl_screen_handles_empty_response():
-    from analyzer import parse_nl_screen
+    from src.analysis.analyzer import parse_nl_screen
 
     mock_response = MagicMock()
     mock_response.content = [MagicMock(text="")]
@@ -320,7 +320,7 @@ def test_parse_nl_screen_handles_empty_response():
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_response
 
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         result = parse_nl_screen("anything")
 
     assert result["filters"] == []
@@ -332,13 +332,13 @@ def test_parse_nl_screen_handles_empty_response():
 
 
 def test_stream_forward_looking_analysis_yields_chunks():
-    from analyzer import stream_forward_looking_analysis
+    from src.analysis.analyzer import stream_forward_looking_analysis
 
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(
         ["Forward ", "guidance."]
     )
-    with patch("analyzer._get_client", return_value=mock_client):
+    with patch("src.analysis.analyzer._get_client", return_value=mock_client):
         chunks = list(
             stream_forward_looking_analysis("AAPL", "We expect revenue to grow 10%...")
         )
@@ -351,8 +351,8 @@ def test_stream_forward_looking_analysis_yields_chunks():
 
 
 def test_get_client_raises_without_key(monkeypatch):
-    import api as _api
-    from analyzer import _get_client
+    import src.data.api as _api
+    from src.analysis.analyzer import _get_client
 
     monkeypatch.setattr(_api, "MOCK_MODE", False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
@@ -361,8 +361,8 @@ def test_get_client_raises_without_key(monkeypatch):
 
 
 def test_get_client_raises_on_placeholder(monkeypatch):
-    import api as _api
-    from analyzer import _get_client
+    import src.data.api as _api
+    from src.analysis.analyzer import _get_client
 
     monkeypatch.setattr(_api, "MOCK_MODE", False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "your_anthropic_api_key_here")

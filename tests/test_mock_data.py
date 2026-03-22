@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 class TestMockData:
     def test_get_mock_quote_known_ticker(self):
-        from mock_data import get_mock_quote
+        from src.data.mock_data import get_mock_quote
 
         q = get_mock_quote("AAPL")
         assert isinstance(q, dict)
@@ -28,14 +28,14 @@ class TestMockData:
         assert q["h"] >= q["l"]
 
     def test_get_mock_quote_unknown_ticker(self):
-        from mock_data import get_mock_quote
+        from src.data.mock_data import get_mock_quote
 
         q = get_mock_quote("XYZZY")
         assert isinstance(q, dict)
         assert q["c"] > 0
 
     def test_get_mock_profile_known(self):
-        from mock_data import get_mock_profile
+        from src.data.mock_data import get_mock_profile
 
         p = get_mock_profile("AAPL")
         assert p["name"] == "Apple Inc"
@@ -43,14 +43,14 @@ class TestMockData:
         assert p["finnhubIndustry"] == "Technology"
 
     def test_get_mock_profile_unknown(self):
-        from mock_data import get_mock_profile
+        from src.data.mock_data import get_mock_profile
 
         p = get_mock_profile("XYZ")
         assert p["name"] == "XYZ Inc"
         assert p["ticker"] == "XYZ"
 
     def test_get_mock_financials(self):
-        from mock_data import get_mock_financials
+        from src.data.mock_data import get_mock_financials
 
         f = get_mock_financials("AAPL")
         assert "peTTM" in f
@@ -60,7 +60,7 @@ class TestMockData:
         assert f["52WeekHigh"] > f["52WeekLow"]
 
     def test_get_mock_daily(self):
-        from mock_data import get_mock_daily
+        from src.data.mock_data import get_mock_daily
 
         d = get_mock_daily("AAPL", years=2)
         assert d["s"] == "ok"
@@ -72,21 +72,21 @@ class TestMockData:
         assert len(d["t"]) == len(d["c"])
 
     def test_get_mock_weekly(self):
-        from mock_data import get_mock_weekly
+        from src.data.mock_data import get_mock_weekly
 
         w = get_mock_weekly("AAPL", years=3)
         assert w["s"] == "ok"
         assert len(w["c"]) == 156  # 3 * 52
 
     def test_get_mock_monthly(self):
-        from mock_data import get_mock_monthly
+        from src.data.mock_data import get_mock_monthly
 
         m = get_mock_monthly("AAPL", years=5)
         assert m["s"] == "ok"
         assert len(m["c"]) == 60  # 5 * 12
 
     def test_get_mock_news(self):
-        from mock_data import get_mock_news
+        from src.data.mock_data import get_mock_news
 
         news = get_mock_news("AAPL")
         assert len(news) == 10
@@ -97,7 +97,7 @@ class TestMockData:
             assert "datetime" in article
 
     def test_get_mock_recommendations(self):
-        from mock_data import get_mock_recommendations
+        from src.data.mock_data import get_mock_recommendations
 
         recs = get_mock_recommendations("AAPL")
         assert len(recs) >= 1
@@ -105,7 +105,7 @@ class TestMockData:
         assert "buy" in r and "hold" in r and "sell" in r
 
     def test_get_mock_earnings(self):
-        from mock_data import get_mock_earnings
+        from src.data.mock_data import get_mock_earnings
 
         e = get_mock_earnings("AAPL", limit=4)
         assert len(e) == 4
@@ -114,14 +114,14 @@ class TestMockData:
             assert "estimate" in entry
 
     def test_get_mock_peers(self):
-        from mock_data import get_mock_peers
+        from src.data.mock_data import get_mock_peers
 
         p = get_mock_peers("AAPL")
         assert len(p) >= 3
         assert "MSFT" in p
 
     def test_get_mock_option_chain(self):
-        from mock_data import get_mock_option_chain
+        from src.data.mock_data import get_mock_option_chain
 
         chain = get_mock_option_chain("AAPL")
         assert "data" in chain
@@ -131,7 +131,7 @@ class TestMockData:
         assert "PUT" in expiry["options"]
 
     def test_get_mock_insider_transactions(self):
-        from mock_data import get_mock_insider_transactions
+        from src.data.mock_data import get_mock_insider_transactions
 
         txns = get_mock_insider_transactions("AAPL")
         assert len(txns) >= 1
@@ -140,35 +140,35 @@ class TestMockData:
             assert "transactionCode" in t
 
     def test_get_mock_short_interest(self):
-        from mock_data import get_mock_short_interest
+        from src.data.mock_data import get_mock_short_interest
 
         si = get_mock_short_interest("AAPL")
         assert si["available"] is True
         assert si["short_pct_float"] > 0
 
     def test_get_mock_macro_context(self):
-        from mock_data import get_mock_macro_context
+        from src.data.mock_data import get_mock_macro_context
 
         m = get_mock_macro_context()
         assert m["vix"] is not None
         assert m["risk_free_rate"] == 0.05
 
     def test_get_mock_estimate_revisions(self):
-        from mock_data import get_mock_estimate_revisions
+        from src.data.mock_data import get_mock_estimate_revisions
 
         r = get_mock_estimate_revisions("AAPL")
         assert r["available"] is True
         assert r["forward_eps"] is not None
 
     def test_get_mock_analyst_price_targets(self):
-        from mock_data import get_mock_analyst_price_targets
+        from src.data.mock_data import get_mock_analyst_price_targets
 
         t = get_mock_analyst_price_targets("AAPL")
         assert t["available"] is True
         assert t["low_target"] < t["high_target"]
 
     def test_get_mock_earnings_history(self):
-        from mock_data import get_mock_earnings_history
+        from src.data.mock_data import get_mock_earnings_history
 
         h = get_mock_earnings_history("AAPL")
         assert len(h) == 10
@@ -177,7 +177,7 @@ class TestMockData:
             assert "actual" in entry
 
     def test_get_mock_dividends(self):
-        from mock_data import get_mock_dividends
+        from src.data.mock_data import get_mock_dividends
 
         d = get_mock_dividends("AAPL")
         assert "dates" in d and "amounts" in d
@@ -185,7 +185,7 @@ class TestMockData:
         assert len(d["dates"]) > 0
 
     def test_get_mock_analysis_text(self):
-        from mock_data import get_mock_analysis_text
+        from src.data.mock_data import get_mock_analysis_text
 
         text = get_mock_analysis_text("AAPL")
         assert "Apple Inc" in text
@@ -193,7 +193,7 @@ class TestMockData:
         assert len(text) > 100
 
     def test_get_mock_sentiment_text(self):
-        from mock_data import get_mock_sentiment_text
+        from src.data.mock_data import get_mock_sentiment_text
 
         text = get_mock_sentiment_text("AAPL")
         assert "AAPL" in text
@@ -207,18 +207,18 @@ class TestMockData:
 
 class TestMockFinnhubAPI:
     def test_mock_mode_flag(self):
-        from api import MOCK_MODE
+        from src.data.api import MOCK_MODE
 
         assert MOCK_MODE is True
 
     def test_get_api_returns_mock(self):
-        from api import MockFinnhubAPI, get_api
+        from src.data.api import MockFinnhubAPI, get_api
 
         api = get_api()
         assert isinstance(api, MockFinnhubAPI)
 
     def test_all_endpoints_return_valid_data(self):
-        from api import get_api
+        from src.data.api import get_api
 
         api = get_api()
 
@@ -308,7 +308,7 @@ class TestMockFinnhubAPI:
         assert er["available"] is True
 
     def test_fetch_all_parallel(self):
-        from api import get_api
+        from src.data.api import get_api
 
         api = get_api()
         result = api.fetch_all_parallel("AAPL")
@@ -328,7 +328,7 @@ class TestMockFinnhubAPI:
 
 class TestMockSentiment:
     def test_mock_sentiment_scoring(self):
-        from sentiment import score_articles
+        from src.data.sentiment import score_articles
 
         articles = [
             {"headline": "Company reports strong earnings beat"},
@@ -342,14 +342,14 @@ class TestMockSentiment:
             assert 0 < s["score"] <= 1.0
 
     def test_mock_sentiment_positive_keywords(self):
-        from sentiment import score_articles
+        from src.data.sentiment import score_articles
 
         articles = [{"headline": "Strong growth beats expectations"}]
         scores = score_articles(articles)
         assert scores[0]["label"] == "positive"
 
     def test_mock_sentiment_negative_keywords(self):
-        from sentiment import score_articles
+        from src.data.sentiment import score_articles
 
         articles = [{"headline": "Weak earnings miss estimates, stock declines"}]
         scores = score_articles(articles)
@@ -363,7 +363,7 @@ class TestMockSentiment:
 
 class TestMockAIBackend:
     def test_mock_ai_streams_text(self):
-        from analyzer import MockAIBackend
+        from src.analysis.analyzer import MockAIBackend
 
         backend = MockAIBackend()
         chunks = list(
@@ -378,7 +378,7 @@ class TestMockAIBackend:
         assert "Apple" in text
 
     def test_mock_ai_sentiment_context(self):
-        from analyzer import MockAIBackend
+        from src.analysis.analyzer import MockAIBackend
 
         backend = MockAIBackend()
         chunks = list(
@@ -393,7 +393,7 @@ class TestMockAIBackend:
         assert "Sentiment" in text
 
     def test_mock_ai_unknown_ticker(self):
-        from analyzer import MockAIBackend
+        from src.analysis.analyzer import MockAIBackend
 
         backend = MockAIBackend()
         chunks = list(
@@ -416,9 +416,9 @@ class TestMockFactorIntegration:
     def test_factors_with_mock_data(self):
         import pandas as pd
 
-        from api import get_api
-        from factors import composite_score, compute_factors
-        from sentiment import aggregate_sentiment, score_articles
+        from src.data.api import get_api
+        from src.analysis.factors import composite_score, compute_factors
+        from src.data.sentiment import aggregate_sentiment, score_articles
 
         api = get_api()
         quote = api.get_quote("AAPL")
@@ -445,10 +445,10 @@ class TestMockFactorIntegration:
     def test_risk_with_mock_data(self):
         import pandas as pd
 
-        from api import get_api
-        from factors import composite_score, compute_factors
-        from guardrails import compute_risk
-        from sentiment import aggregate_sentiment, score_articles
+        from src.data.api import get_api
+        from src.analysis.factors import composite_score, compute_factors
+        from src.analysis.guardrails import compute_risk
+        from src.data.sentiment import aggregate_sentiment, score_articles
 
         api = get_api()
         quote = api.get_quote("AAPL")
@@ -486,8 +486,8 @@ class TestMockFactorIntegration:
     def test_backtest_with_mock_data(self):
         import pandas as pd
 
-        from api import get_api
-        from backtest import run_backtest
+        from src.data.api import get_api
+        from src.analysis.backtest import run_backtest
 
         api = get_api()
         daily = api.get_daily("AAPL", years=3)

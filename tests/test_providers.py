@@ -18,8 +18,8 @@ def _make_provider(pref="auto"):
     so we patch the symbol in the `api` module namespace.
     """
     mock_api = MagicMock()
-    with patch("api.get_api", return_value=mock_api):
-        from providers import DataProvider
+    with patch("src.data.api.get_api", return_value=mock_api):
+        from src.data.providers import DataProvider
 
         dp = DataProvider(source_preference=pref)
     return dp, mock_api
@@ -40,9 +40,9 @@ class TestYfQuote:
         }
         ticker_mock = MagicMock()
         ticker_mock.info = fake_info
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_quote
+            from src.data.providers import _yf_quote
 
             result = _yf_quote("AAPL")
 
@@ -57,9 +57,9 @@ class TestYfQuote:
         fake_info = {"currentPrice": 100.0, "previousClose": 0}
         ticker_mock = MagicMock()
         ticker_mock.info = fake_info
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_quote
+            from src.data.providers import _yf_quote
 
             result = _yf_quote("X")
 
@@ -76,9 +76,9 @@ class TestYfProfile:
         }
         ticker_mock = MagicMock()
         ticker_mock.info = fake_info
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_profile
+            from src.data.providers import _yf_profile
 
             result = _yf_profile("AAPL")
 
@@ -89,9 +89,9 @@ class TestYfProfile:
     def test_fallback_to_symbol_if_no_name(self):
         ticker_mock = MagicMock()
         ticker_mock.info = {}
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_profile
+            from src.data.providers import _yf_profile
 
             result = _yf_profile("MSFT")
 
@@ -103,9 +103,9 @@ class TestYfFinancials:
         fake_info = {"marketCap": 2_000_000_000_000}  # $2T
         ticker_mock = MagicMock()
         ticker_mock.info = fake_info
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_financials
+            from src.data.providers import _yf_financials
 
             result = _yf_financials("AAPL")
 
@@ -114,9 +114,9 @@ class TestYfFinancials:
     def test_none_market_cap(self):
         ticker_mock = MagicMock()
         ticker_mock.info = {}
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_financials
+            from src.data.providers import _yf_financials
 
             result = _yf_financials("X")
 
@@ -125,9 +125,9 @@ class TestYfFinancials:
     def test_dividend_yield_multiplied_by_100(self):
         ticker_mock = MagicMock()
         ticker_mock.info = {"dividendYield": 0.015}  # 1.5% stored as decimal
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_financials
+            from src.data.providers import _yf_financials
 
             result = _yf_financials("X")
 
@@ -148,9 +148,9 @@ class TestYfNews:
         ]
         ticker_mock = MagicMock()
         ticker_mock.news = news
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_news
+            from src.data.providers import _yf_news
 
             result = _yf_news("AAPL", days=7)
 
@@ -160,9 +160,9 @@ class TestYfNews:
     def test_empty_news(self):
         ticker_mock = MagicMock()
         ticker_mock.news = []
-        with patch("providers.yf") as mock_yf:
+        with patch("src.data.providers.yf") as mock_yf:
             mock_yf.Ticker.return_value = ticker_mock
-            from providers import _yf_news
+            from src.data.providers import _yf_news
 
             result = _yf_news("X")
 
@@ -171,7 +171,7 @@ class TestYfNews:
 
 class TestYfPeers:
     def test_returns_empty_list(self):
-        from providers import _yf_peers
+        from src.data.providers import _yf_peers
 
         assert _yf_peers("AAPL") == []
 
@@ -195,8 +195,8 @@ class TestDataProviderFallback:
 
         fake_quote = {"c": 99.0, "d": 0, "dp": 0, "h": 100, "l": 98, "pc": 99}
         with (
-            patch("providers._HAS_YFINANCE", True),
-            patch("providers._yf_quote", return_value=fake_quote),
+            patch("src.data.providers._HAS_YFINANCE", True),
+            patch("src.data.providers._yf_quote", return_value=fake_quote),
         ):
             result = dp.get_quote("AAPL")
 
@@ -207,8 +207,8 @@ class TestDataProviderFallback:
         dp, mock_api = _make_provider("yfinance")
         fake_quote = {"c": 42.0, "d": 0, "dp": 0, "h": 43, "l": 41, "pc": 42}
         with (
-            patch("providers._HAS_YFINANCE", True),
-            patch("providers._yf_quote", return_value=fake_quote),
+            patch("src.data.providers._HAS_YFINANCE", True),
+            patch("src.data.providers._yf_quote", return_value=fake_quote),
         ):
             result = dp.get_quote("X")
 
@@ -219,7 +219,7 @@ class TestDataProviderFallback:
     def test_raises_when_no_source_available(self):
         dp, mock_api = _make_provider("auto")
         mock_api.get_quote.side_effect = RuntimeError("fail")
-        with patch("providers._HAS_YFINANCE", False):
+        with patch("src.data.providers._HAS_YFINANCE", False):
             with pytest.raises(ValueError, match="No data source"):
                 dp.get_quote("AAPL")
 
@@ -229,9 +229,11 @@ class TestDataProviderFallback:
         fake_av = {"peBasicExclExtraTTM": 25.0, "_av_source": "alpha_vantage"}
 
         with (
-            patch("providers._HAS_YFINANCE", True),
-            patch("providers._yf_financials", side_effect=RuntimeError("yf fail")),
-            patch("providers._av_financials", return_value=fake_av),
+            patch("src.data.providers._HAS_YFINANCE", True),
+            patch(
+                "src.data.providers._yf_financials", side_effect=RuntimeError("yf fail")
+            ),
+            patch("src.data.providers._av_financials", return_value=fake_av),
         ):
             result = dp.get_financials("AAPL")
 
@@ -241,7 +243,7 @@ class TestDataProviderFallback:
     def test_get_peers_falls_back_gracefully(self):
         dp, mock_api = _make_provider("auto")
         mock_api.get_peers.side_effect = RuntimeError("no peers")
-        with patch("providers._yf_peers", return_value=[]):
+        with patch("src.data.providers._yf_peers", return_value=[]):
             result = dp.get_peers("AAPL")
         assert result == []
 
@@ -261,7 +263,7 @@ class TestAvFinancials:
 
         orig = os.environ.pop("ALPHA_VANTAGE_API_KEY", None)
         try:
-            from providers import _av_financials
+            from src.data.providers import _av_financials
 
             with pytest.raises(ValueError, match="ALPHA_VANTAGE_API_KEY"):
                 _av_financials("AAPL")
@@ -286,10 +288,10 @@ class TestAvFinancials:
         fake_resp.raise_for_status = lambda: None
 
         with (
-            patch("providers._HAS_REQUESTS", True),
-            patch("providers._requests.get", return_value=fake_resp),
+            patch("src.data.providers._HAS_REQUESTS", True),
+            patch("src.data.providers._requests.get", return_value=fake_resp),
         ):
-            from providers import _av_financials
+            from src.data.providers import _av_financials
 
             result = _av_financials("AAPL")
 
@@ -308,10 +310,10 @@ class TestAvFinancials:
         fake_resp.raise_for_status = lambda: None
 
         with (
-            patch("providers._HAS_REQUESTS", True),
-            patch("providers._requests.get", return_value=fake_resp),
+            patch("src.data.providers._HAS_REQUESTS", True),
+            patch("src.data.providers._requests.get", return_value=fake_resp),
         ):
-            from providers import _av_financials
+            from src.data.providers import _av_financials
 
             with pytest.raises(ValueError, match="No Alpha Vantage data"):
                 _av_financials("AAPL")

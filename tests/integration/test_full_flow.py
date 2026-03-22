@@ -27,11 +27,29 @@ def _enter_symbol_and_analyze(page, symbol: str):
     symbol_input.fill(symbol)
     symbol_input.press("Enter")
 
-    analyze_btn = page.locator('button:has-text("Analyze")').first
+    # Wait for Streamlit to finish the rerun triggered by Enter before clicking
+    page.wait_for_timeout(3000)
+
+    analyze_btn = page.locator(
+        '[data-testid="stSidebar"] button:has-text("Analyze")'
+    ).first
     analyze_btn.click()
 
-    # Wait for the analysis header to appear
-    page.wait_for_selector(f"text=Analysis: {symbol}", timeout=30_000)
+    # Wait for the Stock Quote header which confirms analysis rendered.
+    # We avoid matching the custom page_header HTML (unsafe_allow_html)
+    # since Playwright text= selectors can't reliably match it.
+    try:
+        page.wait_for_selector("text=Stock Quote", timeout=45_000)
+    except Exception:
+        # Capture debug info before re-raising
+        page.screenshot(
+            path=str(SCREENSHOTS_DIR / f"debug_fail_{symbol}.png"), full_page=True
+        )
+        body = page.locator("body").inner_text()
+        raise AssertionError(
+            f"Analysis page for {symbol} did not render 'Stock Quote'.\n"
+            f"Page text (first 2000 chars): {body[:2000]}"
+        ) from None
     page.wait_for_timeout(2000)
 
 

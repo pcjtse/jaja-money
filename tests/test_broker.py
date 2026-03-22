@@ -26,7 +26,7 @@ def _make_response(json_data, status_code=200):
 
 
 def test_trading_disabled_constant():
-    from broker import TRADING_DISABLED
+    from src.trading.broker import TRADING_DISABLED
 
     assert TRADING_DISABLED is True
 
@@ -40,7 +40,7 @@ def test_is_configured_false_when_no_env(monkeypatch):
     monkeypatch.delenv("ALPACA_API_KEY", raising=False)
     monkeypatch.delenv("ALPACA_API_SECRET", raising=False)
 
-    from broker import is_configured
+    from src.trading.broker import is_configured
 
     assert is_configured() is False
 
@@ -49,7 +49,7 @@ def test_is_configured_true_when_env_set(monkeypatch):
     monkeypatch.setenv("ALPACA_API_KEY", "test-key")
     monkeypatch.setenv("ALPACA_API_SECRET", "test-secret")
 
-    from broker import is_configured
+    from src.trading.broker import is_configured
 
     assert is_configured() is True
 
@@ -71,9 +71,9 @@ def test_get_account_returns_normalized_fields(monkeypatch):
         "status": "ACTIVE",
         "currency": "USD",
     }
-    with patch("broker._requests") as mock_req:
+    with patch("src.trading.broker._requests") as mock_req:
         mock_req.get.return_value = _make_response(raw)
-        from broker import get_account
+        from src.trading.broker import get_account
 
         result = get_account()
 
@@ -104,9 +104,9 @@ def test_get_positions_returns_list(monkeypatch):
             "side": "long",
         }
     ]
-    with patch("broker._requests") as mock_req:
+    with patch("src.trading.broker._requests") as mock_req:
         mock_req.get.return_value = _make_response(raw)
-        from broker import get_positions
+        from src.trading.broker import get_positions
 
         positions = get_positions()
 
@@ -120,9 +120,9 @@ def test_get_positions_empty(monkeypatch):
     monkeypatch.setenv("ALPACA_API_KEY", "k")
     monkeypatch.setenv("ALPACA_API_SECRET", "s")
 
-    with patch("broker._requests") as mock_req:
+    with patch("src.trading.broker._requests") as mock_req:
         mock_req.get.return_value = _make_response([])
-        from broker import get_positions
+        from src.trading.broker import get_positions
 
         positions = get_positions()
 
@@ -135,7 +135,7 @@ def test_get_positions_empty(monkeypatch):
 
 
 def test_execute_signal_hold_no_order():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("AAPL", "HOLD", qty=1)
     assert result["signal"] == "HOLD"
@@ -144,7 +144,7 @@ def test_execute_signal_hold_no_order():
 
 
 def test_execute_signal_buy_is_simulation():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("AAPL", "BUY", qty=5)
     assert result["action"] == "simulated"
@@ -156,7 +156,7 @@ def test_execute_signal_buy_is_simulation():
 
 
 def test_execute_signal_sell_is_simulation():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("TSLA", "SELL", qty=2)
     assert result["action"] == "simulated"
@@ -168,7 +168,7 @@ def test_execute_signal_sell_is_simulation():
 
 def test_execute_signal_dry_run_flag_is_simulation():
     """dry_run flag has no effect — execution is always simulated."""
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("AAPL", "BUY", qty=5, dry_run=True)
     assert result["action"] == "simulated"
@@ -176,7 +176,7 @@ def test_execute_signal_dry_run_flag_is_simulation():
 
 
 def test_execute_signal_with_scores():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("AAPL", "BUY", qty=3, factor_score=72, risk_score=35)
     assert result["factor_score"] == 72
@@ -185,14 +185,14 @@ def test_execute_signal_with_scores():
 
 
 def test_execute_signal_invalid_raises():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     with pytest.raises(ValueError, match="Unknown signal"):
         execute_signal("AAPL", "STRONG_BUY", qty=1)
 
 
 def test_execute_signal_note_field():
-    from broker import execute_signal
+    from src.trading.broker import execute_signal
 
     result = execute_signal("AAPL", "BUY", qty=1)
     assert "note" in result
@@ -207,7 +207,7 @@ def test_execute_signal_note_field():
 
 
 def test_place_order_not_exported():
-    import broker
+    import src.trading.broker as broker
 
     assert not hasattr(broker, "place_order"), (
         "place_order should have been removed; real trading is disabled"
@@ -215,7 +215,7 @@ def test_place_order_not_exported():
 
 
 def test_cancel_order_not_exported():
-    import broker
+    import src.trading.broker as broker
 
     assert not hasattr(broker, "cancel_order"), (
         "cancel_order should have been removed; real trading is disabled"

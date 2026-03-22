@@ -22,7 +22,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test_key_ci")
 
 
 def test_compute_context_hash_returns_string():
-    from analyzer import _compute_context_hash
+    from src.analysis.analyzer import _compute_context_hash
 
     h = _compute_context_hash("hello world")
     assert isinstance(h, str)
@@ -30,31 +30,31 @@ def test_compute_context_hash_returns_string():
 
 
 def test_compute_context_hash_deterministic():
-    from analyzer import _compute_context_hash
+    from src.analysis.analyzer import _compute_context_hash
 
     assert _compute_context_hash("same input") == _compute_context_hash("same input")
 
 
 def test_compute_context_hash_different_inputs():
-    from analyzer import _compute_context_hash
+    from src.analysis.analyzer import _compute_context_hash
 
     assert _compute_context_hash("input A") != _compute_context_hash("input B")
 
 
 def test_get_cached_response_miss(tmp_path):
-    from analyzer import _get_cached_response
-    from cache import DiskCache
+    from src.analysis.analyzer import _get_cached_response
+    from src.core.cache import DiskCache
 
-    with patch("analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))):
+    with patch("src.analysis.analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))):
         result = _get_cached_response("nonexistent_key_xyz")
     assert result is None
 
 
 def test_store_and_get_cached_response(tmp_path):
-    from analyzer import _get_cached_response, _store_cached_response
-    from cache import DiskCache
+    from src.analysis.analyzer import _get_cached_response, _store_cached_response
+    from src.core.cache import DiskCache
 
-    with patch("analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))):
+    with patch("src.analysis.analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))):
         _store_cached_response("test_key", "cached text response")
         retrieved = _get_cached_response("test_key")
     assert retrieved == "cached text response"
@@ -66,19 +66,19 @@ def test_store_and_get_cached_response(tmp_path):
 
 
 def test_classify_dividend():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert classify_stock_type("Utilities", pe_ratio=18.0, div_yield=4.5) == "Dividend"
 
 
 def test_classify_defensive_utilities():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert classify_stock_type("Utilities", pe_ratio=18.0, div_yield=2.0) == "Defensive"
 
 
 def test_classify_defensive_healthcare():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert (
         classify_stock_type("Healthcare", pe_ratio=25.0, div_yield=None) == "Defensive"
@@ -86,7 +86,7 @@ def test_classify_defensive_healthcare():
 
 
 def test_classify_defensive_consumer_staples():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert (
         classify_stock_type("Consumer Staples", pe_ratio=22.0, div_yield=1.0)
@@ -95,13 +95,13 @@ def test_classify_defensive_consumer_staples():
 
 
 def test_classify_cyclical_energy():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert classify_stock_type("Energy", pe_ratio=12.0, div_yield=None) == "Cyclical"
 
 
 def test_classify_cyclical_financials():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert (
         classify_stock_type("Financials", pe_ratio=10.0, div_yield=None) == "Cyclical"
@@ -109,7 +109,7 @@ def test_classify_cyclical_financials():
 
 
 def test_classify_cyclical_industrials():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert (
         classify_stock_type("Industrials", pe_ratio=20.0, div_yield=None) == "Cyclical"
@@ -117,41 +117,41 @@ def test_classify_cyclical_industrials():
 
 
 def test_classify_growth_technology_sector():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     assert classify_stock_type("Technology", pe_ratio=35.0, div_yield=None) == "Growth"
 
 
 def test_classify_growth_high_pe():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     # No known sector but high P/E > 30 → Growth
     assert classify_stock_type("Unknown", pe_ratio=40.0, div_yield=None) == "Growth"
 
 
 def test_classify_value_low_pe():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     # No strong sector signal, P/E < 15 → Value
     assert classify_stock_type("Unknown", pe_ratio=10.0, div_yield=None) == "Value"
 
 
 def test_classify_value_default_fallback():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     # No sector, no P/E, no div → default Value
     assert classify_stock_type(None, pe_ratio=None, div_yield=None) == "Value"
 
 
 def test_classify_dividend_takes_precedence():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     # High yield (≥3%) should return Dividend even if sector says Defensive
     assert classify_stock_type("Utilities", pe_ratio=20.0, div_yield=5.0) == "Dividend"
 
 
 def test_classify_returns_valid_type():
-    from analyzer import classify_stock_type
+    from src.analysis.analyzer import classify_stock_type
 
     valid_types = {"Growth", "Value", "Dividend", "Cyclical", "Defensive"}
     for sector in [
@@ -172,13 +172,13 @@ def test_classify_returns_valid_type():
 
 
 def test_estimate_tokens_empty():
-    from analyzer import _estimate_tokens
+    from src.analysis.analyzer import _estimate_tokens
 
     assert _estimate_tokens("") == 0
 
 
 def test_estimate_tokens_returns_int():
-    from analyzer import _estimate_tokens
+    from src.analysis.analyzer import _estimate_tokens
 
     result = _estimate_tokens("hello world this is a test")
     assert isinstance(result, int)
@@ -186,7 +186,7 @@ def test_estimate_tokens_returns_int():
 
 
 def test_estimate_tokens_scales_with_length():
-    from analyzer import _estimate_tokens
+    from src.analysis.analyzer import _estimate_tokens
 
     short = _estimate_tokens("hello world")
     long = _estimate_tokens("hello world " * 100)
@@ -194,7 +194,7 @@ def test_estimate_tokens_scales_with_length():
 
 
 def test_trim_chat_history_no_trim_needed():
-    from analyzer import trim_chat_history
+    from src.analysis.analyzer import trim_chat_history
 
     history = [
         {"role": "user", "content": "What is the P/E ratio?"},
@@ -206,7 +206,7 @@ def test_trim_chat_history_no_trim_needed():
 
 
 def test_trim_chat_history_returns_tuple():
-    from analyzer import trim_chat_history
+    from src.analysis.analyzer import trim_chat_history
 
     result = trim_chat_history("System.", [])
     assert isinstance(result, tuple)
@@ -214,7 +214,7 @@ def test_trim_chat_history_returns_tuple():
 
 
 def test_trim_chat_history_empty_history():
-    from analyzer import trim_chat_history
+    from src.analysis.analyzer import trim_chat_history
 
     trimmed, was_trimmed = trim_chat_history("System.", [])
     assert trimmed == []
@@ -222,7 +222,7 @@ def test_trim_chat_history_empty_history():
 
 
 def test_trim_chat_history_trims_when_over_budget():
-    from analyzer import trim_chat_history
+    from src.analysis.analyzer import trim_chat_history
 
     # Create a very long history with ~150k tokens of content
     long_turn = "word " * 20000  # ~26k tokens per turn
@@ -242,7 +242,7 @@ def test_trim_chat_history_trims_when_over_budget():
 
 
 def test_trim_chat_history_preserves_most_recent():
-    from analyzer import trim_chat_history
+    from src.analysis.analyzer import trim_chat_history
 
     long_turn = "word " * 20000
     history = [
@@ -259,7 +259,7 @@ def test_trim_chat_history_preserves_most_recent():
 
 
 def test_trim_chat_history_result_fits_budget():
-    from analyzer import trim_chat_history, _estimate_tokens
+    from src.analysis.analyzer import trim_chat_history, _estimate_tokens
 
     long_turn = "word " * 10000
     history = [
@@ -299,7 +299,7 @@ def _make_mock_stream(chunks):
 
 def _make_backtest_result():
     """Return a minimal BacktestResult-like object."""
-    from backtest import BacktestResult
+    from src.analysis.backtest import BacktestResult
 
     return BacktestResult(
         symbol="TEST",
@@ -321,17 +321,20 @@ def _make_backtest_result():
 
 
 def test_stream_backtest_narrative_from_cache(tmp_path):
-    from analyzer import stream_backtest_narrative, _compute_context_hash
-    from cache import DiskCache
+    from src.analysis.analyzer import stream_backtest_narrative, _compute_context_hash
+    from src.core.cache import DiskCache
 
     result = _make_backtest_result()
 
     # Pre-populate cache with a fake response
     cache = DiskCache(cache_dir=str(tmp_path))
 
-    with patch("analyzer._disk_cache", cache), patch("analyzer._get_client"):
+    with (
+        patch("src.analysis.analyzer._disk_cache", cache),
+        patch("src.analysis.analyzer._get_client"),
+    ):
         # First store a response in cache
-        from analyzer import _compute_context_hash
+        from src.analysis.analyzer import _compute_context_hash
 
         # Build same prompt that stream_backtest_narrative would build
         prompt = (
@@ -347,8 +350,8 @@ def test_stream_backtest_narrative_from_cache(tmp_path):
 
 
 def test_stream_backtest_narrative_live_stream(tmp_path):
-    from analyzer import stream_backtest_narrative
-    from cache import DiskCache
+    from src.analysis.analyzer import stream_backtest_narrative
+    from src.core.cache import DiskCache
 
     result = _make_backtest_result()
 
@@ -358,8 +361,8 @@ def test_stream_backtest_narrative_live_stream(tmp_path):
     )
 
     with (
-        patch("analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))),
-        patch("analyzer._get_client", return_value=mock_client),
+        patch("src.analysis.analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))),
+        patch("src.analysis.analyzer._get_client", return_value=mock_client),
     ):
         chunks = list(stream_backtest_narrative(result, use_cache=False))
     assert "".join(chunks) == "Analysis complete."
@@ -371,8 +374,8 @@ def test_stream_backtest_narrative_live_stream(tmp_path):
 
 
 def test_stream_sector_rotation_narrative_live(tmp_path):
-    from analyzer import stream_sector_rotation_narrative
-    from cache import DiskCache
+    from src.analysis.analyzer import stream_sector_rotation_narrative
+    from src.core.cache import DiskCache
 
     sector_data = [
         {
@@ -400,16 +403,16 @@ def test_stream_sector_rotation_narrative_live(tmp_path):
     )
 
     with (
-        patch("analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))),
-        patch("analyzer._get_client", return_value=mock_client),
+        patch("src.analysis.analyzer._disk_cache", DiskCache(cache_dir=str(tmp_path))),
+        patch("src.analysis.analyzer._get_client", return_value=mock_client),
     ):
         chunks = list(stream_sector_rotation_narrative(sector_data, use_cache=False))
     assert "".join(chunks) == "Sector analysis."
 
 
 def test_stream_sector_rotation_narrative_from_cache(tmp_path):
-    from analyzer import stream_sector_rotation_narrative
-    from cache import DiskCache
+    from src.analysis.analyzer import stream_sector_rotation_narrative
+    from src.core.cache import DiskCache
 
     sector_data = [
         {
@@ -428,8 +431,8 @@ def test_stream_sector_rotation_narrative_from_cache(tmp_path):
     mock_client.messages.stream.return_value = _make_mock_stream(["Fresh analysis."])
 
     with (
-        patch("analyzer._disk_cache", cache),
-        patch("analyzer._get_client", return_value=mock_client),
+        patch("src.analysis.analyzer._disk_cache", cache),
+        patch("src.analysis.analyzer._get_client", return_value=mock_client),
     ):
         # use_cache=False → always hits the mock stream
         chunks = list(stream_sector_rotation_narrative(sector_data, use_cache=False))
@@ -442,7 +445,7 @@ def test_stream_sector_rotation_narrative_from_cache(tmp_path):
 
 
 def test_stream_fundamental_analysis_uses_stock_type_prompt():
-    from analyzer import stream_fundamental_analysis
+    from src.analysis.analyzer import stream_fundamental_analysis
 
     mock_client = MagicMock()
     mock_client.messages.stream.return_value = _make_mock_stream(["text"])
@@ -456,9 +459,9 @@ def test_stream_fundamental_analysis_uses_stock_type_prompt():
     mock_client.messages.stream.side_effect = fake_stream
 
     with (
-        patch("analyzer._get_client", return_value=mock_client),
+        patch("src.analysis.analyzer._get_client", return_value=mock_client),
         patch(
-            "analyzer._disk_cache",
+            "src.analysis.analyzer._disk_cache",
             MagicMock(get=lambda k: None, set=lambda *a, **kw: None),
         ),
     ):
@@ -473,7 +476,7 @@ def test_stream_fundamental_analysis_uses_stock_type_prompt():
 
 
 def test_stream_fundamental_analysis_default_prompt_when_no_type():
-    from analyzer import _DEFAULT_SYSTEM_PROMPT
+    from src.analysis.analyzer import _DEFAULT_SYSTEM_PROMPT
 
     mock_client = MagicMock()
     captured_system = []
@@ -485,13 +488,13 @@ def test_stream_fundamental_analysis_default_prompt_when_no_type():
     mock_client.messages.stream.side_effect = fake_stream
 
     with (
-        patch("analyzer._get_client", return_value=mock_client),
+        patch("src.analysis.analyzer._get_client", return_value=mock_client),
         patch(
-            "analyzer._disk_cache",
+            "src.analysis.analyzer._disk_cache",
             MagicMock(get=lambda k: None, set=lambda *a, **kw: None),
         ),
     ):
-        from analyzer import stream_fundamental_analysis
+        from src.analysis.analyzer import stream_fundamental_analysis
 
         list(
             stream_fundamental_analysis("test prompt", stock_type=None, use_cache=False)

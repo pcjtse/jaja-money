@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def clean_history(tmp_path, monkeypatch):
     """Redirect history DB to a temp directory."""
-    import history as h
+    import src.data.history as h
 
     monkeypatch.setattr(h, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(h, "_DB_FILE", tmp_path / "history.db")
@@ -15,7 +15,7 @@ def clean_history(tmp_path, monkeypatch):
 
 
 def test_save_and_retrieve():
-    from history import save_analysis, get_history
+    from src.data.history import save_analysis, get_history
 
     save_analysis(
         symbol="AAPL",
@@ -33,7 +33,7 @@ def test_save_and_retrieve():
 
 
 def test_symbol_normalization():
-    from history import save_analysis, get_history
+    from src.data.history import save_analysis, get_history
 
     save_analysis("aapl", price=100.0, factor_score=60, risk_score=40)
     assert len(get_history("AAPL")) == 1
@@ -41,7 +41,7 @@ def test_symbol_normalization():
 
 def test_upsert_same_day():
     """Two saves on the same day should result in only one record."""
-    from history import save_analysis, get_history
+    from src.data.history import save_analysis, get_history
 
     save_analysis("MSFT", price=300.0, factor_score=65, risk_score=35)
     save_analysis("MSFT", price=305.0, factor_score=68, risk_score=32)
@@ -51,7 +51,7 @@ def test_upsert_same_day():
 
 
 def test_score_trend_structure():
-    from history import save_analysis, get_score_trend
+    from src.data.history import save_analysis, get_score_trend
 
     save_analysis("TSLA", price=200.0, factor_score=55, risk_score=60)
     trend = get_score_trend("TSLA")
@@ -64,7 +64,7 @@ def test_score_trend_structure():
 
 
 def test_get_tracked_symbols():
-    from history import save_analysis, get_tracked_symbols
+    from src.data.history import save_analysis, get_tracked_symbols
 
     save_analysis("AAPL", price=150.0, factor_score=70, risk_score=30)
     save_analysis("NVDA", price=500.0, factor_score=80, risk_score=40)
@@ -74,6 +74,6 @@ def test_get_tracked_symbols():
 
 
 def test_empty_history():
-    from history import get_history
+    from src.data.history import get_history
 
     assert get_history("UNKNOWN") == []

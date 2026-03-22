@@ -6,7 +6,7 @@ Covers:
 - P7.3 Screen templates (save/load/delete), CSV export, sentiment warning
 """
 
-from screener import (
+from src.trading.screener import (
     apply_filters,
     load_sp500,
     load_russell1000,
@@ -264,7 +264,9 @@ def test_apply_filters_empty_or_group_passes():
 
 def test_save_and_load_template(tmp_path, monkeypatch):
     """Save a template and retrieve it."""
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "templates.json"
+    )
     filters = [
         {
             "dimension": "factor_score",
@@ -280,13 +282,17 @@ def test_save_and_load_template(tmp_path, monkeypatch):
 
 
 def test_load_templates_empty_when_no_file(tmp_path, monkeypatch):
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "nonexistent.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "nonexistent.json"
+    )
     templates = load_screen_templates()
     assert templates == {}
 
 
 def test_delete_template(tmp_path, monkeypatch):
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "templates.json"
+    )
     filters = [{"dimension": "risk_score", "operator": "<=", "value": 40}]
     save_screen_template("to_delete", filters)
     delete_screen_template("to_delete")
@@ -295,12 +301,16 @@ def test_delete_template(tmp_path, monkeypatch):
 
 
 def test_delete_nonexistent_template_no_crash(tmp_path, monkeypatch):
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "templates.json"
+    )
     delete_screen_template("ghost_template")  # should not raise
 
 
 def test_save_multiple_templates(tmp_path, monkeypatch):
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "templates.json"
+    )
     save_screen_template(
         "screen_a", [{"dimension": "factor_score", "operator": ">=", "value": 60}]
     )
@@ -313,7 +323,9 @@ def test_save_multiple_templates(tmp_path, monkeypatch):
 
 
 def test_overwrite_existing_template(tmp_path, monkeypatch):
-    monkeypatch.setattr("screener._TEMPLATES_FILE", tmp_path / "templates.json")
+    monkeypatch.setattr(
+        "src.trading.screener._TEMPLATES_FILE", tmp_path / "templates.json"
+    )
     save_screen_template(
         "screen", [{"dimension": "factor_score", "operator": ">=", "value": 60}]
     )

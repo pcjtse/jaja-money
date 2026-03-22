@@ -14,7 +14,7 @@ def _make_returns(tickers, n=252, seed=42):
 
 
 def test_correlation_matrix_shape():
-    from portfolio_analysis import correlation_matrix
+    from src.analysis.portfolio_analysis import correlation_matrix
 
     returns = _make_returns(["AAPL", "MSFT", "GOOG"])
     corr = correlation_matrix(returns)
@@ -25,7 +25,7 @@ def test_correlation_matrix_shape():
 
 
 def test_correlation_matrix_symmetric():
-    from portfolio_analysis import correlation_matrix
+    from src.analysis.portfolio_analysis import correlation_matrix
 
     returns = _make_returns(["A", "B", "C"])
     corr = correlation_matrix(returns)
@@ -35,7 +35,7 @@ def test_correlation_matrix_symmetric():
 
 
 def test_correlation_range():
-    from portfolio_analysis import correlation_matrix
+    from src.analysis.portfolio_analysis import correlation_matrix
 
     returns = _make_returns(["X", "Y"])
     corr = correlation_matrix(returns)
@@ -45,7 +45,7 @@ def test_correlation_range():
 
 
 def test_portfolio_stats_keys():
-    from portfolio_analysis import portfolio_stats
+    from src.analysis.portfolio_analysis import portfolio_stats
 
     returns = _make_returns(["AAPL", "MSFT"])
     weights = {"AAPL": 0.6, "MSFT": 0.4}
@@ -61,7 +61,7 @@ def test_portfolio_stats_keys():
 
 
 def test_portfolio_stats_vol_positive():
-    from portfolio_analysis import portfolio_stats
+    from src.analysis.portfolio_analysis import portfolio_stats
 
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 0.5, "B": 0.5})
@@ -69,7 +69,7 @@ def test_portfolio_stats_vol_positive():
 
 
 def test_portfolio_stats_equal_weights():
-    from portfolio_analysis import portfolio_stats
+    from src.analysis.portfolio_analysis import portfolio_stats
 
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 0.5, "B": 0.5})
@@ -79,7 +79,7 @@ def test_portfolio_stats_equal_weights():
 
 def test_portfolio_stats_normalized_weights():
     """Weights that don't sum to 1 should be normalized."""
-    from portfolio_analysis import portfolio_stats
+    from src.analysis.portfolio_analysis import portfolio_stats
 
     returns = _make_returns(["A", "B"])
     stats = portfolio_stats(returns, {"A": 50, "B": 50})  # sums to 100, not 1
@@ -88,7 +88,7 @@ def test_portfolio_stats_normalized_weights():
 
 
 def test_portfolio_beta():
-    from portfolio_analysis import portfolio_beta
+    from src.analysis.portfolio_analysis import portfolio_beta
 
     returns = _make_returns(["A", "B", "SPY"])
     weights = {"A": 0.5, "B": 0.5}
@@ -99,7 +99,7 @@ def test_portfolio_beta():
 
 
 def test_build_returns_matrix():
-    from portfolio_analysis import build_returns_matrix
+    from src.analysis.portfolio_analysis import build_returns_matrix
     import pandas as pd
 
     s1 = pd.Series([100, 102, 101, 103], name="A")

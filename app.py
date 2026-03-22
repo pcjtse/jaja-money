@@ -32,8 +32,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 
-from api import get_api, MOCK_MODE
-from analyzer import (
+from src.data.api import get_api, MOCK_MODE
+from src.analysis.analyzer import (
     build_data_prompt,
     stream_fundamental_analysis,
     stream_sentiment_themes,
@@ -51,14 +51,14 @@ from analyzer import (
     extract_supply_chain_structured,
     score_news_impact,
 )
-from sentiment import (
+from src.data.sentiment import (
     score_articles,
     aggregate_sentiment,
     SENTIMENT_COLOR,
     SENTIMENT_EMOJI,
     compute_impact_weighted_sentiment,
 )
-from factors import (
+from src.analysis.factors import (
     compute_factors,
     composite_score,
     composite_label_color,
@@ -70,21 +70,21 @@ from factors import (
     compute_beat_consistency,
     compute_market_regime,
 )
-from guardrails import compute_risk, apply_regime_adjustment
-from portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
-from watchlist import (
+from src.analysis.guardrails import compute_risk, apply_regime_adjustment
+from src.trading.portfolio import suggest_position, RISK_TOLERANCES, HORIZONS
+from src.trading.watchlist import (
     get_watchlist,
     add_to_watchlist,
     remove_from_watchlist,
     is_in_watchlist,
 )
-from history import (
+from src.data.history import (
     save_analysis,
     get_score_trend,
     get_latest_two_snapshots,
     get_last_n_snapshots,
 )
-from alerts import (
+from src.ui.alerts import (
     get_alerts,
     add_alert,
     check_alerts,
@@ -95,27 +95,27 @@ from alerts import (
     is_scheduler_running,
     check_signal_changes,
 )
-from export import (
+from src.ui.export import (
     factors_to_csv,
     price_history_to_csv,
     analysis_to_html,
     analysis_to_pdf,
 )
-from cache import get_cache
-from log_setup import get_logger
-from ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
-from theme import inject_css, page_header
-from options_analysis import (
+from src.core.cache import get_cache
+from src.core.log_setup import get_logger
+from src.ui.ui_prefs import is_dark_mode, toggle_dark_mode, encode_share_state
+from src.ui.theme import inject_css, page_header
+from src.analysis.options_analysis import (
     build_iv_surface,
     compute_options_metrics,
     compute_hedge_suggestions,
 )
-from social import (
+from src.data.social import (
     fetch_reddit_mentions,
     fetch_stocktwits_messages,
     compute_social_sentiment,
 )
-from ownership import fetch_institutional_ownership, fetch_insider_summary
+from src.data.ownership import fetch_institutional_ownership, fetch_insider_summary
 
 log = get_logger(__name__)
 
@@ -363,7 +363,7 @@ with st.sidebar:
 
     # P4.5: Factor weight settings
     with st.expander("⚙️ Factor Weights"):
-        from config import cfg
+        from src.core.config import cfg
 
         current_weights = dict(cfg.factor_weights)
         weight_keys = [
@@ -1297,7 +1297,7 @@ with st.expander("Social Sentiment — Reddit & StockTwits (P16.1)", expanded=Fa
     if st.button("Fetch Social Sentiment", key="social_fetch"):
         with st.spinner("Fetching Reddit & StockTwits data..."):
             try:
-                from sentiment import _load_finbert
+                from src.data.sentiment import _load_finbert
 
                 _reddit = fetch_reddit_mentions(symbol, limit=25)
                 _stwits = fetch_stocktwits_messages(symbol, limit=25)

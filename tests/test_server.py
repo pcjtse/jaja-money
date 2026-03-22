@@ -31,7 +31,7 @@ def client():
     # Ensure auth is disabled for tests
     os.environ.pop("JAJA_API_KEY", None)
 
-    import server
+    import src.services.server as server
 
     # Reset module-level singleton so each test gets a fresh mock
     server._api_instance = None
@@ -248,7 +248,7 @@ class TestAuthentication:
         """When JAJA_API_KEY is configured, missing key → 401."""
         os.environ["JAJA_API_KEY"] = "secret123"
         try:
-            import server
+            import src.services.server as server
 
             server._api_instance = None
             server._api_error = None
@@ -259,7 +259,7 @@ class TestAuthentication:
                 assert response.status_code == 401
         finally:
             os.environ.pop("JAJA_API_KEY", None)
-            import server
+            import src.services.server as server
 
             server._api_instance = None
 
@@ -267,7 +267,7 @@ class TestAuthentication:
         """When JAJA_API_KEY is configured, correct key is accepted."""
         os.environ["JAJA_API_KEY"] = "secret123"
         try:
-            import server
+            import src.services.server as server
 
             server._api_instance = None
             server._api_error = None
@@ -280,6 +280,6 @@ class TestAuthentication:
                 assert response.status_code in (200, 201)
         finally:
             os.environ.pop("JAJA_API_KEY", None)
-            import server
+            import src.services.server as server
 
             server._api_instance = None

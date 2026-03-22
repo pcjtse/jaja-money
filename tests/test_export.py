@@ -56,7 +56,7 @@ SAMPLE_FINANCIALS = {
 
 
 def test_factors_to_csv_returns_bytes():
-    from export import factors_to_csv
+    from src.ui.export import factors_to_csv
 
     result = factors_to_csv(
         "AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS
@@ -66,7 +66,7 @@ def test_factors_to_csv_returns_bytes():
 
 
 def test_factors_to_csv_contains_symbol():
-    from export import factors_to_csv
+    from src.ui.export import factors_to_csv
 
     result = factors_to_csv(
         "AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE, SAMPLE_FINANCIALS
@@ -75,7 +75,7 @@ def test_factors_to_csv_contains_symbol():
 
 
 def test_factors_to_csv_contains_factor_names():
-    from export import factors_to_csv
+    from src.ui.export import factors_to_csv
 
     result = factors_to_csv("TSLA", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE)
     decoded = result.decode("utf-8")
@@ -84,14 +84,14 @@ def test_factors_to_csv_contains_factor_names():
 
 
 def test_factors_to_csv_contains_flags():
-    from export import factors_to_csv
+    from src.ui.export import factors_to_csv
 
     result = factors_to_csv("AAPL", SAMPLE_FACTORS, SAMPLE_RISK, SAMPLE_QUOTE)
     assert b"High Vol" in result
 
 
 def test_price_history_to_csv():
-    from export import price_history_to_csv
+    from src.ui.export import price_history_to_csv
 
     df = pd.DataFrame(
         {"Open": [100, 101], "Close": [102, 103]},
@@ -104,7 +104,7 @@ def test_price_history_to_csv():
 
 
 def test_analysis_to_html_returns_bytes():
-    from export import analysis_to_html
+    from src.ui.export import analysis_to_html
 
     result = analysis_to_html(
         symbol="AAPL",
@@ -122,7 +122,7 @@ def test_analysis_to_html_returns_bytes():
 
 
 def test_analysis_to_html_valid_html():
-    from export import analysis_to_html
+    from src.ui.export import analysis_to_html
 
     result = analysis_to_html(
         symbol="MSFT",

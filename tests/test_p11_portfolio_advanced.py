@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock
 
-from portfolio_analysis import (
+from src.analysis.portfolio_analysis import (
     factor_attribution,
     kelly_sizing,
     monte_carlo_simulation,
@@ -271,7 +271,7 @@ class TestFactorAttribution:
 
 class TestPeerComparison:
     def test_fetch_peer_metrics_no_peers(self):
-        from comparison import fetch_peer_metrics
+        from src.analysis.comparison import fetch_peer_metrics
 
         mock_api = MagicMock()
         mock_api.get_peers.return_value = []
@@ -293,7 +293,7 @@ class TestPeerComparison:
         assert result["peer_tickers"] == []
 
     def test_fetch_peer_metrics_with_peers(self):
-        from comparison import fetch_peer_metrics
+        from src.analysis.comparison import fetch_peer_metrics
 
         mock_api = MagicMock()
         mock_api.get_peers.return_value = ["MSFT", "GOOGL"]
@@ -317,7 +317,7 @@ class TestPeerComparison:
         assert "peer_table" in result
 
     def test_percentile_ranks_range(self):
-        from comparison import fetch_peer_metrics
+        from src.analysis.comparison import fetch_peer_metrics
 
         mock_api = MagicMock()
         mock_api.get_peers.return_value = ["MSFT", "GOOGL", "META"]

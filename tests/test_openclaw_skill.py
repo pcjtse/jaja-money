@@ -25,14 +25,19 @@ def _stub_factors_and_guardrails():
     """
     import importlib
 
-    for mod_name in ("factors", "guardrails", "screener"):
-        if mod_name not in sys.modules:
+    mod_mapping = {
+        "factors": "src.analysis.factors",
+        "guardrails": "src.analysis.guardrails",
+        "screener": "src.trading.screener",
+    }
+    for mod_name, full_name in mod_mapping.items():
+        if full_name not in sys.modules:
             try:
-                importlib.import_module(mod_name)
+                importlib.import_module(full_name)
             except (ImportError, ModuleNotFoundError):
-                sys.modules[mod_name] = types.ModuleType(mod_name)
+                sys.modules[full_name] = types.ModuleType(full_name)
 
-    factors_mod = sys.modules.get("factors")
+    factors_mod = sys.modules.get("src.analysis.factors")
     if factors_mod is not None and not hasattr(factors_mod, "compute_factors"):
         factors_mod.compute_factors = MagicMock(
             return_value={
@@ -42,7 +47,7 @@ def _stub_factors_and_guardrails():
             }
         )
 
-    guardrails_mod = sys.modules.get("guardrails")
+    guardrails_mod = sys.modules.get("src.analysis.guardrails")
     if guardrails_mod is not None and not hasattr(guardrails_mod, "compute_risk"):
         guardrails_mod.compute_risk = MagicMock(
             return_value={
@@ -52,7 +57,7 @@ def _stub_factors_and_guardrails():
             }
         )
 
-    screener_mod = sys.modules.get("screener")
+    screener_mod = sys.modules.get("src.trading.screener")
     if screener_mod is not None and not hasattr(screener_mod, "run_screener"):
         screener_mod.run_screener = MagicMock(return_value=[])
 
@@ -169,14 +174,14 @@ def test_derive_signal_confidence_capped_at_100():
 def test_analyze_returns_expected_keys(mock_api):
     from jaja_money_skill.scripts.jaja_skill import analyze
 
-    sys.modules["factors"].compute_factors = MagicMock(
+    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
         return_value={
             "composite_score": 72,
             "composite_label": "Strong Buy",
             "factors": [],
         }
     )
-    sys.modules["guardrails"].compute_risk = MagicMock(
+    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
         return_value={
             "risk_score": 35,
             "risk_level": "Low",
@@ -197,14 +202,14 @@ def test_analyze_returns_expected_keys(mock_api):
 def test_analyze_upcases_ticker(mock_api):
     from jaja_money_skill.scripts.jaja_skill import analyze
 
-    sys.modules["factors"].compute_factors = MagicMock(
+    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
         return_value={
             "composite_score": 50,
             "composite_label": "Hold",
             "factors": [],
         }
     )
-    sys.modules["guardrails"].compute_risk = MagicMock(
+    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
         return_value={
             "risk_score": 50,
             "risk_level": "Moderate",
@@ -225,14 +230,14 @@ def test_analyze_upcases_ticker(mock_api):
 def test_score_returns_signal(mock_api):
     from jaja_money_skill.scripts.jaja_skill import score
 
-    sys.modules["factors"].compute_factors = MagicMock(
+    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
         return_value={
             "composite_score": 68,
             "composite_label": "Buy",
             "factors": [],
         }
     )
-    sys.modules["guardrails"].compute_risk = MagicMock(
+    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
         return_value={
             "risk_score": 45,
             "risk_level": "Moderate",
@@ -253,12 +258,12 @@ def test_score_returns_signal(mock_api):
 
 
 def test_get_alerts_no_symbol(tmp_path, monkeypatch):
-    import alerts as a
+    import src.ui.alerts as a
 
     monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-    from alerts import add_alert
+    from src.ui.alerts import add_alert
 
     add_alert("AAPL", "Price Above", 200.0)
     add_alert("MSFT", "Price Below", 300.0)
@@ -272,12 +277,12 @@ def test_get_alerts_no_symbol(tmp_path, monkeypatch):
 
 
 def test_get_alerts_filtered_by_symbol(tmp_path, monkeypatch):
-    import alerts as a
+    import src.ui.alerts as a
 
     monkeypatch.setattr(a, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(a, "_ALERTS_FILE", tmp_path / "alerts.json")
 
-    from alerts import add_alert
+    from src.ui.alerts import add_alert
 
     add_alert("AAPL", "Price Above", 200.0)
     add_alert("MSFT", "Price Below", 300.0)
@@ -297,7 +302,7 @@ def test_get_alerts_filtered_by_symbol(tmp_path, monkeypatch):
 def test_screen_returns_results_and_total(mock_api):
     from jaja_money_skill.scripts.jaja_skill import screen
 
-    sys.modules["screener"].run_screener = MagicMock(
+    sys.modules["src.trading.screener"].run_screener = MagicMock(
         return_value=[
             {"symbol": "AAPL", "factor_score": 72},
             {"symbol": "MSFT", "factor_score": 68},
@@ -315,7 +320,7 @@ def test_screen_returns_results_and_total(mock_api):
 def test_screen_respects_limit(mock_api):
     from jaja_money_skill.scripts.jaja_skill import screen
 
-    sys.modules["screener"].run_screener = MagicMock(
+    sys.modules["src.trading.screener"].run_screener = MagicMock(
         return_value=[{"symbol": f"T{i}"} for i in range(10)]
     )
     with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):

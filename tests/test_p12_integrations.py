@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from alerts import (
+from src.ui.alerts import (
     _post_json,
     _send_discord,
     _send_slack,
@@ -14,7 +14,7 @@ from alerts import (
     send_webhook_notification,
     send_test_webhook,
 )
-from export import parse_brokerage_csv, _parse_float, _get_col
+from src.ui.export import parse_brokerage_csv, _parse_float, _get_col
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ class TestWebhooks:
         assert result is False
 
     def test_post_json_success(self):
-        with patch("alerts._urllib_request.urlopen") as mock_urlopen:
+        with patch("src.ui.alerts._urllib_request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
             mock_response.status = 200
             mock_response.__enter__ = MagicMock(return_value=mock_response)
@@ -39,13 +39,13 @@ class TestWebhooks:
             assert result is True
 
     def test_post_json_failure(self):
-        with patch("alerts._urllib_request.urlopen") as mock_urlopen:
+        with patch("src.ui.alerts._urllib_request.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = Exception("Connection refused")
             result = _post_json("https://invalid.webhook.com", {"text": "hello"})
             assert result is False
 
     def test_send_slack_builds_payload(self):
-        with patch("alerts._post_json") as mock_post:
+        with patch("src.ui.alerts._post_json") as mock_post:
             mock_post.return_value = True
             result = _send_slack(
                 "https://slack.webhook", "Test Alert", "Body text", "#FF0000"
@@ -57,7 +57,7 @@ class TestWebhooks:
             assert payload["attachments"][0]["title"] == "Test Alert"
 
     def test_send_discord_builds_payload(self):
-        with patch("alerts._post_json") as mock_post:
+        with patch("src.ui.alerts._post_json") as mock_post:
             mock_post.return_value = True
             result = _send_discord(
                 "https://discord.webhook", "Test Alert", "Body text", "#2196F3"
@@ -69,7 +69,7 @@ class TestWebhooks:
             assert payload["embeds"][0]["title"] == "Test Alert"
 
     def test_send_telegram_builds_payload(self):
-        with patch("alerts._post_json") as mock_post:
+        with patch("src.ui.alerts._post_json") as mock_post:
             mock_post.return_value = True
             result = _send_telegram("bot_token", "chat_123", "Alert message")
             assert result is True
@@ -85,7 +85,7 @@ class TestWebhooks:
             "threshold": 200.0,
             "note": "Target price hit",
         }
-        with patch("alerts._post_json", return_value=True):
+        with patch("src.ui.alerts._post_json", return_value=True):
             results = send_webhook_notification(
                 alert,
                 current_value=201.5,
@@ -105,18 +105,18 @@ class TestWebhooks:
         assert results == {}
 
     def test_test_webhook_slack(self):
-        with patch("alerts._send_slack", return_value=True) as mock_send:
+        with patch("src.ui.alerts._send_slack", return_value=True) as mock_send:
             result = send_test_webhook("slack", "https://slack.webhook")
             assert result is True
             mock_send.assert_called_once()
 
     def test_test_webhook_discord(self):
-        with patch("alerts._send_discord", return_value=True):
+        with patch("src.ui.alerts._send_discord", return_value=True):
             result = send_test_webhook("discord", "https://discord.webhook")
             assert result is True
 
     def test_test_webhook_telegram(self):
-        with patch("alerts._send_telegram", return_value=True):
+        with patch("src.ui.alerts._send_telegram", return_value=True):
             result = send_test_webhook("telegram", "bot_token", chat_id="chat123")
             assert result is True
 

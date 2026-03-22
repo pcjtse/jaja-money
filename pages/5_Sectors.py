@@ -4,11 +4,11 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from api import get_api, MOCK_MODE
-from sectors import get_sector_data, classify_rotation_phase
-from analyzer import stream_sector_rotation_narrative
+from src.data.api import get_api, MOCK_MODE
+from src.trading.sectors import get_sector_data, classify_rotation_phase
+from src.analysis.analyzer import stream_sector_rotation_narrative
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(page_title="Sector Rotation", page_icon="🔄", layout="wide")
 inject_css()

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent import _execute_tool, run_research_agent
-from document_analysis import (
+from src.services.agent import _execute_tool, run_research_agent
+from src.analysis.document_analysis import (
     _chunk_text,
     extract_pdf_text,
     stream_document_analysis,
@@ -87,7 +87,7 @@ class TestAgentMode:
         mock_response.content = [text_block]
         mock_client.messages.create.return_value = mock_response
 
-        with patch("agent.anthropic") as mock_anthropic_module:
+        with patch("src.services.agent.anthropic") as mock_anthropic_module:
             mock_anthropic_module.Anthropic.return_value = mock_client
 
             chunks = list(
@@ -124,7 +124,7 @@ class TestAgentMode:
 
         mock_client.messages.create.side_effect = lambda **kwargs: make_response()
 
-        with patch("agent.anthropic") as mock_anthropic_module:
+        with patch("src.services.agent.anthropic") as mock_anthropic_module:
             mock_anthropic_module.Anthropic.return_value = mock_client
 
             list(run_research_agent("AAPL", mock_api))
@@ -161,8 +161,8 @@ class TestDocumentAnalysis:
     def test_extract_pdf_no_library(self):
         """Should raise RuntimeError when neither pdfplumber nor PyMuPDF is installed."""
         pdf_data = b"%PDF-1.4 fake pdf content"
-        with patch("document_analysis._try_pdfplumber", return_value=""):
-            with patch("document_analysis._try_pymupdf", return_value=""):
+        with patch("src.analysis.document_analysis._try_pdfplumber", return_value=""):
+            with patch("src.analysis.document_analysis._try_pymupdf", return_value=""):
                 with pytest.raises(RuntimeError, match="Could not extract text"):
                     extract_pdf_text(pdf_data)
 
@@ -170,7 +170,8 @@ class TestDocumentAnalysis:
         """Test extraction using pdfplumber mock."""
         pdf_data = b"%PDF-1.4 content"
         with patch(
-            "document_analysis._try_pdfplumber", return_value="Extracted text from PDF"
+            "src.analysis.document_analysis._try_pdfplumber",
+            return_value="Extracted text from PDF",
         ):
             result = extract_pdf_text(pdf_data)
         assert result == "Extracted text from PDF"
@@ -178,8 +179,11 @@ class TestDocumentAnalysis:
     def test_extract_pdf_fallback_to_pymupdf(self):
         """Should fall back to PyMuPDF when pdfplumber fails."""
         pdf_data = b"%PDF-1.4 content"
-        with patch("document_analysis._try_pdfplumber", return_value=""):
-            with patch("document_analysis._try_pymupdf", return_value="PyMuPDF text"):
+        with patch("src.analysis.document_analysis._try_pdfplumber", return_value=""):
+            with patch(
+                "src.analysis.document_analysis._try_pymupdf",
+                return_value="PyMuPDF text",
+            ):
                 result = extract_pdf_text(pdf_data)
         assert result == "PyMuPDF text"
 
@@ -191,7 +195,7 @@ class TestDocumentAnalysis:
     def test_stream_document_analysis_with_text(self):
         text = "Revenue grew 15%. Key risks: competition and macro headwinds."
 
-        with patch("document_analysis.anthropic") as mock_anthropic_module:
+        with patch("src.analysis.document_analysis.anthropic") as mock_anthropic_module:
             mock_client = MagicMock()
             mock_anthropic_module.Anthropic.return_value = mock_client
 
@@ -215,7 +219,7 @@ class TestDocumentAnalysis:
         text = "Strong quarterly results."
         market_data = {"price": 150.0, "pe": 25.0, "eps": 6.0}
 
-        with patch("document_analysis.anthropic") as mock_anthropic_module:
+        with patch("src.analysis.document_analysis.anthropic") as mock_anthropic_module:
             mock_client = MagicMock()
             mock_anthropic_module.Anthropic.return_value = mock_client
 
@@ -242,7 +246,7 @@ class TestDocumentAnalysis:
     def test_stream_document_analysis_error_handling(self):
         text = "Some document text."
 
-        with patch("document_analysis.anthropic") as mock_anthropic_module:
+        with patch("src.analysis.document_analysis.anthropic") as mock_anthropic_module:
             mock_client = MagicMock()
             mock_anthropic_module.Anthropic.return_value = mock_client
             mock_client.messages.stream.side_effect = Exception("API error")

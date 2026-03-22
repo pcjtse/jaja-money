@@ -82,7 +82,9 @@ def streamlit_server(tmp_path_factory):
     mock_path = str(MOCKS_DIR)
     env["PYTHONPATH"] = f"{mock_path}:{existing_path}" if existing_path else mock_path
 
-    # Set dummy API keys so FinnhubAPI.__init__ doesn't raise
+    # Use the built-in MockFinnhubAPI (synthetic data, no real API calls).
+    # PYTHONPATH mocks still shadow the anthropic module for streaming.
+    env["MOCK_DATA"] = "1"
     env["FINNHUB_API_KEY"] = "test_integration_key"
     env["ANTHROPIC_API_KEY"] = "test_integration_key"
     env["AI_BACKEND"] = "sdk"

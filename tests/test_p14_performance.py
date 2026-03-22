@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cache import DiskCache, RedisCacheBackend
+from src.core.cache import DiskCache, RedisCacheBackend
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ from cache import DiskCache, RedisCacheBackend
 class TestConcurrentFetching:
     def test_fetch_all_parallel_returns_dict(self):
         """Test that fetch_all_parallel returns a dict with expected keys."""
-        from api import FinnhubAPI
+        from src.data.api import FinnhubAPI
 
         mock_client = MagicMock()
         mock_client.quote.return_value = {"c": 150.0, "dp": 1.0, "pc": 148.0}
@@ -63,7 +63,7 @@ class TestConcurrentFetching:
 
     def test_fetch_all_parallel_includes_latency(self):
         """Verify latency_breakdown contains per-source timing."""
-        from api import FinnhubAPI
+        from src.data.api import FinnhubAPI
 
         with patch.object(FinnhubAPI, "__init__", lambda self: None):
             api = FinnhubAPI.__new__(FinnhubAPI)
@@ -104,7 +104,7 @@ class TestRedisCacheBackend:
             assert cache._enabled is False
 
     def test_redis_get_returns_sentinel_when_disabled(self):
-        from cache import CACHE_MISS
+        from src.core.cache import CACHE_MISS
 
         cache = RedisCacheBackend.__new__(RedisCacheBackend)
         cache._enabled = False
@@ -138,7 +138,7 @@ class TestRedisCacheBackend:
         mock_redis_module.Redis.from_url.return_value = mock_client
 
         with patch.dict("sys.modules", {"redis": mock_redis_module}):
-            with patch("cache.cfg") as mock_cfg:
+            with patch("src.core.cache.cfg") as mock_cfg:
                 mock_cfg.cache_ttl = 300
                 cache = RedisCacheBackend(redis_url="redis://localhost:6379/0")
                 cache.set("test_key", {"data": 42}, ttl=60)
@@ -165,7 +165,7 @@ class TestRedisCacheBackend:
         """get_cache() should return DiskCache when CACHE_BACKEND=disk."""
         monkeypatch.setenv("CACHE_BACKEND", "disk")
         # Reimport to trigger factory
-        import cache as cache_module
+        import src.core.cache as cache_module
 
         new_cache = cache_module._create_cache()
         assert isinstance(new_cache, DiskCache)
@@ -175,7 +175,7 @@ class TestRedisCacheBackend:
         monkeypatch.setenv("CACHE_BACKEND", "redis")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
-        import cache as cache_module
+        import src.core.cache as cache_module
 
         with patch.object(RedisCacheBackend, "_connect", lambda self: None):
             new_cache = cache_module._create_cache()
@@ -189,9 +189,9 @@ class TestRedisCacheBackend:
 
 class TestFastAPIServer:
     def test_server_import(self):
-        """server.py should import without errors when FastAPI is installed."""
+        """src.services.server.py should import without errors when FastAPI is installed."""
         try:
-            import server
+            import src.services.server as server
 
             assert hasattr(server, "app")
         except ImportError:
@@ -201,7 +201,7 @@ class TestFastAPIServer:
         """Health endpoint should return 200 with status ok."""
         try:
             from fastapi.testclient import TestClient
-            import server
+            import src.services.server as server
 
             client = TestClient(server.app)
             response = client.get("/health")
@@ -216,7 +216,7 @@ class TestFastAPIServer:
         """Health endpoint should include API key configuration status."""
         try:
             from fastapi.testclient import TestClient
-            import server
+            import src.services.server as server
 
             client = TestClient(server.app)
             response = client.get("/health")
@@ -230,11 +230,11 @@ class TestFastAPIServer:
         """Analyze endpoint should handle missing API gracefully."""
         try:
             from fastapi.testclient import TestClient
-            import server
+            import src.services.server as server
 
             client = TestClient(server.app)
 
-            with patch("server._get_api") as mock_get_api:
+            with patch("src.services.server._get_api") as mock_get_api:
                 mock_api = MagicMock()
                 mock_api.fetch_all_parallel.side_effect = Exception(
                     "No data for INVALID"
@@ -250,7 +250,7 @@ class TestFastAPIServer:
         """OpenAPI docs should be accessible."""
         try:
             from fastapi.testclient import TestClient
-            import server
+            import src.services.server as server
 
             client = TestClient(server.app)
             response = client.get("/docs")
@@ -262,7 +262,7 @@ class TestFastAPIServer:
         """Requests with wrong API key should be rejected."""
         try:
             from fastapi.testclient import TestClient
-            import server
+            import src.services.server as server
 
             with patch.object(server, "_API_KEY", "secret-key-123"):
                 client = TestClient(server.app)

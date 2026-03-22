@@ -30,7 +30,7 @@ import os
 import time
 from typing import Any
 
-from log_setup import get_logger
+from src.core.log_setup import get_logger
 
 log = get_logger(__name__)
 
@@ -184,7 +184,7 @@ def _get_remote_client():
 
 def _get_api():
     """Return a FinnhubAPI instance (local mode only)."""
-    from api import get_api
+    from src.data.api import get_api
 
     return get_api()
 
@@ -235,8 +235,8 @@ def analyze(ticker: str, use_cache: bool = True) -> dict[str, Any]:
     api = _get_api()
     symbol = ticker.upper()
 
-    from factors import compute_factors
-    from guardrails import compute_risk
+    from src.analysis.factors import compute_factors
+    from src.analysis.guardrails import compute_risk
 
     data = api.fetch_all_parallel(symbol)
     quote = data.get("quote") or {}
@@ -292,7 +292,7 @@ def screen(
 
     api = _get_api()
 
-    from screener import run_screener
+    from src.trading.screener import run_screener
 
     results = run_screener(
         tickers=tickers,
@@ -325,8 +325,8 @@ def score(ticker: str) -> dict[str, Any]:
     api = _get_api()
     symbol = ticker.upper()
 
-    from factors import compute_factors
-    from guardrails import compute_risk
+    from src.analysis.factors import compute_factors
+    from src.analysis.guardrails import compute_risk
 
     quote = api.get_quote(symbol)
     financials = api.get_financials(symbol)
@@ -363,7 +363,7 @@ def get_alerts(symbol: str | None = None) -> dict[str, Any]:
     if client:
         return client.get_alerts(symbol)
 
-    from alerts import get_alerts as _get_alerts
+    from src.ui.alerts import get_alerts as _get_alerts
 
     all_alerts = _get_alerts(symbol)
     active = [a for a in all_alerts if a.get("status") == "active"]
@@ -396,7 +396,7 @@ def research(
     api = _get_api()
     symbol = ticker.upper()
 
-    from agent import run_research_agent
+    from src.services.agent import run_research_agent
 
     chunks: list[str] = []
     for chunk in run_research_agent(symbol, api, question=question):

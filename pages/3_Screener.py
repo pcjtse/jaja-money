@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
-from screener import (
+from src.trading.screener import (
     run_screen,
     default_universe,
     load_universe,
@@ -17,7 +17,7 @@ from screener import (
     apply_esg_filter,
 )
 
-from theme import inject_css, page_header
+from src.ui.theme import inject_css, page_header
 
 st.set_page_config(page_title="Stock Screener", page_icon="🔍", layout="wide")
 inject_css()

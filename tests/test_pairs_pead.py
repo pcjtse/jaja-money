@@ -29,7 +29,7 @@ def _make_df(series: pd.Series) -> pd.DataFrame:
 
 class TestComputeSpread:
     def test_returns_series(self):
-        from pairs import compute_spread
+        from src.analysis.pairs import compute_spread
 
         a = _make_price_series(100)
         b = _make_price_series(100, seed=7)
@@ -37,7 +37,7 @@ class TestComputeSpread:
         assert isinstance(result, pd.Series)
 
     def test_length_matches_aligned(self):
-        from pairs import compute_spread
+        from src.analysis.pairs import compute_spread
 
         a = _make_price_series(100)
         b = _make_price_series(100, seed=7)
@@ -45,7 +45,7 @@ class TestComputeSpread:
         assert len(result) == 100
 
     def test_empty_input_returns_empty_series(self):
-        from pairs import compute_spread
+        from src.analysis.pairs import compute_spread
 
         a = pd.Series(dtype=float)
         b = pd.Series(dtype=float)
@@ -53,7 +53,7 @@ class TestComputeSpread:
         assert len(result) == 0
 
     def test_identical_series_gives_zero_spread(self):
-        from pairs import compute_spread
+        from src.analysis.pairs import compute_spread
 
         a = _make_price_series(50)
         result = compute_spread(a, a)
@@ -61,7 +61,7 @@ class TestComputeSpread:
         assert all(abs(v) < 1e-10 for v in result)
 
     def test_spread_is_log_ratio(self):
-        from pairs import compute_spread
+        from src.analysis.pairs import compute_spread
 
         a = pd.Series([100.0, 110.0, 120.0])
         b = pd.Series([50.0, 55.0, 60.0])
@@ -73,7 +73,7 @@ class TestComputeSpread:
 
 class TestComputeZscore:
     def test_returns_series(self):
-        from pairs import compute_zscore, compute_spread
+        from src.analysis.pairs import compute_zscore, compute_spread
 
         a = _make_price_series(200)
         b = _make_price_series(200, seed=7)
@@ -82,7 +82,7 @@ class TestComputeZscore:
         assert isinstance(result, pd.Series)
 
     def test_first_window_bars_are_nan(self):
-        from pairs import compute_zscore, compute_spread
+        from src.analysis.pairs import compute_zscore, compute_spread
 
         a = _make_price_series(200)
         b = _make_price_series(200, seed=7)
@@ -93,14 +93,14 @@ class TestComputeZscore:
         assert all(math.isnan(v) for v in result.iloc[: window - 1])
 
     def test_returns_empty_on_insufficient_data(self):
-        from pairs import compute_zscore
+        from src.analysis.pairs import compute_zscore
 
         short = pd.Series([1.0, 2.0, 3.0])
         result = compute_zscore(short, window=60)
         assert len(result) == 0
 
     def test_zscore_mean_near_zero(self):
-        from pairs import compute_zscore, compute_spread
+        from src.analysis.pairs import compute_zscore, compute_spread
 
         # Cointegrated pair should have mean-reverting spread → z-score near 0 on avg
         a = _make_price_series(500)
@@ -112,7 +112,7 @@ class TestComputeZscore:
 
 class TestComputePairCorrelation:
     def test_highly_correlated_pair(self):
-        from pairs import compute_pair_correlation
+        from src.analysis.pairs import compute_pair_correlation
 
         a = _make_price_series(200)
         # b is nearly identical to a
@@ -122,14 +122,14 @@ class TestComputePairCorrelation:
         assert corr > 0.9
 
     def test_returns_none_for_short_series(self):
-        from pairs import compute_pair_correlation
+        from src.analysis.pairs import compute_pair_correlation
 
         a = pd.Series([1.0, 2.0, 3.0])
         b = pd.Series([1.0, 2.0, 3.0])
         assert compute_pair_correlation(a, b) is None
 
     def test_correlation_in_range(self):
-        from pairs import compute_pair_correlation
+        from src.analysis.pairs import compute_pair_correlation
 
         a = _make_price_series(200)
         b = _make_price_series(200, seed=33)
@@ -140,37 +140,37 @@ class TestComputePairCorrelation:
 
 class TestPairsSignal:
     def test_long_a_short_b_when_zscore_below_negative_threshold(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(-2.5) == "long_A_short_B"
 
     def test_long_b_short_a_when_zscore_above_positive_threshold(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(2.5) == "long_B_short_A"
 
     def test_exit_when_zscore_near_zero(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(0.2) == "exit"
 
     def test_neutral_in_between(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(1.5) == "neutral"
 
     def test_none_zscore_returns_neutral(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(None) == "neutral"
 
     def test_nan_zscore_returns_neutral(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         assert pairs_signal(float("nan")) == "neutral"
 
     def test_custom_thresholds(self):
-        from pairs import pairs_signal
+        from src.analysis.pairs import pairs_signal
 
         # Using entry=1.0, exit=0.2
         assert (
@@ -191,14 +191,14 @@ class TestBacktestPairs:
         return _make_df(a), _make_df(b)
 
     def test_returns_result_object(self):
-        from pairs import backtest_pairs, PairsBacktestResult
+        from src.analysis.pairs import backtest_pairs, PairsBacktestResult
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "A", "B")
         assert isinstance(result, PairsBacktestResult)
 
     def test_result_has_symbol_names(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "AAPL", "MSFT")
@@ -206,21 +206,21 @@ class TestBacktestPairs:
         assert result.symbol_b == "MSFT"
 
     def test_equity_curve_starts_at_one(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "A", "B")
         assert result.equity_curve[0] == pytest.approx(1.0)
 
     def test_win_rate_in_range(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "A", "B")
         assert 0.0 <= result.win_rate_pct <= 100.0
 
     def test_raises_on_insufficient_data(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a = _make_df(_make_price_series(10))
         df_b = _make_df(_make_price_series(10, seed=2))
@@ -228,20 +228,20 @@ class TestBacktestPairs:
             backtest_pairs(df_a, df_b, "A", "B")
 
     def test_raises_on_none_input(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         with pytest.raises(ValueError):
             backtest_pairs(None, None, "A", "B")
 
     def test_dates_are_strings(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "A", "B")
         assert all(isinstance(d, str) for d in result.dates)
 
     def test_spread_series_not_empty(self):
-        from pairs import backtest_pairs
+        from src.analysis.pairs import backtest_pairs
 
         df_a, df_b = self._make_dfs(200)
         result = backtest_pairs(df_a, df_b, "A", "B")
@@ -263,7 +263,7 @@ def _make_close_and_dates(n=252, start="2023-01-01"):
 
 class TestComputePeadDrift:
     def test_empty_earnings_returns_neutral(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         result = compute_pead_drift("AAPL", [], close, dates)
@@ -271,7 +271,7 @@ class TestComputePeadDrift:
         assert result.latest_surprise_pct is None
 
     def test_returns_pead_result_object(self):
-        from pead import compute_pead_drift, PEADResult
+        from src.analysis.pead import compute_pead_drift, PEADResult
 
         close, dates = _make_close_and_dates(252, "2023-01-01")
         earnings = [
@@ -282,7 +282,7 @@ class TestComputePeadDrift:
         assert isinstance(result, PEADResult)
 
     def test_big_beat_gives_long_signal(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": 10.0}]
@@ -292,7 +292,7 @@ class TestComputePeadDrift:
         assert result.signal == "Long (PEAD Beat)"
 
     def test_big_miss_gives_short_signal(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": -10.0}]
@@ -302,7 +302,7 @@ class TestComputePeadDrift:
         assert result.signal == "Short Signal (PEAD Miss)"
 
     def test_inline_gives_neutral(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-06-30", "surprisePercent": 2.0}]
@@ -312,7 +312,7 @@ class TestComputePeadDrift:
         assert result.signal == "Neutral"
 
     def test_drift_direction_classification(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         earnings = [
@@ -324,14 +324,14 @@ class TestComputePeadDrift:
         assert "beat" in directions or "miss" in directions
 
     def test_returns_neutral_with_none_close(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         earnings = [{"period": "2023-06-30", "surprisePercent": 8.0}]
         result = compute_pead_drift("AAPL", earnings, None, None)
         assert result.signal == "Neutral"
 
     def test_latest_surprise_pct_matches_first_entry(self):
-        from pead import compute_pead_drift
+        from src.analysis.pead import compute_pead_drift
 
         close, dates = _make_close_and_dates()
         earnings = [{"period": "2023-09-30", "surprisePercent": 6.5}]
@@ -341,7 +341,7 @@ class TestComputePeadDrift:
 
 class TestScreenPeadCandidates:
     def test_returns_list(self):
-        from pead import screen_pead_candidates
+        from src.analysis.pead import screen_pead_candidates
 
         api = MagicMock()
         api.get_earnings.return_value = [
@@ -356,7 +356,7 @@ class TestScreenPeadCandidates:
         assert isinstance(results, list)
 
     def test_filters_below_threshold(self):
-        from pead import screen_pead_candidates
+        from src.analysis.pead import screen_pead_candidates
 
         api = MagicMock()
         api.get_earnings.return_value = [
@@ -366,7 +366,7 @@ class TestScreenPeadCandidates:
         assert results == []
 
     def test_result_has_required_keys(self):
-        from pead import screen_pead_candidates
+        from src.analysis.pead import screen_pead_candidates
 
         api = MagicMock()
         api.get_earnings.return_value = [
