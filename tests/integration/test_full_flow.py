@@ -38,7 +38,18 @@ def _enter_symbol_and_analyze(page, symbol: str):
     # Wait for the Stock Quote header which confirms analysis rendered.
     # We avoid matching the custom page_header HTML (unsafe_allow_html)
     # since Playwright text= selectors can't reliably match it.
-    page.wait_for_selector("text=Stock Quote", timeout=45_000)
+    try:
+        page.wait_for_selector("text=Stock Quote", timeout=45_000)
+    except Exception:
+        # Capture debug info before re-raising
+        page.screenshot(
+            path=str(SCREENSHOTS_DIR / f"debug_fail_{symbol}.png"), full_page=True
+        )
+        body = page.locator("body").inner_text()
+        raise AssertionError(
+            f"Analysis page for {symbol} did not render 'Stock Quote'.\n"
+            f"Page text (first 2000 chars): {body[:2000]}"
+        ) from None
     page.wait_for_timeout(2000)
 
 
