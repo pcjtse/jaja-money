@@ -24,7 +24,7 @@ import subprocess
 from typing import Generator
 from dotenv import load_dotenv
 
-from cache import get_cache
+from cache import get_cache, CACHE_MISS
 from config import cfg
 from log_setup import get_logger
 
@@ -161,10 +161,13 @@ def _compute_context_hash(context: str) -> str:
 
 def _get_cached_response(cache_key: str) -> str | None:
     """Return cached Claude text response or None."""
+    from cache import CACHE_MISS
+
     result = _disk_cache.get(f"claude:{cache_key}")
-    if result is not None:
+    if result is not CACHE_MISS:
         log.info("Claude cache hit for key=%s", cache_key[:12])
-    return result
+        return result
+    return None
 
 
 def _store_cached_response(cache_key: str, text: str) -> None:
@@ -1396,7 +1399,7 @@ def stream_price_target(
     """
     cache_key = _compute_context_hash(data_prompt)
     cached = _disk_cache.get(f"price_target:{cache_key}")
-    if cached is not None:
+    if cached is not CACHE_MISS:
         log.info("Price target cache hit for %s", symbol)
         yield cached
         return
@@ -1524,7 +1527,7 @@ def stream_transcript_qa(
     """
     cache_key = _compute_context_hash(f"{symbol}:{question}:{transcript_text[:500]}")
     cached = _disk_cache.get(f"transcript_qa:{cache_key}")
-    if cached is not None:
+    if cached is not CACHE_MISS:
         log.info("Transcript Q&A cache hit for %s", symbol)
         yield cached
         return
@@ -1592,7 +1595,7 @@ def stream_supply_chain_analysis(
     """
     cache_key = _compute_context_hash(f"supply_chain:{symbol}:{filing_text[:1000]}")
     cached = _disk_cache.get(f"supply_chain:{cache_key}")
-    if cached is not None:
+    if cached is not CACHE_MISS:
         log.info("Supply chain cache hit for %s", symbol)
         yield cached
         return
@@ -1735,7 +1738,7 @@ def score_news_impact(headlines: list[str]) -> list[dict]:
     capped = headlines[:10]
     cache_key = _compute_context_hash("|".join(capped))
     cached = _disk_cache.get(f"news_impact:{cache_key}")
-    if cached is not None:
+    if cached is not CACHE_MISS:
         log.info("News impact cache hit (key=%s)", cache_key[:12])
         return cached  # type: ignore[return-value]
 

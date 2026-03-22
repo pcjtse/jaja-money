@@ -5,6 +5,8 @@ Enhanced with:
 - Options market data (P2.6)
 - Earnings call transcript fetch (P2.3)
 - Structured logging (P4.3)
+- Centralized rate limiting (audit fix)
+- Retry with exponential backoff on transient errors (audit fix)
 """
 
 from __future__ import annotations
@@ -14,14 +16,25 @@ import time
 import finnhub
 from dotenv import load_dotenv
 
-from cache import get_cache
+from cache import get_cache, CACHE_MISS
 from config import cfg
 from log_setup import get_logger
+from rate_limiter import finnhub_limiter
 
 load_dotenv()
 
 log = get_logger(__name__)
 _disk_cache = get_cache()
+
+# Transient exceptions that warrant a retry
+_RETRYABLE_MSGS = ("429", "too many requests", "rate limit", "503", "502", "timeout")
+_MAX_RETRIES = 3
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True if the exception looks transient / rate-limited."""
+    msg = str(exc).lower()
+    return any(token in msg for token in _RETRYABLE_MSGS)
 
 
 class FinnhubAPI:
@@ -35,19 +48,41 @@ class FinnhubAPI:
         self.client = finnhub.Client(api_key=api_key)
 
     def _cached(self, key: str, fn, ttl: int | None = None):
-        """Get from disk cache or call fn() and store result."""
+        """Get from disk cache or call fn() with rate limiting and retry."""
         ttl = ttl if ttl is not None else cfg.cache_ttl
         if cfg.use_disk_cache:
             cached = _disk_cache.get(key)
-            if cached is not None:
+            if cached is not CACHE_MISS:
                 return cached
-        t0 = time.monotonic()
-        result = fn()
-        elapsed = time.monotonic() - t0
-        log.debug("API call '%s' took %.2fs", key, elapsed)
-        if cfg.use_disk_cache:
-            _disk_cache.set(key, result, ttl=ttl)
-        return result
+
+        # Rate-limit + retry with exponential backoff
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            finnhub_limiter.acquire()
+            try:
+                t0 = time.monotonic()
+                result = fn()
+                elapsed = time.monotonic() - t0
+                log.debug("API call '%s' took %.2fs", key, elapsed)
+                if cfg.use_disk_cache:
+                    _disk_cache.set(key, result, ttl=ttl)
+                return result
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES and _is_retryable(exc):
+                    wait = 2**attempt  # 1s, 2s, 4s
+                    log.warning(
+                        "API call '%s' failed (attempt %d/%d): %s — retrying in %ds",
+                        key,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        exc,
+                        wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    raise
+        raise last_exc  # type: ignore[misc]
 
     def get_quote(self, symbol: str) -> dict:
         """Return real-time quote with keys: c, d, dp, h, l, o, pc, t."""
@@ -233,13 +268,30 @@ class FinnhubAPI:
     # P5.3: Earnings Calendar
     # ------------------------------------------------------------------
 
-    def get_earnings_calendar(self, symbol: str) -> dict:
+    def get_earnings_calendar(
+        self,
+        symbol: str,
+        option_chain: dict | None = None,
+        quote: dict | None = None,
+    ) -> dict:
         """Return next earnings date and implied move from ATM straddle.
+
+        Parameters
+        ----------
+        symbol       : stock ticker symbol
+        option_chain : pre-fetched option chain (avoids extra API call)
+        quote        : pre-fetched quote (avoids extra API call)
 
         Returns dict with: next_date (str|None), days_to_earnings (int|None),
         historical_reactions (list of {date, change_pct}),
         implied_move_pct (float|None) computed from ATM straddle / current price.
+
+        Note: without pre-fetched data this triggers up to 3 API calls
+        (calendar + option_chain + quote).
         """
+        # Capture pre-fetched data in closure to avoid extra API calls
+        _prefetched_chain = option_chain
+        _prefetched_quote = quote
 
         def _fetch():
             try:
@@ -279,10 +331,18 @@ class FinnhubAPI:
                 # Compute implied move from ATM straddle if options available
                 implied_move_pct = None
                 try:
-                    chain = self.get_option_chain(symbol)
+                    chain = (
+                        _prefetched_chain
+                        if _prefetched_chain is not None
+                        else self.get_option_chain(symbol)
+                    )
                     if chain and chain.get("data"):
-                        quote = self.get_quote(symbol)
-                        current_price = float(quote.get("c", 0) or 0)
+                        q = (
+                            _prefetched_quote
+                            if _prefetched_quote is not None
+                            else self.get_quote(symbol)
+                        )
+                        current_price = float(q.get("c", 0) or 0)
                         if current_price > 0:
                             nearest = chain["data"][0]
                             options_map = nearest.get("options", {})
@@ -719,6 +779,8 @@ class FinnhubAPI:
 
         Runs quote, profile, financials, candles, news, insider, recommendations,
         and earnings concurrently to reduce total latency.
+        Workers are capped at 4 to avoid bursting the Finnhub 60 req/min limit.
+        Each call goes through the centralized rate limiter.
 
         Returns
         -------
@@ -743,7 +805,7 @@ class FinnhubAPI:
         latency = {}
         t_total_start = _time.monotonic()
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             future_to_name = {
                 executor.submit(_timed_call, fn): name for name, fn in tasks.items()
             }

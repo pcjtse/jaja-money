@@ -17,29 +17,37 @@ def test_set_and_get(dc):
     assert val == {"data": 42}
 
 
-def test_miss_returns_none(dc):
-    assert dc.get("nonexistent") is None
+def test_miss_returns_sentinel(dc):
+    from cache import CACHE_MISS
+
+    assert dc.get("nonexistent") is CACHE_MISS
 
 
 def test_ttl_expiry(dc):
+    from cache import CACHE_MISS
+
     dc.set("key_expire", "hello", ttl=0)
     time.sleep(0.05)
-    assert dc.get("key_expire") is None
+    assert dc.get("key_expire") is CACHE_MISS
 
 
 def test_delete(dc):
+    from cache import CACHE_MISS
+
     dc.set("key_del", "value", ttl=60)
     dc.delete("key_del")
-    assert dc.get("key_del") is None
+    assert dc.get("key_del") is CACHE_MISS
 
 
 def test_clear(dc):
+    from cache import CACHE_MISS
+
     dc.set("a", 1, ttl=60)
     dc.set("b", 2, ttl=60)
     count = dc.clear()
     assert count == 2
-    assert dc.get("a") is None
-    assert dc.get("b") is None
+    assert dc.get("a") is CACHE_MISS
+    assert dc.get("b") is CACHE_MISS
 
 
 def test_stats(dc):
@@ -57,6 +65,8 @@ def test_overwrite(dc):
 
 
 def test_various_value_types(dc):
+    from cache import CACHE_MISS
+
     dc.set("int", 42, ttl=60)
     dc.set("list", [1, 2, 3], ttl=60)
     dc.set("dict", {"a": 1}, ttl=60)
@@ -64,4 +74,6 @@ def test_various_value_types(dc):
     assert dc.get("int") == 42
     assert dc.get("list") == [1, 2, 3]
     assert dc.get("dict") == {"a": 1}
-    assert dc.get("none_val") is None  # Can't distinguish None from miss
+    # With sentinel, cached None is now distinguishable from a miss
+    assert dc.get("none_val") is None
+    assert dc.get("truly_missing") is CACHE_MISS

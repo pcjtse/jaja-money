@@ -53,21 +53,40 @@ class JajaMoneyClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get(self, path: str, params: dict | None = None) -> Any:
+    _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+    _MAX_RETRIES = 3
+
+    def _request_with_retry(self, method: str, path: str, **kwargs) -> Any:
+        """Execute an HTTP request with retry + exponential backoff."""
         url = f"{self.base_url}{path}"
-        resp = self._requests.get(
-            url, headers=self._headers, params=params, timeout=self.timeout
-        )
-        resp.raise_for_status()
-        return resp.json()
+        last_exc: Exception | None = None
+        for attempt in range(self._MAX_RETRIES + 1):
+            try:
+                resp = getattr(self._requests, method)(
+                    url, headers=self._headers, timeout=self.timeout, **kwargs
+                )
+                if (
+                    resp.status_code in self._RETRYABLE_STATUS
+                    and attempt < self._MAX_RETRIES
+                ):
+                    wait = 2**attempt  # 1s, 2s, 4s
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self._MAX_RETRIES:
+                    time.sleep(2**attempt)
+                else:
+                    raise
+        raise last_exc  # type: ignore[misc]
+
+    def _get(self, path: str, params: dict | None = None) -> Any:
+        return self._request_with_retry("get", path, params=params)
 
     def _post(self, path: str, payload: dict) -> Any:
-        url = f"{self.base_url}{path}"
-        resp = self._requests.post(
-            url, headers=self._headers, json=payload, timeout=self.timeout
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._request_with_retry("post", path, json=payload)
 
     # ------------------------------------------------------------------
     # Public methods mirroring the skill API

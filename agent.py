@@ -21,7 +21,8 @@ from log_setup import get_logger
 
 log = get_logger(__name__)
 
-_MAX_TURNS = 10
+_MAX_TURNS = 8
+_MAX_API_CALLS = 30
 _MODEL = "claude-sonnet-4-6"
 
 
@@ -195,9 +196,12 @@ Instructions:
         {"role": "user", "content": f"Research {symbol} and answer: {question}"}
     ]
 
+    from rate_limiter import anthropic_limiter
+
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     turn_count = 0
     token_count = 0
+    api_call_count = 0
     steps: list[str] = []
 
     yield f"**Agent Mode: Researching {symbol}**\n\n"
@@ -208,6 +212,7 @@ Instructions:
         log.info("Agent turn %d/%d for %s", turn_count, _MAX_TURNS, symbol)
 
         try:
+            anthropic_limiter.acquire()
             response = client.messages.create(
                 model=_MODEL,
                 max_tokens=2000,
@@ -239,9 +244,25 @@ Instructions:
         if response.stop_reason == "end_turn" or not tool_calls:
             break
 
-        # Execute tool calls and build tool results
+        # Execute tool calls and build tool results (budget-capped)
         tool_results = []
         for tc in tool_calls:
+            api_call_count += 1
+            if api_call_count > _MAX_API_CALLS:
+                log.warning(
+                    "Agent API call budget exhausted (%d calls) for %s",
+                    api_call_count,
+                    symbol,
+                )
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": json.dumps({"error": "API call budget exhausted"}),
+                    }
+                )
+                continue
+
             step_desc = f"Fetching {tc.name}({tc.input})"
             steps.append(step_desc)
             yield f"\n\n*Step {len(steps)}: {step_desc}*\n"
@@ -259,7 +280,10 @@ Instructions:
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
-    yield f"\n\n---\n*Agent completed in {turn_count} turns | ~{token_count:,} tokens used*"
+    yield (
+        f"\n\n---\n*Agent completed in {turn_count} turns | "
+        f"~{token_count:,} tokens | {api_call_count} API calls*"
+    )
 
 
 def get_agent_steps(symbol: str) -> list[str]:

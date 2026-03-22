@@ -41,8 +41,30 @@ except ImportError:
     raise ImportError("FastAPI not installed. Run: pip install fastapi uvicorn")
 
 from log_setup import get_logger  # noqa: E402
+from rate_limiter import TokenBucketRateLimiter  # noqa: E402
 
 log = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Per-endpoint server-side rate limiting
+# ---------------------------------------------------------------------------
+
+_server_limiter = TokenBucketRateLimiter(
+    max_tokens=30, refill_period=60.0, name="server"
+)
+_heavy_limiter = TokenBucketRateLimiter(
+    max_tokens=5, refill_period=60.0, name="server_heavy"
+)
+
+
+def _check_rate_limit(limiter: TokenBucketRateLimiter) -> None:
+    """Acquire a token or raise 429."""
+    if not limiter.try_acquire():
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again shortly.",
+        )
+
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -56,9 +78,13 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+_CORS_ORIGINS = os.getenv(
+    "JAJA_CORS_ORIGINS", "http://localhost:8501,http://localhost:3000"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -129,7 +155,7 @@ class ForwardTradeRequest(BaseModel):
 
 
 class SignalsRequest(BaseModel):
-    symbols: list[str] = Field(..., description="Stock ticker symbols")
+    symbols: list[str] = Field(..., description="Stock ticker symbols", max_length=20)
 
 
 class OpenClawWebhookRequest(BaseModel):
@@ -139,7 +165,7 @@ class OpenClawWebhookRequest(BaseModel):
 
 
 class RebalanceRequest(BaseModel):
-    tickers: list[str] = Field(..., description="Portfolio tickers")
+    tickers: list[str] = Field(..., description="Portfolio tickers", max_length=30)
     target_weights: dict[str, float] = Field(
         ..., description="Target weights per ticker (sum to 1)"
     )
@@ -216,6 +242,7 @@ async def analyze(
     Returns a JSON object with all computed metrics.
     Does not include AI narrative (use /analyze/stream for streaming).
     """
+    _check_rate_limit(_server_limiter)
     api = _get_api()
     symbol = req.symbol.upper()
 
@@ -264,6 +291,7 @@ async def analyze_stream(
     _key: str = Depends(_get_api_key),
 ):
     """Stream Claude AI analysis for a stock symbol."""
+    _check_rate_limit(_server_limiter)
     api = _get_api()
     symbol = req.symbol.upper()
 
@@ -313,6 +341,7 @@ async def screen(
     _key: str = Depends(_get_api_key),
 ):
     """Screen a list of tickers against factor and risk thresholds."""
+    _check_rate_limit(_heavy_limiter)
     api = _get_api()
 
     try:
@@ -379,6 +408,7 @@ async def chat(
     _key: str = Depends(_get_api_key),
 ):
     """Stream a Claude chat response about a stock."""
+    _check_rate_limit(_server_limiter)
     api = _get_api()
     symbol = req.symbol.upper()
 
@@ -387,10 +417,11 @@ async def chat(
         from guardrails import compute_risk
         from analyzer import stream_chat_response, build_chat_system_prompt
 
-        quote = api.get_quote(symbol)
-        financials = api.get_financials(symbol)
-        daily = api.get_daily(symbol)
-        news = api.get_news(symbol)
+        data = api.fetch_all_parallel(symbol)
+        quote = data.get("quote") or {}
+        financials = data.get("financials") or {}
+        daily = data.get("daily") or {}
+        news = data.get("news") or []
 
         factors_result = compute_factors(symbol, quote, financials, daily, news)
         risk_result = compute_risk(symbol, quote, financials, daily, news)
@@ -517,6 +548,7 @@ async def score_endpoint(
     Faster than /analyze — returns scores and signal only, no AI narrative.
     Used by the OpenClaw skill's score() function in remote mode.
     """
+    _check_rate_limit(_server_limiter)
     api = _get_api()
     symbol = req.symbol.upper()
 
@@ -525,10 +557,11 @@ async def score_endpoint(
         from guardrails import compute_risk
         from jaja_money_skill.scripts.jaja_skill import derive_signal
 
-        quote = api.get_quote(symbol)
-        financials = api.get_financials(symbol)
-        daily = api.get_daily(symbol)
-        news = api.get_news(symbol)
+        data = api.fetch_all_parallel(symbol)
+        quote = data.get("quote") or {}
+        financials = data.get("financials") or {}
+        daily = data.get("daily") or {}
+        news = data.get("news") or []
 
         factors_result = compute_factors(symbol, quote, financials, daily, news)
         risk_result = compute_risk(symbol, quote, financials, daily, news)
@@ -611,6 +644,7 @@ async def signals(
         SELL — factor_score <= 35 or risk_score >= 75
         HOLD — all other combinations
     """
+    _check_rate_limit(_heavy_limiter)
     api = _get_api()
 
     from factors import compute_factors
@@ -784,6 +818,7 @@ async def openclaw_rebalance(
     For each ticker, computes the drift between current and target weight
     and returns suggested BUY/SELL/HOLD actions with share-count estimates.
     """
+    _check_rate_limit(_heavy_limiter)
     api = _get_api()
 
     from factors import compute_factors
@@ -880,6 +915,7 @@ async def openclaw_agent(
     news, earnings, insider transactions, options) then synthesises an
     investment memo covering bear / base / bull cases.
     """
+    _check_rate_limit(_heavy_limiter)
     api = _get_api()
     symbol = req.symbol.upper()
 
