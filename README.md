@@ -168,48 +168,108 @@ RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst se
 - **Google Sheets export** — Write results to a Google Sheet via service account
 - **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
 - **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
-- **OpenClaw integration** — Publish as a ClawHub skill, connect to a local or remote jaja-money server, and trigger analysis on market events (see below)
+- **Agent Skill** — Use as an [Agent Skill](https://agentskills.io) with OpenClaw, Claude Code, or any compatible AI agent (see below)
 
 ---
 
-## OpenClaw Integration
+## Agent Skill — jaja-money
 
-jaja-money can be used with Openclaw. The skill can run **locally** (importing analysis
-modules directly) or in **remote mode** — connecting to any running jaja-money server
-over HTTP via `JAJA_API_URL`.
+jaja-money is packaged as an **Agent Skill** following the [Agent Skills standard](https://agentskills.io).
+The skill lives in the `jaja_money_skill/` directory and can be used with any AI agent
+that supports the standard, including **OpenClaw** and **Claude Code**.
 
 > **Note:** Real order execution has been removed. `broker.py` provides read-only Alpaca
 > account/position monitoring and a **simulation-only** `execute_signal()` that returns
 > what a trade *would* do without placing any real orders.
 
-| Feature | Module / Endpoint |
-|---------|-------------------|
-| ClawHub skill package (local + remote) | `openclaw_skill.py` |
-| Lightweight factor/risk scores | `POST /score` |
-| Structured signal API | `POST /signals` |
-| Active price alerts | `GET /alerts` |
-| Incoming webhook receiver | `POST /openclaw/webhook` |
-| Portfolio rebalancing | `POST /openclaw/rebalance` |
-| Autonomous research agent | `POST /openclaw/agent` |
-| Event-triggered analysis | `openclaw_events.py` |
-| Skill manifest | `GET /openclaw/manifest` |
-| Alpaca monitoring (read-only) | `broker.py` |
+### Skill Structure
 
-### 1. ClawHub Skill Package
+```
+jaja_money_skill/
+├── SKILL.md              # Skill metadata + instructions (Agent Skills standard)
+├── __init__.py
+├── scripts/
+│   ├── __init__.py
+│   ├── jaja_skill.py     # Core skill functions (analyze, score, screen, etc.)
+│   ├── jaja_client.py    # HTTP client for remote mode
+│   └── jaja_events.py    # Event-triggered analysis scheduler
+├── references/
+│   ├── api_schema.md     # Full API response schemas
+│   └── endpoints.md      # REST API endpoint documentation
+└── assets/               # Static resources (templates, data files)
+```
 
-`openclaw_skill.py` is a self-contained module ready for ClawHub registration.
-It operates in two modes:
+### Installation
 
-- **Local mode** (default) — imports analysis modules directly; use when running
-  the skill in the same Python environment as jaja-money.
-- **Remote mode** — set `JAJA_API_URL` to delegate all calls to a running
-  jaja-money REST server (local network or remote host). No local dependencies
-  required beyond `requests`.
+#### With OpenClaw
+
+Copy or symlink the `jaja_money_skill/` directory into your OpenClaw skills directory:
+
+```bash
+# Clone the repo
+git clone https://github.com/pcjtse/jaja-money.git
+cd jaja-money
+
+# Copy the skill to your OpenClaw skills directory
+cp -r jaja_money_skill/ ~/.openclaw/skills/jaja-money/
+
+# Or symlink for development
+ln -s "$(pwd)/jaja-money-skill" ~/.openclaw/skills/jaja-money
+```
+
+Then configure the required environment variables:
+
+```bash
+export FINNHUB_API_KEY=your_finnhub_key
+export ANTHROPIC_API_KEY=your_anthropic_key   # optional, for AI research
+```
+
+OpenClaw will auto-discover the skill from `SKILL.md` and make its functions available.
+
+#### With Claude Code
+
+Add the skill to your Claude Code project by referencing the skill directory:
+
+```bash
+# From the jaja-money project root
+claude --skill ./jaja-money-skill
+```
+
+Or add to your project's `.claude/settings.json`:
+
+```json
+{
+  "skills": ["./jaja-money-skill"]
+}
+```
+
+Claude Code will load the `SKILL.md` and make the skill functions available in your sessions.
+
+#### Standalone Python Usage
+
+```bash
+pip install -r requirements.txt
+```
+
+### Skill Capabilities
+
+| Capability | Function | Description |
+|------------|----------|-------------|
+| Full analysis | `analyze(ticker)` | Factor scores, risk, financials, signal |
+| Quick score | `score(ticker)` | Lightweight factor/risk scores |
+| Screening | `screen(tickers, ...)` | Filter tickers by factor/risk thresholds |
+| Alerts | `get_alerts(symbol)` | Active price and signal alerts |
+| Research | `research(ticker, question)` | Autonomous multi-step investment research |
+
+### 1. Using the Skill (Python)
+
+The skill can run **locally** (importing analysis modules directly) or in
+**remote mode** — connecting to any running jaja-money server over HTTP.
 
 **Local mode:**
 
 ```python
-from openclaw_skill import analyze, screen, score, get_alerts, research
+from jaja_money_skill.scripts.jaja_skill import analyze, screen, score, get_alerts, research
 
 # Full fundamental + risk analysis
 result = analyze("AAPL")
@@ -232,13 +292,12 @@ memo = research("TSLA", question="What is the bear case?")
 **Remote mode** — point the skill at a running jaja-money server:
 
 ```bash
-# All skill function calls are forwarded to the server via HTTP
 export JAJA_API_URL=http://analysis-server:8080
 export JAJA_API_KEY=mysecret   # optional, forwarded as X-API-Key
 ```
 
 ```python
-from openclaw_skill import analyze, score  # works exactly the same
+from jaja_money_skill.scripts.jaja_skill import analyze, score
 
 result = analyze("AAPL")   # calls http://analysis-server:8080/analyze
 s = score("MSFT")          # calls http://analysis-server:8080/score
@@ -247,7 +306,7 @@ s = score("MSFT")          # calls http://analysis-server:8080/score
 You can also use `JajaMoneyClient` directly for finer control:
 
 ```python
-from openclaw_skill import JajaMoneyClient
+from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
 
 client = JajaMoneyClient("http://analysis-server:8080", api_key="mysecret")
 client.health()                         # GET /health
@@ -256,16 +315,10 @@ client.score("MSFT")                    # POST /score
 client.screen(["AAPL", "MSFT"])         # POST /screen
 client.signals(["AAPL", "MSFT"])        # POST /signals
 client.get_alerts("AAPL")              # GET /alerts?symbol=AAPL
-client.research("TSLA", question="Bear case?")  # POST /openclaw/agent (streaming, collected)
+client.research("TSLA", question="Bear case?")  # POST /openclaw/agent
 ```
 
-Retrieve the full manifest for ClawHub registration:
-
-```bash
-curl http://localhost:8080/openclaw/manifest
-```
-
-### 2. REST API — OpenClaw Endpoints
+### 2. REST API Endpoints
 
 Start the API server:
 
@@ -274,7 +327,7 @@ uvicorn server:app --host 0.0.0.0 --port 8080
 # or: python server.py
 ```
 
-**`POST /score`** — lightweight factor + risk scores for a single ticker (used by remote skill):
+**`POST /score`** — lightweight factor + risk scores:
 
 ```bash
 curl -X POST http://localhost:8080/score \
@@ -297,7 +350,7 @@ curl -X POST http://localhost:8080/score \
 }
 ```
 
-**`GET /alerts`** — list active price/signal alerts (used by remote skill):
+**`GET /alerts`** — list active price/signal alerts:
 
 ```bash
 curl "http://localhost:8080/alerts"
@@ -312,25 +365,13 @@ curl -X POST http://localhost:8080/signals \
   -d '{"symbols": ["AAPL", "MSFT", "NVDA"]}'
 ```
 
-```json
-{
-  "signals": [
-    {"symbol": "AAPL", "signal": "BUY", "confidence": 74, "factor_score": 72, "risk_score": 38},
-    {"symbol": "MSFT", "signal": "HOLD", "confidence": 50, "factor_score": 58, "risk_score": 52}
-  ],
-  "count": 2
-}
-```
-
 Signal logic:
 
 | Signal | Condition |
 |--------|-----------|
-| **BUY** | `factor_score ≥ 65` **and** `risk_score ≤ 50` |
-| **SELL** | `factor_score ≤ 35` **or** `risk_score ≥ 75` |
+| **BUY** | `factor_score >= 65` **and** `risk_score <= 50` |
+| **SELL** | `factor_score <= 35` **or** `risk_score >= 75` |
 | **HOLD** | everything else |
-
-**`GET /openclaw/manifest`** — returns the ClawHub skill manifest.
 
 **`POST /openclaw/agent`** — streams the autonomous research agent:
 
@@ -352,45 +393,21 @@ curl -X POST http://localhost:8080/openclaw/rebalance \
   }'
 ```
 
+**`GET /openclaw/manifest`** — returns the skill manifest.
+
 ### 3. Alpaca Account Monitoring (Read-Only)
 
 `broker.py` provides **read-only** monitoring of an [Alpaca](https://alpaca.markets)
-account. Real order placement has been removed — `execute_signal()` always returns a
-simulation result and never submits orders to Alpaca.
-
-**Setup:**
+account. `execute_signal()` always returns a simulation result.
 
 ```bash
-# Add to your .env file (read-only monitoring only)
 ALPACA_API_KEY=your_alpaca_key
 ALPACA_API_SECRET=your_alpaca_secret
 ALPACA_BASE_URL=https://paper-api.alpaca.markets   # default
 ```
 
-**Usage:**
-
 ```python
-from broker import execute_signal, get_positions, get_account, is_configured
-
-if is_configured():
-    # Inspect account and positions (read-only Alpaca API calls)
-    account = get_account()
-    # {'cash': 10000.0, 'portfolio_value': 25000.0, 'buying_power': 20000.0, ...}
-
-    positions = get_positions()
-    # [{'symbol': 'AAPL', 'qty': 10.0, 'unrealized_pl': 120.0, ...}, ...]
-
-    # Simulate a signal — no order is placed regardless of dry_run flag
-    result = execute_signal("AAPL", signal="BUY", qty=5)
-    # {'symbol': 'AAPL', 'signal': 'BUY', 'action': 'simulated',
-    #  'simulated': True, 'order': None,
-    #  'note': 'Real trading is disabled. This is a simulation only.'}
-```
-
-**Combining with `score()` for simulation:**
-
-```python
-from openclaw_skill import score
+from jaja_money_skill.scripts.jaja_skill import score
 from broker import execute_signal
 
 s = score("AAPL")
@@ -404,11 +421,9 @@ result = execute_signal(
 # Always returns a simulation — use Forward Test for paper portfolio tracking
 ```
 
-### 4. OpenClaw Incoming Webhook Receiver
+### 4. Incoming Webhook Receiver
 
-**`POST /openclaw/webhook`** accepts commands from an OpenClaw agent at runtime.
-
-Supported `event_type` values:
+**`POST /openclaw/webhook`** accepts commands from an AI agent at runtime.
 
 | `event_type` | Required `payload` fields | Action |
 |---|---|---|
@@ -417,30 +432,19 @@ Supported `event_type` values:
 | `screen_request` | `tickers` | Runs the screener and returns results |
 
 ```bash
-# Trigger analysis from an OpenClaw agent
 curl -X POST http://localhost:8080/openclaw/webhook \
   -H "Content-Type: application/json" \
   -d '{
     "event_type": "analyze_request",
     "payload": {"symbol": "NVDA"},
-    "agent_id": "my-openclaw-agent"
-  }'
-
-# Create an alert
-curl -X POST http://localhost:8080/openclaw/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "alert_request",
-    "payload": {"symbol": "AAPL", "condition": "Price Above", "threshold": 220}
+    "agent_id": "my-agent"
   }'
 ```
 
 ### 5. Event-Triggered Analysis
 
-`openclaw_events.py` uses APScheduler to automatically fire analysis callbacks
-when market events occur — no manual polling required.
-
-**Supported events:**
+The event scheduler uses APScheduler to automatically fire analysis callbacks
+when market events occur.
 
 | Event type | Trigger condition |
 |---|---|
@@ -448,48 +452,28 @@ when market events occur — no manual polling required.
 | `new_sec_filing` | 10-K, 10-Q, or 8-K filed today |
 | `price_alert_triggered` | Price / factor threshold breached |
 
-**Setup:**
-
-```bash
-# APScheduler is already in requirements.txt
-pip install APScheduler
-```
-
-**Usage:**
-
 ```python
-from openclaw_events import (
+from jaja_money_skill.scripts.jaja_events import (
     register_event_callback,
     start_event_scheduler,
     stop_event_scheduler,
 )
 
 def on_earnings(event):
-    """Auto-score the stock when earnings are imminent."""
-    from openclaw_skill import score
+    from jaja_money_skill.scripts.jaja_skill import score
     s = score(event["symbol"])
     print(f"{event['symbol']} earnings in {event['days_away']}d — signal: {s['signal']}")
 
-def on_price_alert(event):
-    """Log a simulated trade when a price alert fires."""
-    from broker import execute_signal
-    result = execute_signal(event["symbol"], signal="SELL", qty=10)
-    # result["action"] == "simulated" — no real order placed
-    print(f"Simulated: {result}")
-
 register_event_callback("earnings_approaching", on_earnings)
-register_event_callback("price_alert_triggered", on_price_alert)
-
-# Monitor AAPL, MSFT, NVDA every 5 minutes
 start_event_scheduler(tickers=["AAPL", "MSFT", "NVDA"], interval_seconds=300)
 ```
 
-Configure the scheduler in `config.yaml`:
+Configure in `config.yaml`:
 
 ```yaml
 openclaw:
-  event_scheduler_interval_seconds: 300   # poll every 5 minutes
-  earnings_alert_days_ahead: 3            # fire when earnings < 3 days out
+  event_scheduler_interval_seconds: 300
+  earnings_alert_days_ahead: 3
   signal_buy_factor_min: 65
   signal_buy_risk_max: 50
   signal_sell_factor_max: 35
@@ -503,7 +487,7 @@ openclaw:
 | `FINNHUB_API_KEY` | Yes | Finnhub market data |
 | `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
 | `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
-| `JAJA_API_URL` | OpenClaw remote | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
+| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
 | `JAJA_API_PORT` | No | REST API server port (default: `8080`) |
 | `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
 | `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |

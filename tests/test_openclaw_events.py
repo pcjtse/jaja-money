@@ -1,4 +1,4 @@
-"""Tests for openclaw_events.py — Event-Triggered Analysis."""
+"""Tests for jaja-money event scheduler — Event-Triggered Analysis."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_callbacks():
     """Ensure callbacks are cleared between tests."""
-    import openclaw_events as ev
+    import jaja_money_skill.scripts.jaja_events as ev
 
     ev.clear_event_callbacks()
     yield
@@ -24,7 +24,10 @@ def clear_callbacks():
 
 
 def test_register_callback_valid_event():
-    from openclaw_events import register_event_callback, _event_callbacks
+    from jaja_money_skill.scripts.jaja_events import (
+        register_event_callback,
+        _event_callbacks,
+    )
 
     def my_cb(event):
         pass
@@ -34,14 +37,14 @@ def test_register_callback_valid_event():
 
 
 def test_register_callback_invalid_event():
-    from openclaw_events import register_event_callback
+    from jaja_money_skill.scripts.jaja_events import register_event_callback
 
     with pytest.raises(ValueError, match="Unknown event type"):
         register_event_callback("nonexistent_event", lambda e: None)
 
 
 def test_clear_callbacks_single_type():
-    from openclaw_events import (
+    from jaja_money_skill.scripts.jaja_events import (
         register_event_callback,
         clear_event_callbacks,
         _event_callbacks,
@@ -56,7 +59,7 @@ def test_clear_callbacks_single_type():
 
 
 def test_clear_callbacks_all():
-    from openclaw_events import (
+    from jaja_money_skill.scripts.jaja_events import (
         register_event_callback,
         clear_event_callbacks,
         _event_callbacks,
@@ -76,7 +79,7 @@ def test_clear_callbacks_all():
 
 
 def test_check_earnings_events_fires_when_near():
-    from openclaw_events import check_earnings_events
+    from jaja_money_skill.scripts.jaja_events import check_earnings_events
 
     near_date = (date.today() + timedelta(days=1)).isoformat()
     mock_api = MagicMock()
@@ -91,7 +94,7 @@ def test_check_earnings_events_fires_when_near():
 
 
 def test_check_earnings_events_no_fire_when_far():
-    from openclaw_events import check_earnings_events
+    from jaja_money_skill.scripts.jaja_events import check_earnings_events
 
     far_date = (date.today() + timedelta(days=30)).isoformat()
     mock_api = MagicMock()
@@ -103,7 +106,7 @@ def test_check_earnings_events_no_fire_when_far():
 
 
 def test_check_earnings_events_no_fire_for_past():
-    from openclaw_events import check_earnings_events
+    from jaja_money_skill.scripts.jaja_events import check_earnings_events
 
     past_date = (date.today() - timedelta(days=1)).isoformat()
     mock_api = MagicMock()
@@ -115,7 +118,7 @@ def test_check_earnings_events_no_fire_for_past():
 
 
 def test_check_earnings_events_skips_empty_earnings():
-    from openclaw_events import check_earnings_events
+    from jaja_money_skill.scripts.jaja_events import check_earnings_events
 
     mock_api = MagicMock()
     mock_api.get_earnings.return_value = []
@@ -125,7 +128,7 @@ def test_check_earnings_events_skips_empty_earnings():
 
 
 def test_check_earnings_events_handles_api_error():
-    from openclaw_events import check_earnings_events
+    from jaja_money_skill.scripts.jaja_events import check_earnings_events
 
     mock_api = MagicMock()
     mock_api.get_earnings.side_effect = Exception("API failure")
@@ -144,7 +147,7 @@ def test_check_sec_filing_events_fires_for_today():
     import sys
     import types
 
-    from openclaw_events import check_sec_filing_events
+    from jaja_money_skill.scripts.jaja_events import check_sec_filing_events
 
     today = date.today().isoformat()
     mock_filing = {
@@ -170,7 +173,7 @@ def test_check_sec_filing_events_skips_old_filings():
     import sys
     import types
 
-    from openclaw_events import check_sec_filing_events
+    from jaja_money_skill.scripts.jaja_events import check_sec_filing_events
 
     old_filing = {
         "form": "10-K",
@@ -190,7 +193,7 @@ def test_check_sec_filing_events_no_edgar():
     """Should return empty list when edgar is unavailable."""
     import sys
 
-    from openclaw_events import check_sec_filing_events
+    from jaja_money_skill.scripts.jaja_events import check_sec_filing_events
 
     # Temporarily remove edgar from sys.modules so the import inside the
     # function raises ImportError and the function returns []
@@ -222,7 +225,7 @@ def test_check_price_alert_events_fires_triggered(tmp_path, monkeypatch):
     mock_api = MagicMock()
     mock_api.get_quote.return_value = {"c": 160.0}
 
-    from openclaw_events import check_price_alert_events
+    from jaja_money_skill.scripts.jaja_events import check_price_alert_events
 
     events = check_price_alert_events(["AAPL"], api=mock_api)
 
@@ -245,7 +248,7 @@ def test_check_price_alert_events_no_fire_below_threshold(tmp_path, monkeypatch)
     mock_api = MagicMock()
     mock_api.get_quote.return_value = {"c": 150.0}
 
-    from openclaw_events import check_price_alert_events
+    from jaja_money_skill.scripts.jaja_events import check_price_alert_events
 
     events = check_price_alert_events(["AAPL"], api=mock_api)
     assert events == []
@@ -257,7 +260,10 @@ def test_check_price_alert_events_no_fire_below_threshold(tmp_path, monkeypatch)
 
 
 def test_fire_callbacks_called_for_each_event():
-    from openclaw_events import register_event_callback, _fire_callbacks
+    from jaja_money_skill.scripts.jaja_events import (
+        register_event_callback,
+        _fire_callbacks,
+    )
 
     received = []
     register_event_callback("earnings_approaching", received.append)
@@ -274,7 +280,10 @@ def test_fire_callbacks_called_for_each_event():
 
 
 def test_fire_callbacks_callback_error_does_not_propagate():
-    from openclaw_events import register_event_callback, _fire_callbacks
+    from jaja_money_skill.scripts.jaja_events import (
+        register_event_callback,
+        _fire_callbacks,
+    )
 
     def bad_cb(event):
         raise RuntimeError("callback failure")
@@ -291,7 +300,7 @@ def test_fire_callbacks_callback_error_does_not_propagate():
 
 
 def test_start_stop_scheduler():
-    from openclaw_events import (
+    from jaja_money_skill.scripts.jaja_events import (
         start_event_scheduler,
         stop_event_scheduler,
         is_scheduler_running,
@@ -310,7 +319,7 @@ def test_start_stop_scheduler():
 
 
 def test_start_scheduler_idempotent():
-    from openclaw_events import (
+    from jaja_money_skill.scripts.jaja_events import (
         start_event_scheduler,
         stop_event_scheduler,
         is_scheduler_running,
