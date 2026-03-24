@@ -489,6 +489,88 @@ if not analyze and not symbol:
         """,
         unsafe_allow_html=True,
     )
+
+    # ---------------------------------------------------------------------------
+    # 21.4: Daily Rankings panel
+    # ---------------------------------------------------------------------------
+    from src.data.history import get_latest_ranking, get_latest_thesis
+
+    st.markdown("---")
+    with st.expander("Daily Long/Short Rankings", expanded=True):
+        _ranking = get_latest_ranking()
+        if _ranking is None:
+            st.info(
+                "No ranking data yet. Visit the Rankings page to run a full universe scan."
+            )
+        else:
+            _rank_date = _ranking.get("date", "")
+            st.caption(f"Last updated: {_rank_date}")
+
+            _col_long, _col_short = st.columns(2)
+            with _col_long:
+                st.markdown("**Top Longs**")
+                _long_rows = _ranking.get("longs", [])
+                if _long_rows:
+                    _long_df = pd.DataFrame(
+                        [
+                            {
+                                "Symbol": r["symbol"],
+                                "Sector": r.get("sector") or "N/A",
+                                "Score": r.get("factor_score"),
+                                "Rank": r.get("rank_overall"),
+                                "Pct": r.get("percentile"),
+                            }
+                            for r in _long_rows
+                        ]
+                    )
+                    st.dataframe(
+                        _long_df,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.caption("No long candidates.")
+
+            with _col_short:
+                st.markdown("**Top Shorts**")
+                _short_rows = _ranking.get("shorts", [])
+                if _short_rows:
+                    _short_df = pd.DataFrame(
+                        [
+                            {
+                                "Symbol": r["symbol"],
+                                "Sector": r.get("sector") or "N/A",
+                                "Score": r.get("factor_score"),
+                                "Rank": r.get("rank_overall"),
+                                "Pct": r.get("percentile"),
+                            }
+                            for r in _short_rows
+                        ]
+                    )
+                    st.dataframe(
+                        _short_df,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.caption("No short candidates.")
+
+        # AI Theses
+        _thesis = get_latest_thesis()
+        if _thesis:
+            st.markdown("---")
+            _th_col1, _th_col2 = st.columns(2)
+            with _th_col1:
+                st.markdown(
+                    f"**AI Thesis — #1 Long ({_thesis.get('long_symbol', '')})**"
+                )
+                st.markdown(_thesis.get("long_thesis") or "_Not available_")
+            with _th_col2:
+                st.markdown(
+                    f"**AI Thesis — #1 Short ({_thesis.get('short_symbol', '')})**"
+                )
+                st.markdown(_thesis.get("short_thesis") or "_Not available_")
+
     st.stop()
 
 if not symbol:

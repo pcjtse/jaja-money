@@ -631,6 +631,141 @@ def generate_weekly_report(api, watchlist_tickers: list[str]) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# 21.4: Daily ranking thesis generation + scheduler
+# ---------------------------------------------------------------------------
+
+_ranking_scheduler = None
+
+
+def generate_ranking_thesis(
+    api,
+    long_symbol: str,
+    short_symbol: str,
+    run_date: str,
+    long_factor_score: int | None = None,
+    short_factor_score: int | None = None,
+) -> dict:
+    """Generate Claude AI theses for the #1 long and #1 short of the day.
+
+    Parameters
+    ----------
+    api          : market data API object
+    long_symbol  : top-ranked long candidate symbol
+    short_symbol : top-ranked short candidate symbol
+    run_date     : YYYY-MM-DD date string for labelling
+    long_factor_score  : composite factor score for long (0-100), optional
+    short_factor_score : composite factor score for short (0-100), optional
+
+    Returns
+    -------
+    dict with keys: long_thesis, short_thesis
+    """
+    from src.core.rate_limiter import anthropic_limiter
+    from src.data.history import save_ranking_thesis
+
+    try:
+        _shared_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    except Exception as exc:
+        log.warning("Ranking thesis: could not init Anthropic client: %s", exc)
+        _shared_client = None
+
+    def _write_thesis(symbol: str, direction: str, score: int | None) -> str:
+        score_line = (
+            f"Composite factor score: {score}/100\n" if score is not None else ""
+        )
+        prompt = (
+            f"You are a quantitative equity analyst writing a daily ranking brief.\n"
+            f"Symbol: {symbol}\n"
+            f"Ranking direction: {direction} candidate\n"
+            f"{score_line}"
+            f"In one concise paragraph (3-4 sentences), explain why {symbol} ranks as "
+            f"the top {direction} candidate today. Focus on factor-driven reasoning: "
+            f"momentum, valuation, earnings quality, and risk. Be direct and professional."
+        )
+        try:
+            client = _shared_client or anthropic.Anthropic(
+                api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
+            anthropic_limiter.acquire()
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=250,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        except Exception as exc:
+            log.warning("Ranking thesis: Claude call failed for %s: %s", symbol, exc)
+            score_str = f" (score: {score}/100)" if score is not None else ""
+            return f"{symbol}{score_str} — AI thesis unavailable."
+
+    long_thesis = _write_thesis(long_symbol, "long", long_factor_score)
+    short_thesis = _write_thesis(short_symbol, "short", short_factor_score)
+
+    save_ranking_thesis(run_date, long_symbol, long_thesis, short_symbol, short_thesis)
+    log.info("Ranking thesis generated for %s", run_date)
+    return {"long_thesis": long_thesis, "short_thesis": short_thesis}
+
+
+def schedule_daily_ranking(
+    api,
+    hour: int = 22,
+    minute: int = 0,
+) -> bool:
+    """Schedule nightly cross-sectional ranking + thesis generation at hour:minute UTC.
+
+    Returns True if scheduler was started, False if APScheduler is unavailable.
+    """
+    global _ranking_scheduler
+
+    if not _HAS_APSCHEDULER:
+        log.warning("APScheduler not installed; cannot schedule daily ranking")
+        return False
+
+    if _ranking_scheduler and _ranking_scheduler.running:
+        log.info("Ranking scheduler already running")
+        return True
+
+    def _job():
+        from src.analysis.rankings import run_daily_ranking
+
+        try:
+            result = run_daily_ranking(api, force=True)
+            longs = result.get("top_longs", [])
+            shorts = result.get("top_shorts", [])
+            if longs and shorts:
+                generate_ranking_thesis(
+                    api,
+                    long_symbol=longs[0]["symbol"],
+                    short_symbol=shorts[0]["symbol"],
+                    run_date=result["run_date"],
+                    long_factor_score=longs[0].get("factor_score"),
+                    short_factor_score=shorts[0].get("factor_score"),
+                )
+        except Exception as exc:
+            log.error("Nightly ranking job failed: %s", exc)
+
+    _ranking_scheduler = BackgroundScheduler()
+    _ranking_scheduler.add_job(
+        _job, "cron", hour=hour, minute=minute, id="daily_ranking"
+    )
+    _ranking_scheduler.start()
+    log.info("Ranking scheduler started: daily at %02d:%02d UTC", hour, minute)
+    return True
+
+
+def stop_ranking_scheduler() -> None:
+    """Stop the ranking scheduler if running."""
+    global _ranking_scheduler
+    if _ranking_scheduler and _ranking_scheduler.running:
+        _ranking_scheduler.shutdown(wait=False)
+        log.info("Ranking scheduler stopped")
+
+
+def is_ranking_scheduler_running() -> bool:
+    return bool(_ranking_scheduler and _ranking_scheduler.running)
+
+
 def schedule_weekly_report(
     api,
     day_of_week: str = "mon",
