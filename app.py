@@ -1906,6 +1906,27 @@ if len(trend["dates"]) > 1:
 else:
     st.caption("Run analysis on multiple days to see the score trend chart.")
 
+# 21.3: Signal Quality badge
+from src.analysis.signal_validity import get_signal_quality_summary  # noqa: E402
+
+_sq = get_signal_quality_summary()
+if _sq.get("has_data"):
+    with st.expander("📊 Signal Quality", expanded=False):
+        _sq_c1, _sq_c2, _sq_c3 = st.columns(3)
+        _sq_c1.metric("Signals tracked", _sq["sample_size"])
+        _ic_val = _sq["latest_ic_63d"]
+        _sq_c2.metric(
+            "Latest IC (63d)",
+            f"{_ic_val:.3f}" if _ic_val is not None else "N/A",
+            delta=_sq.get("ic_trend"),
+        )
+        _tqr = _sq.get("top_quartile_return_63d")
+        _sq_c3.metric(
+            "Top-quartile return (63d)",
+            f"{_tqr:.1f}%" if _tqr is not None else "N/A",
+        )
+        st.caption("See the **Signal Quality** page for the full forward-return analysis.")
+
 # P2.2: Compare to previous analysis diff view
 _snapshots = get_latest_two_snapshots(symbol)
 if len(_snapshots) == 2:

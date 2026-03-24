@@ -830,13 +830,13 @@ Remove the `TRADING_DISABLED = True` hardcode in `broker.py` and implement real 
 ### 21.3 Signal Validity Dashboard (Does the Score Actually Work?)
 Show users whether the composite score has historically correlated with forward returns. Without this, the tool asks users to trust a score without evidence that it predicts anything. Adding a forward-return validation layer transforms the service from "here is a score" to "here is a score that historically led to X% returns in the top quartile."
 
-- [ ] For every ticker/date in `history.db` where a composite score was recorded, fetch the actual 21-day, 63-day, and 126-day forward return
-- [ ] Bucket scores into quartiles and display median forward return per quartile in a bar chart
-- [ ] Compute and display Spearman rank correlation between composite score and forward return for each time horizon
-- [ ] Show information coefficient (IC) trend over rolling 12-month windows to detect model decay
-- [ ] Add a "Signal Quality" panel to the main app, updated as history accumulates
+- [x] For every ticker/date in `history.db` where a composite score was recorded, fetch the actual 21-day, 63-day, and 126-day forward return
+- [x] Bucket scores into quartiles and display median forward return per quartile in a bar chart
+- [x] Compute and display Spearman rank correlation between composite score and forward return for each time horizon
+- [x] Show information coefficient (IC) trend over rolling 12-month windows to detect model decay
+- [x] Add a "Signal Quality" panel to the main app, updated as history accumulates
 
-**Files:** `history.py`, new `signal_validity.py`, `app.py`
+**Files:** `history.py`, new `signal_validity.py`, `app.py`, new `pages/9_SignalQuality.py`
 
 ---
 
