@@ -803,11 +803,11 @@ Expose the analysis engine as a REST API so the platform can be integrated into 
 ### 21.1 ML-Trained Adaptive Factor Weights
 Replace the static hardcoded factor weights with a model trained on historical data to discover which factor combinations actually predicted forward returns. This is the single change that most directly addresses the "no novel analysis / zero alpha" critique — it turns the composite score from a textbook weighted average into a data-driven signal with measurable predictive power.
 
-- [ ] Build a walk-forward training loop: at each rebalance date, fit a logistic regression (or gradient-boosted tree) on [factor scores at time T] → [positive return at T+63 days] for all available historical ticker/date pairs
-- [ ] Use the fitted model's coefficients as the live factor weights for the next period — retrain quarterly
-- [ ] Display the current model weights in the UI alongside the composite score so users can see which factors the model currently favours
-- [ ] Report out-of-sample prediction accuracy (AUC, precision@top-decile) so users can assess whether the score is predictive
-- [ ] Fall back to static config weights if insufficient historical data is available for training
+- [x] Build a walk-forward training loop: at each rebalance date, fit a logistic regression (or gradient-boosted tree) on [factor scores at time T] → [positive return at T+63 days] for all available historical ticker/date pairs
+- [x] Use the fitted model's coefficients as the live factor weights for the next period — retrain quarterly
+- [x] Display the current model weights in the UI alongside the composite score so users can see which factors the model currently favours
+- [x] Report out-of-sample prediction accuracy (AUC, precision@top-decile) so users can assess whether the score is predictive
+- [x] Fall back to static config weights if insufficient historical data is available for training
 
 **Files:** `factors.py`, `history.py`, `backtest.py`, new `ml_weights.py`
 
