@@ -453,3 +453,88 @@ def diff_snapshots(snap_a: dict, snap_b: dict) -> dict:
                 pass
 
     return changes
+
+
+# ---------------------------------------------------------------------------
+# 21.1: ML-trained adaptive factor weights table
+# ---------------------------------------------------------------------------
+
+
+def _ensure_ml_weights_table() -> None:
+    """Create ml_weights table if it doesn't exist."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ml_weights (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                trained_date         TEXT NOT NULL,
+                weights_json         TEXT NOT NULL,
+                auc                  REAL,
+                precision_top_decile REAL,
+                n_samples            INTEGER
+            )
+        """)
+
+
+_ensure_ml_weights_table()
+
+
+def save_ml_weights(
+    weights: dict,
+    trained_date: str,
+    auc: float | None = None,
+    precision_top_decile: float | None = None,
+    n_samples: int = 0,
+) -> None:
+    """Persist a trained ML weights snapshot."""
+    try:
+        with _connect() as conn:
+            conn.execute(
+                """INSERT INTO ml_weights
+                   (trained_date, weights_json, auc, precision_top_decile, n_samples)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    trained_date,
+                    json.dumps(weights),
+                    auc,
+                    precision_top_decile,
+                    n_samples,
+                ),
+            )
+        log.info("Saved ML weights trained on %s (n=%d)", trained_date, n_samples)
+    except Exception as exc:
+        log.warning("Failed to save ML weights: %s", exc)
+
+
+def get_latest_ml_weights() -> dict | None:
+    """Return the most recent ML weights row, or None if table is empty."""
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM ml_weights ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+    except Exception as exc:
+        log.warning("Failed to load ML weights: %s", exc)
+        return None
+
+
+def get_all_factor_snapshots() -> list[dict]:
+    """Return all analysis_history rows that contain factor score data.
+
+    Each row includes: symbol, date, price, factors_json.
+    Used by ml_weights.py to build a training dataset.
+    """
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT symbol, date, price, factors_json
+                   FROM analysis_history
+                   WHERE factors_json IS NOT NULL AND factors_json != '[]'
+                   ORDER BY date ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to load factor snapshots: %s", exc)
+        return []
