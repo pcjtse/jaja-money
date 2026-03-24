@@ -1546,6 +1546,60 @@ st.dataframe(
     },
 )
 
+# 21.1: ML-trained adaptive factor weights panel
+with st.expander("Factor Weights (21.1 — Adaptive ML Weights)", expanded=False):
+    try:
+        from src.analysis.ml_weights import get_weights_metadata
+
+        _wm = get_weights_metadata()
+        _w_source = _wm.get("source", "static")
+        _w_weights = _wm.get("weights", {})
+        if _w_source == "ml":
+            _wm_cols = st.columns(4)
+            _wm_cols[0].metric("Source", "ML-Trained")
+            _wm_cols[1].metric("AUC", f"{_wm['auc']:.3f}" if _wm.get("auc") else "—")
+            _wm_cols[2].metric(
+                "Precision@Top-10%",
+                f"{_wm['precision_top_decile']:.1%}"
+                if _wm.get("precision_top_decile")
+                else "—",
+            )
+            _wm_cols[3].metric("Training samples", _wm.get("n_samples") or "—")
+            st.caption(
+                f"Trained: {_wm.get('trained_date')} "
+                f"({_wm.get('age_days')} days ago) — retrained quarterly"
+            )
+        else:
+            st.info(
+                "Not enough historical data to train ML weights yet. "
+                "Analyse more tickers over time to enable adaptive learning. "
+                "Using static config weights."
+            )
+        if _w_weights:
+            import plotly.graph_objects as _go_w
+
+            _labels = list(_w_weights.keys())
+            _values = [round(v * 100, 1) for v in _w_weights.values()]
+            _fig_w = _go_w.Figure(
+                _go_w.Bar(
+                    x=_values,
+                    y=_labels,
+                    orientation="h",
+                    marker_color="#2da44e" if _w_source == "ml" else "#888888",
+                    text=[f"{v}%" for v in _values],
+                    textposition="outside",
+                )
+            )
+            _fig_w.update_layout(
+                xaxis_title="Weight (%)",
+                yaxis_title=None,
+                height=280,
+                margin={"l": 10, "r": 40, "t": 10, "b": 30},
+            )
+            st.plotly_chart(_fig_w, use_container_width=True)
+    except Exception as _wm_exc:
+        st.caption(f"Factor weights panel unavailable: {_wm_exc}")
+
 # P15.3: Multi-timeframe factor alignment
 if _close_weekly is not None or _close_monthly is not None:
     with st.expander("Multi-Timeframe Factor Alignment (P15.3)", expanded=False):

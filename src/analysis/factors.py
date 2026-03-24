@@ -193,7 +193,12 @@ def calc_vwap(df: pd.DataFrame) -> float | None:
 
 
 def _get_weight(name: str, default: float) -> float:
-    weights = cfg.factor_weights
+    try:
+        from src.analysis.ml_weights import get_adaptive_weights
+
+        weights = get_adaptive_weights()
+    except Exception:
+        weights = cfg.factor_weights
     return float(weights.get(name, default))
 
 
