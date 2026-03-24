@@ -798,6 +798,74 @@ Expose the analysis engine as a REST API so the platform can be integrated into 
 
 ---
 
+## Priority 21 — Score-to-9 Usefulness Improvements
+
+### 21.1 ML-Trained Adaptive Factor Weights
+Replace the static hardcoded factor weights with a model trained on historical data to discover which factor combinations actually predicted forward returns. This is the single change that most directly addresses the "no novel analysis / zero alpha" critique — it turns the composite score from a textbook weighted average into a data-driven signal with measurable predictive power.
+
+- [ ] Build a walk-forward training loop: at each rebalance date, fit a logistic regression (or gradient-boosted tree) on [factor scores at time T] → [positive return at T+63 days] for all available historical ticker/date pairs
+- [ ] Use the fitted model's coefficients as the live factor weights for the next period — retrain quarterly
+- [ ] Display the current model weights in the UI alongside the composite score so users can see which factors the model currently favours
+- [ ] Report out-of-sample prediction accuracy (AUC, precision@top-decile) so users can assess whether the score is predictive
+- [ ] Fall back to static config weights if insufficient historical data is available for training
+
+**Files:** `factors.py`, `history.py`, `backtest.py`, new `ml_weights.py`
+
+---
+
+### 21.2 Enable Live Trade Execution via Alpaca
+Remove the `TRADING_DISABLED = True` hardcode in `broker.py` and implement real order submission with position-level safeguards. The service is currently pure research — users cannot act on any recommendation without switching to a different tool. Enabling execution closes the loop and makes the platform genuinely end-to-end useful.
+
+- [ ] Add a `TRADING_ENABLED` config flag (default `false`, requires explicit opt-in) that gates live execution
+- [ ] Implement `execute_signal()` to submit market/limit orders via the Alpaca REST API when `TRADING_ENABLED=true`
+- [ ] Enforce hard position limits: max position size as % of account, max single-trade dollar amount (from config)
+- [ ] Add a pre-trade risk check: block any trade where the guardrail risk score exceeds a configurable threshold
+- [ ] Show a live order blotter in the Portfolio page with fill status, P&L, and stop-loss levels
+- [ ] Paper trading mode uses Alpaca's sandbox environment — no real money until the user explicitly switches to live credentials
+
+**Files:** `broker.py`, `portfolio.py`, `config.yaml`, `pages/4_Portfolio.py`
+
+---
+
+### 21.3 Signal Validity Dashboard (Does the Score Actually Work?)
+Show users whether the composite score has historically correlated with forward returns. Without this, the tool asks users to trust a score without evidence that it predicts anything. Adding a forward-return validation layer transforms the service from "here is a score" to "here is a score that historically led to X% returns in the top quartile."
+
+- [ ] For every ticker/date in `history.db` where a composite score was recorded, fetch the actual 21-day, 63-day, and 126-day forward return
+- [ ] Bucket scores into quartiles and display median forward return per quartile in a bar chart
+- [ ] Compute and display Spearman rank correlation between composite score and forward return for each time horizon
+- [ ] Show information coefficient (IC) trend over rolling 12-month windows to detect model decay
+- [ ] Add a "Signal Quality" panel to the main app, updated as history accumulates
+
+**Files:** `history.py`, new `signal_validity.py`, `app.py`
+
+---
+
+### 21.4 Cross-Sectional Ranking: Daily Long/Short Candidate List
+Score stocks relative to each other rather than in isolation and generate a daily ranked list of the highest-scoring longs and lowest-scoring shorts across the S&P 500. Currently each stock is scored on an absolute scale — cross-sectional ranking produces actionable trade ideas (buy the top decile, avoid the bottom decile) that are not available from scoring stocks one at a time.
+
+- [ ] Run the full factor computation overnight for the entire S&P 500 universe (reuse screener infrastructure)
+- [ ] Rank all stocks by composite score within each sector to produce sector-neutral long/short lists
+- [ ] Display a "Today's Top 10 Longs" and "Top 10 Shorts" panel on the dashboard home page
+- [ ] Allow users to filter by sector, market cap, or minimum liquidity (ADV)
+- [ ] Claude writes a one-paragraph investment thesis for the #1 long and #1 short candidate each day
+
+**Files:** `screener.py`, `factors.py`, `digest.py`, `app.py`, new `rankings.py`
+
+---
+
+### 21.5 Alternative Data Signal: Google Trends + Job Posting Velocity
+Integrate at least one non-traditional, publicly accessible data source that leads financial statements by weeks or months. Google search-interest trends and job posting growth are well-documented leading indicators — they surface demand acceleration or deceleration before it appears in revenue figures. This gives the service a genuine data edge over tools that rely solely on Finnhub/yfinance.
+
+- [ ] Integrate `pytrends` to fetch Google Trends interest-over-time for the company name and its primary product terms (last 12 months, weekly)
+- [ ] Compute trend slope over the last 90 days; flag accelerating search interest as a positive signal, decelerating as a risk flag
+- [ ] Integrate a job posting API (e.g., Adzuna free tier or Indeed scrape-free approach via SerpAPI) to track hiring velocity — rapid headcount growth signals expansion, mass layoffs signal contraction
+- [ ] Add both signals as optional inputs to the composite factor score (weight ~5% each when available)
+- [ ] Surface trend charts in a new "Alternative Data" section in the app
+
+**Files:** new `alt_data.py`, `factors.py`, `api.py`, `app.py`
+
+---
+
 ## Summary
 
 | Priority | Feature | Status |
@@ -891,6 +959,11 @@ Expose the analysis engine as a REST API so the platform can be integrated into 
 | 20 | News Impact Scoring (Claude per-article) | [x] Done |
 | 20 | Signal Change Notifications | [x] Done |
 | 20 | Weekly Portfolio Performance Email Report | [x] Done |
+| 21 | ML-Trained Adaptive Factor Weights | [ ] Pending |
+| 21 | Enable Live Trade Execution via Alpaca | [ ] Pending |
+| 21 | Signal Validity Dashboard | [ ] Pending |
+| 21 | Cross-Sectional Ranking: Daily Long/Short List | [ ] Pending |
+| 21 | Alternative Data Signal: Google Trends + Job Postings | [ ] Pending |
 
 ---
 
