@@ -538,3 +538,188 @@ def get_all_factor_snapshots() -> list[dict]:
     except Exception as exc:
         log.warning("Failed to load factor snapshots: %s", exc)
         return []
+
+
+# ---------------------------------------------------------------------------
+# 21.4: Cross-Sectional Daily Rankings
+# ---------------------------------------------------------------------------
+
+
+def _ensure_ranking_tables() -> None:
+    """Create cross-sectional ranking tables if they don't exist."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cross_sectional_rankings (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_date        TEXT NOT NULL,
+                symbol          TEXT NOT NULL,
+                sector          TEXT,
+                rank_overall    INTEGER,
+                rank_in_sector  INTEGER,
+                percentile      REAL,
+                factor_score    INTEGER,
+                risk_score      INTEGER,
+                market_cap_b    REAL,
+                adv             REAL,
+                composite_label TEXT,
+                UNIQUE(run_date, symbol)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_theses (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_date     TEXT NOT NULL UNIQUE,
+                long_symbol  TEXT,
+                long_thesis  TEXT,
+                short_symbol TEXT,
+                short_thesis TEXT,
+                generated_at INTEGER
+            )
+        """)
+
+
+_ensure_ranking_tables()
+
+
+def save_ranking_snapshot(run_date: str, results: list[dict]) -> None:
+    """Bulk upsert a cross-sectional ranking snapshot for a given date.
+
+    Each dict in results should contain: symbol, sector, rank_overall,
+    rank_in_sector, percentile, factor_score, risk_score, market_cap_b,
+    adv, composite_label.
+    """
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "DELETE FROM cross_sectional_rankings WHERE run_date=?",
+                (run_date,),
+            )
+            conn.executemany(
+                """INSERT INTO cross_sectional_rankings
+                   (run_date, symbol, sector, rank_overall, rank_in_sector,
+                    percentile, factor_score, risk_score, market_cap_b, adv,
+                    composite_label)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                [
+                    (
+                        run_date,
+                        r.get("symbol", ""),
+                        r.get("sector"),
+                        r.get("rank_overall"),
+                        r.get("rank_in_sector"),
+                        r.get("percentile"),
+                        r.get("factor_score"),
+                        r.get("risk_score"),
+                        r.get("market_cap_b"),
+                        r.get("adv"),
+                        r.get("composite_label"),
+                    )
+                    for r in results
+                ],
+            )
+        log.info("Saved %d ranking rows for %s", len(results), run_date)
+    except Exception as exc:
+        log.warning("Failed to save ranking snapshot for %s: %s", run_date, exc)
+
+
+def get_latest_ranking(top_n: int = 10, bottom_n: int = 10) -> dict | None:
+    """Return the most recent ranking snapshot.
+
+    Returns a dict with keys: date, longs (top_n by factor_score),
+    shorts (bottom_n by factor_score), all_rows.  Returns None if no
+    ranking exists.
+    """
+    try:
+        with _connect() as conn:
+            date_row = conn.execute(
+                "SELECT run_date FROM cross_sectional_rankings "
+                "ORDER BY run_date DESC LIMIT 1"
+            ).fetchone()
+            if date_row is None:
+                return None
+            run_date = date_row["run_date"]
+            rows = conn.execute(
+                """SELECT * FROM cross_sectional_rankings
+                   WHERE run_date=?
+                   ORDER BY rank_overall ASC""",
+                (run_date,),
+            ).fetchall()
+        all_rows = [dict(r) for r in rows]
+        return {
+            "date": run_date,
+            "longs": all_rows[:top_n],
+            "shorts": all_rows[-bottom_n:] if len(all_rows) >= bottom_n else all_rows,
+            "all_rows": all_rows,
+        }
+    except Exception as exc:
+        log.warning("Failed to load latest ranking: %s", exc)
+        return None
+
+
+def get_ranking_for_date(date: str) -> list[dict]:
+    """Return the full ranking snapshot for a specific date."""
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM cross_sectional_rankings
+                   WHERE run_date=?
+                   ORDER BY rank_overall ASC""",
+                (date,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to load ranking for %s: %s", date, exc)
+        return []
+
+
+def save_ranking_thesis(
+    run_date: str,
+    long_symbol: str,
+    long_thesis: str,
+    short_symbol: str,
+    short_thesis: str,
+) -> None:
+    """Persist the Claude-generated long/short thesis for a ranking date."""
+    try:
+        with _connect() as conn:
+            conn.execute(
+                """INSERT INTO ranking_theses
+                   (run_date, long_symbol, long_thesis, short_symbol, short_thesis,
+                    generated_at)
+                   VALUES (?,?,?,?,?,?)
+                   ON CONFLICT(run_date) DO UPDATE SET
+                     long_symbol=excluded.long_symbol,
+                     long_thesis=excluded.long_thesis,
+                     short_symbol=excluded.short_symbol,
+                     short_thesis=excluded.short_thesis,
+                     generated_at=excluded.generated_at""",
+                (
+                    run_date,
+                    long_symbol,
+                    long_thesis,
+                    short_symbol,
+                    short_thesis,
+                    int(time.time()),
+                ),
+            )
+        log.info(
+            "Saved ranking thesis for %s (%s long, %s short)",
+            run_date,
+            long_symbol,
+            short_symbol,
+        )
+    except Exception as exc:
+        log.warning("Failed to save ranking thesis for %s: %s", run_date, exc)
+
+
+def get_latest_thesis() -> dict | None:
+    """Return the most recent ranking thesis, or None if none exists."""
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM ranking_theses ORDER BY run_date DESC LIMIT 1"
+            ).fetchone()
+        return dict(row) if row else None
+    except Exception as exc:
+        log.warning("Failed to load latest thesis: %s", exc)
+        return None
