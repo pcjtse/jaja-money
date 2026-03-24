@@ -185,6 +185,7 @@ def _seed_signal_returns(n: int = 40) -> None:
 
 
 def test_quartile_analysis_returns_four_buckets():
+    pytest.importorskip("numpy")
     from src.analysis.signal_validity import compute_quartile_analysis
 
     _seed_signal_returns(40)
@@ -195,6 +196,7 @@ def test_quartile_analysis_returns_four_buckets():
 
 def test_quartile_analysis_monotonic_with_score():
     """With a perfectly monotonic score→return relationship, Q4 > Q1."""
+    pytest.importorskip("numpy")
     from src.analysis.signal_validity import compute_quartile_analysis
 
     _seed_signal_returns(40)
@@ -221,6 +223,7 @@ def test_quartile_analysis_insufficient_data():
 
 
 def test_spearman_detects_positive_correlation():
+    pytest.importorskip("scipy")
     from src.analysis.signal_validity import compute_spearman_correlations
 
     _seed_signal_returns(30)
@@ -270,6 +273,7 @@ def _seed_monthly_returns(months: int = 15) -> None:
 
 
 def test_ic_trend_returns_months_list():
+    pytest.importorskip("scipy")
     from src.analysis.signal_validity import compute_ic_trend
 
     _seed_monthly_returns(15)
