@@ -23,7 +23,10 @@ if "transformers" not in sys.modules:
 # Stub out `torch` (sometimes imported transitively)
 # ---------------------------------------------------------------------------
 if "torch" not in sys.modules:
-    sys.modules["torch"] = types.ModuleType("torch")
+    _torch_stub = types.ModuleType("torch")
+    # scipy >= 1.17 checks for torch.Tensor when torch is present in sys.modules
+    _torch_stub.Tensor = type("Tensor", (), {})
+    sys.modules["torch"] = _torch_stub
 
 # ---------------------------------------------------------------------------
 # Stub out `yfinance` so tests run without the optional dep

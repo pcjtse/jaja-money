@@ -723,3 +723,110 @@ def get_latest_thesis() -> dict | None:
     except Exception as exc:
         log.warning("Failed to load latest thesis: %s", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# 21.3: Signal Validity — forward return caching
+# ---------------------------------------------------------------------------
+
+
+def _ensure_signal_returns_table() -> None:
+    """Create signal_returns table if it doesn't exist."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS signal_returns (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol          TEXT NOT NULL,
+                signal_date     TEXT NOT NULL,
+                signal_score    INTEGER,
+                price_at_signal REAL,
+                return_21d      REAL,
+                return_63d      REAL,
+                return_126d     REAL,
+                fetched_at      INTEGER,
+                UNIQUE(symbol, signal_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_signal_returns_symbol "
+            "ON signal_returns (symbol, signal_date)"
+        )
+
+
+_ensure_signal_returns_table()
+
+
+def upsert_signal_return(
+    symbol: str,
+    signal_date: str,
+    signal_score: int | None,
+    price_at_signal: float | None,
+    return_21d: float | None = None,
+    return_63d: float | None = None,
+    return_126d: float | None = None,
+) -> None:
+    """Insert or update a forward-return record for a signal."""
+    try:
+        with _connect() as conn:
+            conn.execute(
+                """INSERT INTO signal_returns
+                   (symbol, signal_date, signal_score, price_at_signal,
+                    return_21d, return_63d, return_126d, fetched_at)
+                   VALUES (?,?,?,?,?,?,?,?)
+                   ON CONFLICT(symbol, signal_date) DO UPDATE SET
+                     signal_score=excluded.signal_score,
+                     price_at_signal=excluded.price_at_signal,
+                     return_21d=excluded.return_21d,
+                     return_63d=excluded.return_63d,
+                     return_126d=excluded.return_126d,
+                     fetched_at=excluded.fetched_at""",
+                (
+                    symbol.upper(),
+                    signal_date,
+                    signal_score,
+                    price_at_signal,
+                    return_21d,
+                    return_63d,
+                    return_126d,
+                    int(time.time()),
+                ),
+            )
+    except Exception as exc:
+        log.warning("Failed to upsert signal return for %s %s: %s", symbol, signal_date, exc)
+
+
+def get_signal_returns(symbol: str | None = None) -> list[dict]:
+    """Return all cached signal return rows, optionally filtered by symbol."""
+    try:
+        with _connect() as conn:
+            if symbol:
+                rows = conn.execute(
+                    """SELECT * FROM signal_returns
+                       WHERE symbol=?
+                       ORDER BY signal_date ASC""",
+                    (symbol.upper(),),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM signal_returns ORDER BY signal_date ASC"
+                ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to fetch signal returns: %s", exc)
+        return []
+
+
+def get_all_analysis_signals() -> list[dict]:
+    """Return all rows from analysis_history with symbol, date, price, factor_score."""
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT symbol, date, price, factor_score
+                   FROM analysis_history
+                   WHERE factor_score IS NOT NULL
+                   ORDER BY date ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to load analysis signals: %s", exc)
+        return []
