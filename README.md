@@ -28,9 +28,13 @@ and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
 |--------------------|-----------------|
 | ![Portfolio](screenshots/05_portfolio.png) | ![Sectors](screenshots/06_sectors.png) |
 
-| Strategy Backtesting | |
-|----------------------|-|
-| ![Backtest](screenshots/07_backtest.png) | |
+| Strategy Backtesting | Forward Testing |
+|----------------------|-----------------|
+| ![Backtest](screenshots/07_backtest.png) | ![Forward Test](screenshots/forward_test.png) |
+
+| Daily Rankings | Signal Quality |
+|----------------|----------------|
+| ![Rankings](screenshots/rankings.png) | ![Signal Quality](screenshots/signal_quality.png) |
 
 ---
 
