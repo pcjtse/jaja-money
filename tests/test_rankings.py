@@ -460,13 +460,36 @@ def test_score_universe_handles_errors():
 
 
 def test_quick_analyze_returns_adv():
-    """_quick_analyze must include an adv field (avg daily value)."""
+    """_quick_analyze includes adv (avg daily value) in its return dict."""
     pytest.importorskip("pandas")  # skip if pandas unavailable
+    from unittest.mock import patch
+
     from src.data.api import MockFinnhubAPI
     from src.trading.screener import _quick_analyze
 
-    result = _quick_analyze("AAPL", api=MockFinnhubAPI())
-    assert result is not None
+    _factors = [{"name": "f", "score": 60, "weight": 1.0, "label": "OK", "detail": ""}]
+    _risk = {
+        "risk_score": 40,
+        "risk_level": "Low",
+        "risk_color": "#00ff00",
+        "flags": [],
+        "hv": None,
+        "drawdown_pct": None,
+        "vol_regime": "normal",
+        "macro_context": None,
+    }
+    with (
+        patch("src.analysis.factors.compute_factors", return_value=_factors),
+        patch("src.analysis.factors.composite_score", return_value=60),
+        patch(
+            "src.analysis.factors.composite_label_color",
+            return_value=("Buy", "#2da44e"),
+        ),
+        patch("src.analysis.guardrails.compute_risk", return_value=_risk),
+    ):
+        result = _quick_analyze("AAPL", api=MockFinnhubAPI())
+
+    assert result is not None, "_quick_analyze unexpectedly returned None"
     assert "adv" in result
     assert result["adv"] > 0
 
@@ -474,15 +497,39 @@ def test_quick_analyze_returns_adv():
 def test_quick_analyze_adv_zero_when_daily_fails():
     """adv defaults to 0.0 when daily data is unavailable."""
     pytest.importorskip("pandas")  # skip if pandas unavailable
+    from unittest.mock import patch
+
     from src.data.api import MockFinnhubAPI
     from src.trading.screener import _quick_analyze
+
+    _factors = [{"name": "f", "score": 60, "weight": 1.0, "label": "OK", "detail": ""}]
+    _risk = {
+        "risk_score": 40,
+        "risk_level": "Low",
+        "risk_color": "#00ff00",
+        "flags": [],
+        "hv": None,
+        "drawdown_pct": None,
+        "vol_regime": "normal",
+        "macro_context": None,
+    }
 
     class _NoDailyMock(MockFinnhubAPI):
         def get_daily(self, symbol, years=1):
             raise RuntimeError("no daily data")
 
-    result = _quick_analyze("AAPL", api=_NoDailyMock())
-    assert result is not None
+    with (
+        patch("src.analysis.factors.compute_factors", return_value=_factors),
+        patch("src.analysis.factors.composite_score", return_value=60),
+        patch(
+            "src.analysis.factors.composite_label_color",
+            return_value=("Buy", "#2da44e"),
+        ),
+        patch("src.analysis.guardrails.compute_risk", return_value=_risk),
+    ):
+        result = _quick_analyze("AAPL", api=_NoDailyMock())
+
+    assert result is not None, "_quick_analyze unexpectedly returned None"
     assert result["adv"] == 0.0
 
 
