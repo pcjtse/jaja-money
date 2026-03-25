@@ -116,19 +116,23 @@ flowchart LR
 - **Company overview** — sector, market cap, P/E, EPS, dividend yield, 52-week range
 - **Interactive price chart** — candlestick with SMA(50/200), Bollinger Bands, volume, OBV, VWAP
 - **Technical indicators** — RSI(14), MACD, Fibonacci levels (computed locally)
-- **Earnings history** — EPS vs estimate vs surprise for last 4 quarters
+- **Earnings history** — EPS vs estimate vs surprise for last 4 quarters, with beat probability badge
 - **Analyst recommendations** — consensus bar chart and estimate revision momentum
-- **Insider trading** — recent insider buy/sell activity
+- **Insider trading** — recent insider buy/sell activity with cluster detection
+- **Short interest** — short % of float, days-to-cover, and squeeze potential indicator
+- **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread with elevated-risk banner
 - **Options market data** — IV surface and hedge suggestions
 - **Export** — CSV, HTML report, or PDF download
 
 ### Factor Score Engine
-Eight factors scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy),
-displayed as a gauge, radar chart, and progress-bar breakdown:
+Ten factors scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy),
+displayed as a gauge, radar chart, and progress-bar breakdown. Valuation is scored relative to the
+sector median rather than absolute thresholds. Weights are configurable in `config.yaml` and can be
+overridden by the optional ML adaptive weighting module.
 
-| Factor | Weight |
-|--------|--------|
-| Valuation (P/E) | 15% |
+| Factor | Default Weight |
+|--------|----------------|
+| Valuation (P/E, sector-adjusted) | 15% |
 | Trend (SMA-50/200) | 20% |
 | Momentum (RSI-14) | 10% |
 | MACD Signal | 10% |
@@ -136,29 +140,40 @@ displayed as a gauge, radar chart, and progress-bar breakdown:
 | Earnings Quality | 15% |
 | Analyst Consensus | 10% |
 | 52-Week Strength | 5% |
+| Dividend Yield | 5% |
+| Estimate Revisions | 8% |
+
+> Weights are applied proportionally; factors without available data are excluded from the composite.
 
 ### Risk Guardrails
 Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme),
-with 13 colour-coded red-flag alerts covering volatility, drawdown, overbought/oversold
-RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst sentiment.
+with 30+ colour-coded red-flag alerts covering volatility, drawdown, overbought/oversold
+RSI, downtrend conditions, high P/E, earnings miss rate, negative analyst sentiment,
+earnings proximity, insider selling clusters, elevated short interest, liquidity risk (ADV-based),
+volatility regime (transient vs. sustained spikes), and macroeconomic stress (VIX / yield curve).
 
 ### AI Analysis (Claude Opus 4.6)
-- **Fundamental analysis** — 8-section investment research report streamed live
+- **Fundamental analysis** — 8-section investment research report streamed live with adaptive prompts per stock type (Growth / Value / Dividend / Cyclical / Defensive)
 - **News sentiment themes** — Claude synthesises bullish/bearish narratives from headlines
 - **Price target** — AI-generated 12-month price target with bull/bear scenarios
-- **Interactive chat** — Ask any question about the stock; Claude answers with full context
-- **SEC EDGAR** — Fetch and analyse 10-K, 10-Q, and 8-K filings directly from EDGAR
-- **Autonomous agent** — Multi-step research workflow with tool-call authority (up to 10 turns)
+- **Interactive chat** — Ask any question about the stock; Claude answers with full context (chat history auto-trimmed to fit context window)
+- **Earnings transcript analysis** — Stream Claude analysis of earnings call tone, guidance confidence, and forward-looking statements
+- **Earnings prediction** — Beat probability badge based on historical EPS surprise patterns, tracked in history for calibration
+- **SEC EDGAR** — Fetch and analyse 10-K, 10-Q, and 8-K filings directly from EDGAR, with section-level diffing across quarters
+- **Autonomous agent** — Multi-step research workflow with tool-call authority (up to 10 turns, with step trace)
+- **PDF analysis** — Upload any financial PDF (10-K, earnings slides, research reports) for Claude to parse and cross-reference with live data
 
 ### Multi-Page App
 | Page | Description |
 |------|-------------|
-| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap |
-| **Screener** | Filter S&P 500 or custom universe by factor/risk/P/E/RSI; supports Claude natural-language queries |
-| **Portfolio** | Correlation matrix, beta, Monte Carlo simulation, Kelly sizing, factor attribution |
-| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase classification |
-| **Backtest** | Historical signal simulation with equity curve, Sharpe ratio, max drawdown, and DRIP support |
+| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and automatic peer group benchmarking |
+| **Screener** | Filter S&P 500, Russell 1000, or custom universe; supports AND/OR filter logic and Claude natural-language queries |
+| **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10 000 paths), Kelly criterion sizing, and factor attribution |
+| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase classification and Claude narrative |
+| **Backtest** | Walk-forward signal simulation with equity curve, Sharpe ratio, max drawdown, parameter sensitivity heatmap, and DRIP support |
 | **Forward Test** | Paper portfolio tracker to validate AI signals without real capital |
+| **Digests** | Daily Claude-written morning briefings covering overnight news and flag changes for each watchlist ticker |
+| **Settings** | Runtime configuration for factor weights, risk thresholds, alert destinations, and cache management |
 
 ### Additional Capabilities
 - **Watchlist** — Save tickers with factor scores; persisted across sessions
@@ -167,6 +182,12 @@ RSI, downtrend conditions, high P/E, earnings miss rate, and negative analyst se
 - **Named snapshots** — Save and diff analysis states over time
 - **Google Sheets export** — Write results to a Google Sheet via service account
 - **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
+- **Social sentiment** — Aggregated social media sentiment signals as supplementary context
+- **Post-earnings drift (PEAD)** — Track and analyse post-announcement price drift patterns
+- **Pairs trading** — Statistical correlation-based pairs analysis for hedged long/short ideas
+- **ML factor weighting** — Optional adaptive factor weights derived from historical signal performance
+- **Signal validity metrics** — Reliability scores and confidence intervals for generated signals
+- **Live risk-free rate** — 3-month T-bill rate fetched from FRED (used in Sharpe calculations)
 - **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
 - **Agent Skill** — Use as an [Agent Skill](https://agentskills.io) with OpenClaw, Claude Code, or any compatible AI agent (see below)
 
@@ -320,80 +341,8 @@ client.research("TSLA", question="Bear case?")  # POST /openclaw/agent
 
 ### 2. REST API Endpoints
 
-Start the API server:
-
-```bash
-uvicorn server:app --host 0.0.0.0 --port 8080
-# or: python server.py
-```
-
-**`POST /score`** — lightweight factor + risk scores:
-
-```bash
-curl -X POST http://localhost:8080/score \
-  -H "Content-Type: application/json" \
-  -d '{"symbol": "AAPL"}'
-```
-
-```json
-{
-  "symbol": "AAPL",
-  "factor_score": 72,
-  "composite_label": "Buy",
-  "risk_score": 38,
-  "risk_level": "Low",
-  "signal": "BUY",
-  "confidence": 74,
-  "factors": [],
-  "flags": [],
-  "timestamp": 1742500000
-}
-```
-
-**`GET /alerts`** — list active price/signal alerts:
-
-```bash
-curl "http://localhost:8080/alerts"
-curl "http://localhost:8080/alerts?symbol=AAPL"
-```
-
-**`POST /signals`** — batch BUY / HOLD / SELL signals with confidence scores:
-
-```bash
-curl -X POST http://localhost:8080/signals \
-  -H "Content-Type: application/json" \
-  -d '{"symbols": ["AAPL", "MSFT", "NVDA"]}'
-```
-
-Signal logic:
-
-| Signal | Condition |
-|--------|-----------|
-| **BUY** | `factor_score >= 65` **and** `risk_score <= 50` |
-| **SELL** | `factor_score <= 35` **or** `risk_score >= 75` |
-| **HOLD** | everything else |
-
-**`POST /openclaw/agent`** — streams the autonomous research agent:
-
-```bash
-curl -X POST http://localhost:8080/openclaw/agent \
-  -H "Content-Type: application/json" \
-  -d '{"symbol": "AAPL", "question": "What is the bull case?"}'
-```
-
-**`POST /openclaw/rebalance`** — portfolio drift analysis and rebalancing suggestions:
-
-```bash
-curl -X POST http://localhost:8080/openclaw/rebalance \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tickers": ["AAPL", "MSFT"],
-    "target_weights": {"AAPL": 0.6, "MSFT": 0.4},
-    "current_weights": {"AAPL": 0.72, "MSFT": 0.28}
-  }'
-```
-
-**`GET /openclaw/manifest`** — returns the skill manifest.
+For the full endpoint reference including request/response formats, authentication, and
+Docker setup, see **[REST_API.md](REST_API.md)**.
 
 ### 3. Alpaca Account Monitoring (Read-Only)
 
