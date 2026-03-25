@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -129,8 +131,8 @@ def test_apply_liquidity_filter_removes_low_adv():
     from src.analysis.rankings import _apply_liquidity_filter
 
     results = [
-        _make_result("A", "Tech", 80, adv=500_000),   # 0.5M < 1M threshold
-        _make_result("B", "Tech", 70, adv=2_000_000), # 2M passes
+        _make_result("A", "Tech", 80, adv=500_000),  # 0.5M < 1M threshold
+        _make_result("B", "Tech", 70, adv=2_000_000),  # 2M passes
     ]
     filtered = _apply_liquidity_filter(results, min_adv_m=1.0)
     assert len(filtered) == 1
@@ -177,7 +179,11 @@ def test_apply_liquidity_filter_missing_adv():
 
 
 def test_build_response_top_n():
-    from src.analysis.rankings import _assign_overall_ranks, _assign_sector_ranks, _build_response
+    from src.analysis.rankings import (
+        _assign_overall_ranks,
+        _assign_sector_ranks,
+        _build_response,
+    )
 
     results = [_make_result(f"S{i}", "Tech", i * 5) for i in range(1, 21)]
     ranked = _assign_overall_ranks(results)
@@ -187,7 +193,11 @@ def test_build_response_top_n():
 
 
 def test_build_response_bottom_n():
-    from src.analysis.rankings import _assign_overall_ranks, _assign_sector_ranks, _build_response
+    from src.analysis.rankings import (
+        _assign_overall_ranks,
+        _assign_sector_ranks,
+        _build_response,
+    )
 
     results = [_make_result(f"S{i}", "Tech", i * 5) for i in range(1, 21)]
     ranked = _assign_overall_ranks(results)
@@ -197,7 +207,11 @@ def test_build_response_bottom_n():
 
 
 def test_build_response_longs_have_highest_scores():
-    from src.analysis.rankings import _assign_overall_ranks, _assign_sector_ranks, _build_response
+    from src.analysis.rankings import (
+        _assign_overall_ranks,
+        _assign_sector_ranks,
+        _build_response,
+    )
 
     results = [_make_result(f"S{i}", "Tech", i * 5) for i in range(1, 21)]
     ranked = _assign_overall_ranks(results)
@@ -209,7 +223,11 @@ def test_build_response_longs_have_highest_scores():
 
 
 def test_build_response_by_sector():
-    from src.analysis.rankings import _assign_overall_ranks, _assign_sector_ranks, _build_response
+    from src.analysis.rankings import (
+        _assign_overall_ranks,
+        _assign_sector_ranks,
+        _build_response,
+    )
 
     results = [
         _make_result("T1", "Technology", 80),
@@ -434,3 +452,54 @@ def test_score_universe_handles_errors():
     _, errors = _score_universe(["FAIL1", "FAIL2"], _BadAPI(), max_workers=1)
     # Errors are collected; no exception raised
     assert isinstance(errors, list)
+
+
+# ---------------------------------------------------------------------------
+# adv field in _quick_analyze
+# ---------------------------------------------------------------------------
+
+
+def test_quick_analyze_returns_adv():
+    """_quick_analyze must include an adv field (avg daily value)."""
+    pytest.importorskip("pandas")  # skip if pandas unavailable
+    from src.data.api import MockFinnhubAPI
+    from src.trading.screener import _quick_analyze
+
+    result = _quick_analyze("AAPL", api=MockFinnhubAPI())
+    assert result is not None
+    assert "adv" in result
+    assert result["adv"] > 0
+
+
+def test_quick_analyze_adv_zero_when_daily_fails():
+    """adv defaults to 0.0 when daily data is unavailable."""
+    pytest.importorskip("pandas")  # skip if pandas unavailable
+    from src.data.api import MockFinnhubAPI
+    from src.trading.screener import _quick_analyze
+
+    class _NoDailyMock(MockFinnhubAPI):
+        def get_daily(self, symbol, years=1):
+            raise RuntimeError("no daily data")
+
+    result = _quick_analyze("AAPL", api=_NoDailyMock())
+    assert result is not None
+    assert result["adv"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# market_cap_b and adv filter interaction with _apply_liquidity_filter
+# ---------------------------------------------------------------------------
+
+
+def test_apply_liquidity_filter_respects_market_cap_b():
+    """Verify market_cap_b is passed through unmodified (filter is ADV-based)."""
+    from src.analysis.rankings import _apply_liquidity_filter
+
+    results = [
+        _make_result("BIG", "Tech", 80, adv=5_000_000, market_cap_b=500.0),
+        _make_result("TINY", "Tech", 70, adv=200_000, market_cap_b=0.5),
+    ]
+    filtered = _apply_liquidity_filter(results, min_adv_m=1.0)
+    assert len(filtered) == 1
+    assert filtered[0]["symbol"] == "BIG"
+    assert filtered[0]["market_cap_b"] == 500.0

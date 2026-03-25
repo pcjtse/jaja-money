@@ -843,11 +843,11 @@ Show users whether the composite score has historically correlated with forward 
 ### 21.4 Cross-Sectional Ranking: Daily Long/Short Candidate List
 Score stocks relative to each other rather than in isolation and generate a daily ranked list of the highest-scoring longs and lowest-scoring shorts across the S&P 500. Currently each stock is scored on an absolute scale — cross-sectional ranking produces actionable trade ideas (buy the top decile, avoid the bottom decile) that are not available from scoring stocks one at a time.
 
-- [ ] Run the full factor computation overnight for the entire S&P 500 universe (reuse screener infrastructure)
-- [ ] Rank all stocks by composite score within each sector to produce sector-neutral long/short lists
-- [ ] Display a "Today's Top 10 Longs" and "Top 10 Shorts" panel on the dashboard home page
-- [ ] Allow users to filter by sector, market cap, or minimum liquidity (ADV)
-- [ ] Claude writes a one-paragraph investment thesis for the #1 long and #1 short candidate each day
+- [x] Run the full factor computation overnight for the entire S&P 500 universe (reuse screener infrastructure)
+- [x] Rank all stocks by composite score within each sector to produce sector-neutral long/short lists
+- [x] Display a "Today's Top 10 Longs" and "Top 10 Shorts" panel on the dashboard home page
+- [x] Allow users to filter by sector, market cap, or minimum liquidity (ADV)
+- [x] Claude writes a one-paragraph investment thesis for the #1 long and #1 short candidate each day
 
 **Files:** `screener.py`, `factors.py`, `digest.py`, `app.py`, new `rankings.py`
 

@@ -1925,7 +1925,9 @@ if _sq.get("has_data"):
             "Top-quartile return (63d)",
             f"{_tqr:.1f}%" if _tqr is not None else "N/A",
         )
-        st.caption("See the **Signal Quality** page for the full forward-return analysis.")
+        st.caption(
+            "See the **Signal Quality** page for the full forward-return analysis."
+        )
 
 # P2.2: Compare to previous analysis diff view
 _snapshots = get_latest_two_snapshots(symbol)

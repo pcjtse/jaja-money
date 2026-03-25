@@ -792,7 +792,9 @@ def upsert_signal_return(
                 ),
             )
     except Exception as exc:
-        log.warning("Failed to upsert signal return for %s %s: %s", symbol, signal_date, exc)
+        log.warning(
+            "Failed to upsert signal return for %s %s: %s", symbol, signal_date, exc
+        )
 
 
 def get_signal_returns(symbol: str | None = None) -> list[dict]:

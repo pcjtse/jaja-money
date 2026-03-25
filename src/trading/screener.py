@@ -251,8 +251,10 @@ def _quick_analyze(symbol: str, api=None) -> dict | None:
                 .reset_index(drop=True)
             )
             close = df["Close"]
+            adv = float((df["Close"] * df["Volume"]).tail(20).mean())
         except Exception:
             close = None
+            adv = 0.0
 
         try:
             recs = api.get_recommendations(symbol)
@@ -323,6 +325,7 @@ def _quick_analyze(symbol: str, api=None) -> dict | None:
             "flag_count": len(risk["flags"]),
             "pe_ratio": float(pe) if pe is not None else None,
             "market_cap_b": float(mc) / 1000 if mc is not None else None,
+            "adv": adv,
             "rsi": rsi,
             "trend": _classify_trend(factors),
         }

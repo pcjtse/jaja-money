@@ -58,9 +58,7 @@ def _fetch_close_prices(symbol: str, years: int = 2) -> dict[str, float]:
         return {}
 
 
-def _closest_price(
-    prices: dict[str, float], target_date: datetime
-) -> float | None:
+def _closest_price(prices: dict[str, float], target_date: datetime) -> float | None:
     """Return the close price on or just after `target_date` (±5 calendar days)."""
     for offset in range(6):
         key = (target_date + timedelta(days=offset)).strftime("%Y-%m-%d")
@@ -164,7 +162,9 @@ def backfill_all_forward_returns(max_symbols: int = 200) -> dict:
             days_since = (datetime.strptime(today_str, "%Y-%m-%d") - sig_dt).days
             price_at_signal = row.get("price")
 
-            rets = compute_forward_return(sym, signal_date, price_at_signal or 0, prices)
+            rets = compute_forward_return(
+                sym, signal_date, price_at_signal or 0, prices
+            )
             # Only store if we have at least one return value, or the signal is
             # old enough that we expect data (>126 days ago)
             if days_since > 21 or any(v is not None for v in rets.values()):
@@ -213,7 +213,9 @@ def compute_quartile_analysis(horizon_days: int = 63) -> dict:
     """
     col = f"return_{horizon_days}d"
     rows = [
-        r for r in get_signal_returns() if r.get("signal_score") is not None and r.get(col) is not None
+        r
+        for r in get_signal_returns()
+        if r.get("signal_score") is not None and r.get(col) is not None
     ]
 
     if len(rows) < 4:
