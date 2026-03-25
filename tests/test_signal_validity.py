@@ -23,7 +23,9 @@ def clean_history(tmp_path, monkeypatch):
     yield
 
 
-def _make_prices(start_date: str, n_days: int = 200, start_price: float = 100.0) -> dict:
+def _make_prices(
+    start_date: str, n_days: int = 200, start_price: float = 100.0
+) -> dict:
     """Generate a synthetic {date: price} dict starting from start_date."""
     prices = {}
     base = datetime.strptime(start_date, "%Y-%m-%d")
@@ -332,7 +334,9 @@ def test_backfill_uses_cached_prices(monkeypatch):
         )
 
     # Pre-cache the return so backfill should skip it
-    upsert_signal_return("TST", old_date, 60, 100.0, return_21d=1.0, return_63d=2.0, return_126d=3.0)
+    upsert_signal_return(
+        "TST", old_date, 60, 100.0, return_21d=1.0, return_63d=2.0, return_126d=3.0
+    )
 
     # Mock yfinance so it's not actually called
     mock_called = []

@@ -38,7 +38,9 @@ with st.sidebar:
     horizon = st.selectbox(
         "Return horizon",
         options=[21, 63, 126],
-        format_func=lambda d: f"{d} days (~{d // 21} month{'s' if d // 21 != 1 else ''})",
+        format_func=lambda d: (
+            f"{d} days (~{d // 21} month{'s' if d // 21 != 1 else ''})"
+        ),
         index=1,
     )
     if st.button("Refresh Forward Returns", type="primary"):
@@ -90,11 +92,11 @@ if quartiles:
     import plotly.graph_objects as go
 
     labels = [q["label"] for q in quartiles]
-    medians = [q["median_return"] if q["median_return"] is not None else 0.0 for q in quartiles]
-    counts = [q["count"] for q in quartiles]
-    colors = [
-        "#cf2929" if m < 0 else "#1a7f37" for m in medians
+    medians = [
+        q["median_return"] if q["median_return"] is not None else 0.0 for q in quartiles
     ]
+    counts = [q["count"] for q in quartiles]
+    colors = ["#cf2929" if m < 0 else "#1a7f37" for m in medians]
 
     fig = go.Figure(
         go.Bar(
@@ -168,9 +170,7 @@ if corrs:
     st.dataframe(corr_df, use_container_width=True, hide_index=True)
 
     # Highlight interpretation
-    corr_for_horizon = next(
-        (c for c in corrs if c["horizon_days"] == horizon), None
-    )
+    corr_for_horizon = next((c for c in corrs if c["horizon_days"] == horizon), None)
     if corr_for_horizon and corr_for_horizon["correlation"] is not None:
         rho = corr_for_horizon["correlation"]
         sig = corr_for_horizon["significant"]

@@ -70,6 +70,12 @@ with st.sidebar:
 
     selected_sector = st.selectbox("Sector", ["All"] + all_sectors)
     min_score = st.slider("Min Factor Score", 0, 100, 0)
+    min_mktcap_b = st.number_input(
+        "Min Market Cap (B$)", min_value=0.0, value=0.0, step=1.0
+    )
+    min_adv_m = st.number_input(
+        "Min Avg Daily Value (M$)", min_value=0.0, value=0.0, step=1.0
+    )
     top_n = st.slider("Top / Bottom N", 5, 50, 10)
 
 # ---------------------------------------------------------------------------
@@ -85,6 +91,10 @@ if ranking:
         rows = [r for r in rows if (r.get("sector") or "N/A") == selected_sector]
     if min_score > 0:
         rows = [r for r in rows if (r.get("factor_score") or 0) >= min_score]
+    if min_mktcap_b > 0:
+        rows = [r for r in rows if (r.get("market_cap_b") or 0) >= min_mktcap_b]
+    if min_adv_m > 0:
+        rows = [r for r in rows if (r.get("adv") or 0) >= min_adv_m * 1_000_000]
 
     if rows:
         df = pd.DataFrame(
@@ -123,6 +133,10 @@ with long_col:
         longs = ranking.get("all_rows", [])
         if selected_sector != "All":
             longs = [r for r in longs if (r.get("sector") or "N/A") == selected_sector]
+        if min_mktcap_b > 0:
+            longs = [r for r in longs if (r.get("market_cap_b") or 0) >= min_mktcap_b]
+        if min_adv_m > 0:
+            longs = [r for r in longs if (r.get("adv") or 0) >= min_adv_m * 1_000_000]
         longs = longs[:top_n]
         if longs:
             long_df = pd.DataFrame(
@@ -150,6 +164,10 @@ with short_col:
             shorts = [
                 r for r in shorts if (r.get("sector") or "N/A") == selected_sector
             ]
+        if min_mktcap_b > 0:
+            shorts = [r for r in shorts if (r.get("market_cap_b") or 0) >= min_mktcap_b]
+        if min_adv_m > 0:
+            shorts = [r for r in shorts if (r.get("adv") or 0) >= min_adv_m * 1_000_000]
         shorts = shorts[:top_n]
         if shorts:
             short_df = pd.DataFrame(
