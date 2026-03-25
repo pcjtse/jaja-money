@@ -461,27 +461,27 @@ def test_score_universe_handles_errors():
 
 def test_quick_analyze_returns_adv():
     """_quick_analyze must include an adv field (avg daily value)."""
-    pd = pytest.importorskip("pandas")  # noqa: F841 — skip if pandas unavailable
+    pytest.importorskip("pandas")  # skip if pandas unavailable
+    from src.data.api import MockFinnhubAPI
     from src.trading.screener import _quick_analyze
 
-    api = _MockAPI()
-    result = _quick_analyze("AAPL", api=api)
+    result = _quick_analyze("AAPL", api=MockFinnhubAPI())
     assert result is not None
     assert "adv" in result
-    # With 252 days of volume=1_000_000 and close~100, adv should be ~100M
     assert result["adv"] > 0
 
 
 def test_quick_analyze_adv_zero_when_daily_fails():
     """adv defaults to 0.0 when daily data is unavailable."""
     pytest.importorskip("pandas")  # skip if pandas unavailable
+    from src.data.api import MockFinnhubAPI
     from src.trading.screener import _quick_analyze
 
-    class _NoDailyAPI(_MockAPI):
+    class _NoDailyMock(MockFinnhubAPI):
         def get_daily(self, symbol, years=1):
             raise RuntimeError("no daily data")
 
-    result = _quick_analyze("AAPL", api=_NoDailyAPI())
+    result = _quick_analyze("AAPL", api=_NoDailyMock())
     assert result is not None
     assert result["adv"] == 0.0
 
