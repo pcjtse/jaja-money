@@ -249,3 +249,109 @@ class TestBacktestPage:
     def test_backtest_screenshot(self):
         """Capture screenshot of backtest page."""
         self.page.screenshot(path=str(SCREENSHOTS_DIR / "07_backtest.png"))
+
+
+# ---------------------------------------------------------------------------
+# Forward Test Page Tests
+# ---------------------------------------------------------------------------
+
+
+class TestForwardTestPage:
+    """Tests for the Forward Testing (Paper Portfolio) page."""
+
+    @pytest.fixture(autouse=True)
+    def navigate(self, page, streamlit_server):
+        """Navigate to the Forward Test page."""
+        page.set_default_timeout(30_000)
+        _navigate_to_page(page, "ForwardTest", streamlit_server)
+        self.page = page
+
+    def test_forward_test_page_loads(self):
+        """Forward Test page should load with portfolio tracking UI."""
+        self.page.wait_for_timeout(5000)
+        body_text = self.page.locator("body").inner_text()
+        assert any(
+            kw in body_text
+            for kw in ["Forward", "Paper", "Portfolio", "Test", "trade"]
+        )
+
+    def test_forward_test_screenshot(self):
+        """Capture screenshot of forward test page."""
+        # Wait for sidebar "Portfolios" header — rendered even in the empty state
+        try:
+            self.page.wait_for_selector("text=Portfolios", timeout=15_000)
+        except Exception:
+            pass
+        # Wait for the Streamlit running spinner to clear
+        self.page.wait_for_timeout(5000)
+        self.page.screenshot(path=str(SCREENSHOTS_DIR / "forward_test.png"))
+
+
+# ---------------------------------------------------------------------------
+# Rankings Page Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRankingsPage:
+    """Tests for the Cross-Sectional Rankings page."""
+
+    @pytest.fixture(autouse=True)
+    def navigate(self, page, streamlit_server):
+        """Navigate to the Rankings page."""
+        page.set_default_timeout(30_000)
+        _navigate_to_page(page, "Rankings", streamlit_server)
+        self.page = page
+
+    def test_rankings_page_loads(self):
+        """Rankings page should load with ranking UI."""
+        self.page.wait_for_timeout(5000)
+        body_text = self.page.locator("body").inner_text()
+        assert any(
+            kw in body_text
+            for kw in ["Rankings", "Rank", "Score", "Signal", "Symbol"]
+        )
+
+    def test_rankings_screenshot(self):
+        """Capture screenshot of rankings page."""
+        # Wait for "Full Leaderboard" section to render
+        try:
+            self.page.wait_for_selector("text=Full Leaderboard", timeout=15_000)
+        except Exception:
+            pass
+        # Wait for the Streamlit running spinner to clear
+        self.page.wait_for_timeout(5000)
+        self.page.screenshot(path=str(SCREENSHOTS_DIR / "rankings.png"))
+
+
+# ---------------------------------------------------------------------------
+# Signal Quality Page Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSignalQualityPage:
+    """Tests for the Signal Quality Dashboard page."""
+
+    @pytest.fixture(autouse=True)
+    def navigate(self, page, streamlit_server):
+        """Navigate to the Signal Quality page."""
+        page.set_default_timeout(30_000)
+        _navigate_to_page(page, "SignalQuality", streamlit_server)
+        self.page = page
+
+    def test_signal_quality_page_loads(self):
+        """Signal Quality page should load with quality metrics UI."""
+        self.page.wait_for_timeout(5000)
+        body_text = self.page.locator("body").inner_text()
+        assert any(
+            kw in body_text
+            for kw in ["Signal", "Quality", "Score", "Returns", "Correlation"]
+        )
+
+    def test_signal_quality_screenshot(self):
+        """Capture screenshot of signal quality page."""
+        try:
+            self.page.wait_for_selector("text=Signal Quality", timeout=15_000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(3000)
+        self.page.screenshot(path=str(SCREENSHOTS_DIR / "signal_quality.png"))
