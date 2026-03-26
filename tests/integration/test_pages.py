@@ -268,7 +268,7 @@ class TestForwardTestPage:
 
     def test_forward_test_page_loads(self):
         """Forward Test page should load with portfolio tracking UI."""
-        self.page.wait_for_timeout(3000)
+        self.page.wait_for_timeout(5000)
         body_text = self.page.locator("body").inner_text()
         assert any(
             kw in body_text
@@ -277,6 +277,13 @@ class TestForwardTestPage:
 
     def test_forward_test_screenshot(self):
         """Capture screenshot of forward test page."""
+        # Wait for sidebar "Portfolios" header — rendered even in the empty state
+        try:
+            self.page.wait_for_selector("text=Portfolios", timeout=15_000)
+        except Exception:
+            pass
+        # Wait for the Streamlit running spinner to clear
+        self.page.wait_for_timeout(5000)
         self.page.screenshot(path=str(SCREENSHOTS_DIR / "forward_test.png"))
 
 
@@ -297,7 +304,7 @@ class TestRankingsPage:
 
     def test_rankings_page_loads(self):
         """Rankings page should load with ranking UI."""
-        self.page.wait_for_timeout(3000)
+        self.page.wait_for_timeout(5000)
         body_text = self.page.locator("body").inner_text()
         assert any(
             kw in body_text
@@ -306,6 +313,13 @@ class TestRankingsPage:
 
     def test_rankings_screenshot(self):
         """Capture screenshot of rankings page."""
+        # Wait for "Full Leaderboard" section to render
+        try:
+            self.page.wait_for_selector("text=Full Leaderboard", timeout=15_000)
+        except Exception:
+            pass
+        # Wait for the Streamlit running spinner to clear
+        self.page.wait_for_timeout(5000)
         self.page.screenshot(path=str(SCREENSHOTS_DIR / "rankings.png"))
 
 
@@ -326,7 +340,7 @@ class TestSignalQualityPage:
 
     def test_signal_quality_page_loads(self):
         """Signal Quality page should load with quality metrics UI."""
-        self.page.wait_for_timeout(3000)
+        self.page.wait_for_timeout(5000)
         body_text = self.page.locator("body").inner_text()
         assert any(
             kw in body_text
@@ -335,4 +349,9 @@ class TestSignalQualityPage:
 
     def test_signal_quality_screenshot(self):
         """Capture screenshot of signal quality page."""
+        try:
+            self.page.wait_for_selector("text=Signal Quality", timeout=15_000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(3000)
         self.page.screenshot(path=str(SCREENSHOTS_DIR / "signal_quality.png"))
