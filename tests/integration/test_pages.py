@@ -271,8 +271,7 @@ class TestForwardTestPage:
         self.page.wait_for_timeout(5000)
         body_text = self.page.locator("body").inner_text()
         assert any(
-            kw in body_text
-            for kw in ["Forward", "Paper", "Portfolio", "Test", "trade"]
+            kw in body_text for kw in ["Forward", "Paper", "Portfolio", "Test", "trade"]
         )
 
     def test_forward_test_screenshot(self):
@@ -307,8 +306,7 @@ class TestRankingsPage:
         self.page.wait_for_timeout(5000)
         body_text = self.page.locator("body").inner_text()
         assert any(
-            kw in body_text
-            for kw in ["Rankings", "Rank", "Score", "Signal", "Symbol"]
+            kw in body_text for kw in ["Rankings", "Rank", "Score", "Signal", "Symbol"]
         )
 
     def test_rankings_screenshot(self):
