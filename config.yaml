@@ -5,13 +5,21 @@ cache:
 
 factor_weights:
   valuation: 0.15
-  trend: 0.20
+  trend: 0.15
   rsi: 0.10
   macd: 0.10
   sentiment: 0.15
   earnings: 0.15
   analyst: 0.10
   range: 0.05
+  alt_data: 0.05
+
+# P21.5: Alternative data signal settings
+alt_data:
+  enabled: true
+  trends_weight: 0.5    # share of alt_data score from Google Trends
+  jobs_weight: 0.5      # share of alt_data score from job posting velocity
+  cache_ttl_hours: 6
 
 risk:
   bands:

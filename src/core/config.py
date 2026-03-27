@@ -25,13 +25,20 @@ _DEFAULTS: dict[str, Any] = {
     },
     "factor_weights": {
         "valuation": 0.15,
-        "trend": 0.20,
+        "trend": 0.15,
         "rsi": 0.10,
         "macd": 0.10,
         "sentiment": 0.15,
         "earnings": 0.15,
         "analyst": 0.10,
         "range": 0.05,
+        "alt_data": 0.05,
+    },
+    "alt_data": {
+        "enabled": True,
+        "trends_weight": 0.5,
+        "jobs_weight": 0.5,
+        "cache_ttl_hours": 6,
     },
     "risk": {
         "bands": {
@@ -200,6 +207,11 @@ class _Config:
     def ai_backend(self) -> str:
         """AI backend to use: 'sdk' (default) or 'cli'."""
         return str(self.get("ai_backend", default="sdk"))
+
+    @property
+    def alt_data_enabled(self) -> bool:
+        """Whether the alternative data signal (P21.5) is enabled."""
+        return bool(self.get("alt_data", "enabled", default=True))
 
 
 def _build_config() -> _Config:

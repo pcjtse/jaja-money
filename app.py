@@ -1519,7 +1519,19 @@ try:
 except Exception:
     pass
 
-# P5.2, P5.1, P5.7: Include sector, revisions in factor computation
+# P21.5: Fetch alternative data signal (Google Trends + job posting velocity)
+_alt_data = None
+try:
+    from src.core.config import cfg as _cfg
+
+    if _cfg.alt_data_enabled:
+        _company_name = (profile or {}).get("name", symbol) if profile else symbol
+        with st.spinner("Fetching alternative data signals..."):
+            _alt_data = get_api().get_alt_data_signals(symbol, _company_name)
+except Exception:
+    pass
+
+# P5.2, P5.1, P5.7, P21.5: Include sector, revisions, alt data in factor computation
 _sector = (profile or {}).get("finnhubIndustry") if profile else None
 _factors = compute_factors(
     quote=quote,
@@ -1530,6 +1542,7 @@ _factors = compute_factors(
     sentiment_agg=agg,
     sector=_sector,
     revisions=_revisions if _revisions else None,
+    alt_data=_alt_data,
 )
 _composite = composite_score(_factors)
 _label, _color = composite_label_color(_composite)
@@ -1707,6 +1720,120 @@ if _close_weekly is not None or _close_monthly is not None:
             tf_cols[3].metric("Alignment", _alignment)
         except Exception as _e:
             st.caption(f"Multi-timeframe analysis unavailable: {_e}")
+
+# P21.5: Alternative Data Signals section
+if _alt_data:
+    st.divider()
+    st.header("Alternative Data Signals")
+    st.caption(
+        "Google Trends search-interest and job-posting velocity — leading indicators "
+        "that may surface demand acceleration or deceleration weeks before it shows "
+        "up in financial statements."
+    )
+
+    _trends = _alt_data.get("trends", {})
+    _jobs = _alt_data.get("jobs", {})
+    _t_avail = _trends.get("available", False)
+    _j_avail = _jobs.get("available", False)
+
+    _alt_cols = st.columns(3)
+    _alt_cols[0].metric(
+        "Alt Data Score",
+        f"{_alt_data['score']}/100",
+        help="Combined Google Trends + job posting signal",
+    )
+    if _t_avail:
+        _slope_pct = _trends.get("slope", 0) * 100
+        _alt_cols[1].metric(
+            "Trends Signal",
+            _trends.get("label", "—"),
+            delta=f"{_slope_pct:+.1f}% slope",
+        )
+    else:
+        _alt_cols[1].metric("Trends Signal", "Unavailable")
+
+    if _j_avail:
+        _vel = _jobs.get("velocity_pct", 0)
+        _alt_cols[2].metric(
+            "Job Posting Velocity",
+            _jobs.get("label", "—"),
+            delta=f"{_vel:+.1f}%",
+        )
+    else:
+        _alt_cols[2].metric("Job Posting Velocity", "Unavailable")
+
+    # Google Trends chart
+    if _t_avail and _trends.get("values"):
+        with st.expander("Google Trends Interest Over Time", expanded=True):
+            import numpy as _np
+
+            _trend_vals = _trends["values"]
+            _trend_x = list(range(len(_trend_vals)))
+            _slope = _trends.get("slope", 0)
+            _mean_v = float(_np.mean(_trend_vals)) if _trend_vals else 50.0
+            _trend_line = [
+                _mean_v + _slope * _mean_v * (i - len(_trend_vals) / 2)
+                for i in _trend_x
+            ]
+            _fig_trends = go.Figure()
+            _fig_trends.add_trace(
+                go.Scatter(
+                    x=_trend_x,
+                    y=_trend_vals,
+                    mode="lines+markers",
+                    name="Interest",
+                    line={"color": "#2da44e", "width": 2},
+                    marker={"size": 5},
+                )
+            )
+            _fig_trends.add_trace(
+                go.Scatter(
+                    x=_trend_x,
+                    y=_trend_line,
+                    mode="lines",
+                    name="Trend",
+                    line={"color": "#f0b429", "width": 2, "dash": "dash"},
+                )
+            )
+            _fig_trends.update_layout(
+                xaxis_title="Weeks ago (0 = most recent)",
+                yaxis_title="Relative Interest (0-100)",
+                height=280,
+                margin={"l": 10, "r": 10, "t": 10, "b": 30},
+                legend={"orientation": "h", "y": -0.2},
+            )
+            st.plotly_chart(_fig_trends, use_container_width=True)
+
+    # Job postings bar chart
+    if _j_avail:
+        with st.expander("Job Posting Counts", expanded=True):
+            _recent_cnt = _jobs.get("recent_count", 0)
+            _prior_cnt = _jobs.get("prior_count", 0)
+            _fig_jobs = go.Figure(
+                go.Bar(
+                    x=["Prior 30d", "Last 30d"],
+                    y=[_prior_cnt, _recent_cnt],
+                    marker_color=[
+                        "#888888",
+                        "#2da44e" if _recent_cnt >= _prior_cnt else "#e05252",
+                    ],
+                    text=[str(_prior_cnt), str(_recent_cnt)],
+                    textposition="outside",
+                )
+            )
+            _fig_jobs.update_layout(
+                yaxis_title="Job Postings",
+                height=220,
+                margin={"l": 10, "r": 10, "t": 10, "b": 30},
+            )
+            st.plotly_chart(_fig_jobs, use_container_width=True)
+
+    if not _t_avail and not _j_avail:
+        st.info(
+            "Alternative data signals unavailable. "
+            "Install `pytrends` and set `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` "
+            "environment variables to enable this section."
+        )
 
 # P20.1: Market Regime
 _market_regime = None

@@ -301,7 +301,7 @@ def test_compute_factors_with_sector():
         sentiment_agg=None,
         sector="Technology",
     )
-    assert len(result) == 10
+    assert len(result) == 11
     val_factor = next(f for f in result if f["name"] == "Valuation (P/E)")
     # P/E 20 vs Technology median 28 → discounted
     assert (
@@ -325,7 +325,7 @@ def test_compute_factors_with_revisions():
         sentiment_agg=None,
         revisions=revisions,
     )
-    assert len(result) == 10
+    assert len(result) == 11
     rev_factor = next(f for f in result if f["name"] == "Estimate Revisions")
     assert rev_factor["score"] == 78
 
@@ -341,5 +341,5 @@ def test_compute_factors_all_none_still_10():
         sector=None,
         revisions=None,
     )
-    assert len(result) == 10
+    assert len(result) == 11
     assert all(0 <= f["score"] <= 100 for f in result)
