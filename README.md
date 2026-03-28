@@ -197,6 +197,93 @@ volatility regime (transient vs. sustained spikes), and macroeconomic stress (VI
 
 ---
 
+### Full Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `FINNHUB_API_KEY` | Yes | Finnhub market data |
+| `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
+| `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
+| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
+| `JAJA_API_PORT` | No | REST API server port (default: `8080`) |
+| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
+| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
+| `ALPACA_BASE_URL` | Monitoring only | Alpaca base URL (default: `https://paper-api.alpaca.markets`) |
+
+---
+
+## Prerequisites
+
+- **Python 3.10+**
+- A free [Finnhub](https://finnhub.io) API key
+- An [Anthropic](https://console.anthropic.com) API key **or** the [Claude Code CLI](https://claude.ai/code)
+
+> **Tip:** If you have Claude Code CLI installed (`claude` on your PATH), you can set
+> `ai_backend: "cli"` in `config.yaml` and skip the `ANTHROPIC_API_KEY` entirely.
+
+---
+
+## Setup
+
+1. **Clone and enter the repo:**
+   ```bash
+   cd jaja-money
+   ```
+
+2. **Create a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate        # macOS / Linux
+   # venv\Scripts\activate          # Windows
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+   > The FinBERT model (~500 MB) downloads automatically on first run and is cached locally.
+
+4. **Configure API keys:**
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env`:
+   ```
+   FINNHUB_API_KEY=your_finnhub_key_here
+   ANTHROPIC_API_KEY=your_anthropic_key_here
+   ```
+
+---
+
+## Usage
+
+```bash
+streamlit run app.py
+```
+
+Open `http://localhost:8501`, enter a ticker (e.g. `AAPL`) in the sidebar, and click **Analyze**.
+Use the sidebar navigation to switch between pages.
+
+### Docker
+
+```bash
+# Quick start
+cp .env.example .env   # add your keys
+docker compose up --build
+
+# With Redis cache
+docker compose --profile redis up --build
+```
+
+Persistent data (history, watchlist, alerts, cache) is stored inside the container at
+`~/.jaja-money/`. Mount a volume to keep it across restarts:
+```bash
+docker run -p 8501:8501 --env-file .env \
+  -v "$HOME/.jaja-money:/root/.jaja-money" jaja-money
+```
+
+---
+
 ## Agent Skill — jaja-money
 
 jaja-money is packaged as an **Agent Skill** following the [Agent Skills standard](https://agentskills.io).
@@ -432,93 +519,6 @@ openclaw:
   signal_sell_factor_max: 35
   signal_sell_risk_min: 75
 ```
-
-### Full Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `FINNHUB_API_KEY` | Yes | Finnhub market data |
-| `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
-| `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
-| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
-| `JAJA_API_PORT` | No | REST API server port (default: `8080`) |
-| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
-| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
-| `ALPACA_BASE_URL` | Monitoring only | Alpaca base URL (default: `https://paper-api.alpaca.markets`) |
-
----
-
-## Prerequisites
-
-- **Python 3.10+**
-- A free [Finnhub](https://finnhub.io) API key
-- An [Anthropic](https://console.anthropic.com) API key **or** the [Claude Code CLI](https://claude.ai/code)
-
-> **Tip:** If you have Claude Code CLI installed (`claude` on your PATH), you can set
-> `ai_backend: "cli"` in `config.yaml` and skip the `ANTHROPIC_API_KEY` entirely.
-
----
-
-## Setup
-
-1. **Clone and enter the repo:**
-   ```bash
-   cd jaja-money
-   ```
-
-2. **Create a virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate        # macOS / Linux
-   # venv\Scripts\activate          # Windows
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   > The FinBERT model (~500 MB) downloads automatically on first run and is cached locally.
-
-4. **Configure API keys:**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env`:
-   ```
-   FINNHUB_API_KEY=your_finnhub_key_here
-   ANTHROPIC_API_KEY=your_anthropic_key_here
-   ```
-
----
-
-## Usage
-
-```bash
-streamlit run app.py
-```
-
-Open `http://localhost:8501`, enter a ticker (e.g. `AAPL`) in the sidebar, and click **Analyze**.
-Use the sidebar navigation to switch between pages.
-
-### Docker
-
-```bash
-# Quick start
-cp .env.example .env   # add your keys
-docker compose up --build
-
-# With Redis cache
-docker compose --profile redis up --build
-```
-
-Persistent data (history, watchlist, alerts, cache) is stored inside the container at
-`~/.jaja-money/`. Mount a volume to keep it across restarts:
-```bash
-docker run -p 8501:8501 --env-file .env \
-  -v "$HOME/.jaja-money:/root/.jaja-money" jaja-money
-```
-
----
 
 ## ⚠️ API Usage Limits
 
