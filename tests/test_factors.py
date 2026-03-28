@@ -600,7 +600,7 @@ def test_compute_factors_returns_10():
             "counts": {"positive": 7, "negative": 2, "neutral": 1},
         },
     )
-    assert len(result) == 11  # 8 original + dividend yield + estimate revisions + alt data
+    assert len(result) == 23  # 11 original + 12 new alpha factors
 
 
 def test_compute_factors_keys():
@@ -631,7 +631,7 @@ def test_compute_factors_zero_price_handled():
         recommendations=[],
         sentiment_agg=None,
     )
-    assert len(result) == 11  # 8 original + dividend yield + estimate revisions + alt data
+    assert len(result) == 23  # 11 original + 12 new alpha factors
 
 
 def test_compute_factors_all_none():

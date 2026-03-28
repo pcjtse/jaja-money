@@ -164,6 +164,14 @@ def _build_flags(
     macro_context: dict | None = None,
     account_size: float | None = None,
     max_position_pct: float = 0.05,
+    # Alpha feature data for additional flags
+    congress_data: dict | None = None,
+    crowding_data: dict | None = None,
+    catalyst_data: dict | None = None,
+    supply_chain_data: dict | None = None,
+    borrow_rate_data: dict | None = None,
+    regime_data: dict | None = None,
+    options_flow_data: dict | None = None,
 ) -> list[dict]:
     """Return a list of flag dicts: {severity, icon, title, message}."""
     flags = []
@@ -537,6 +545,148 @@ def _build_flags(
             f"Structural volatility trend — requires tighter risk management.",
         )
 
+    # --- Alpha feature flags ---
+
+    # Congressional selling signal
+    if congress_data and congress_data.get("available"):
+        net_signal = congress_data.get("net_signal", "")
+        sells = congress_data.get("sells", 0)
+        if net_signal == "Selling" and sells >= 2:
+            flag(
+                "warning",
+                "🏛️",
+                "Congressional net selling",
+                f"Multiple politicians have recently sold shares "
+                f"({sells} sale transactions in the last 90 days). "
+                f"Congressional selling has historically preceded negative returns.",
+            )
+        elif net_signal == "Buying":
+            buys = congress_data.get("buys", 0)
+            flag(
+                "info",
+                "🏛️",
+                "Congressional net buying",
+                f"{buys} congressional purchase(s) detected in the last 90 days — "
+                f"a historically bullish signal.",
+            )
+
+    # Factor crowding risk
+    if crowding_data:
+        risk_level = crowding_data.get("risk_level", "Low")
+        penalty = crowding_data.get("penalty", 0)
+        if risk_level == "Extreme":
+            flag(
+                "danger",
+                "🎯",
+                "Extreme factor crowding",
+                f"This stock's factor profile is nearly identical to the top-decile "
+                f"consensus. Crowded factor plays reverse violently when funds unwind. "
+                f"Score penalized by {penalty} pts.",
+            )
+        elif risk_level == "High":
+            flag(
+                "warning",
+                "🎯",
+                "High factor crowding risk",
+                f"Factor profile highly similar to widely-held consensus picks. "
+                f"Elevated unwind risk if market regime shifts. Penalty: {penalty} pts.",
+            )
+
+    # Near-term catalyst concentration risk
+    if catalyst_data:
+        within_7d = catalyst_data.get("catalysts_within_7d", 0)
+        if within_7d >= 2:
+            flag(
+                "warning",
+                "📅",
+                f"{within_7d} catalysts within 7 days",
+                "Multiple binary events approaching. Consider reducing position size "
+                "to manage event risk.",
+            )
+        if catalyst_data.get("fomc_within_30d"):
+            flag(
+                "info",
+                "🏦",
+                "FOMC meeting within 30 days",
+                "An FOMC rate decision is upcoming. Interest-rate-sensitive sectors "
+                "may see elevated volatility.",
+            )
+
+    # Supply chain concentration
+    if supply_chain_data:
+        sole = supply_chain_data.get("sole_source_risk", False)
+        high_risk = supply_chain_data.get("high_risk_regions", [])
+        if sole:
+            flag(
+                "warning",
+                "⛓️",
+                "Single-source supply chain dependency",
+                "Company appears dependent on a sole-source supplier. "
+                "Supply disruptions would have outsized business impact.",
+            )
+        if len(high_risk) >= 2:
+            flag(
+                "warning",
+                "🌏",
+                f"High-risk supply chain regions: {', '.join(high_risk[:3])}",
+                "Supply chain exposure to geopolitically sensitive regions increases "
+                "operational and tariff risk.",
+            )
+
+    # Expensive borrow rate (short squeeze risk)
+    if borrow_rate_data and borrow_rate_data.get("available"):
+        ctb_tier = borrow_rate_data.get("ctb_tier", "")
+        ctb_rate = borrow_rate_data.get("ctb_rate")
+        if ctb_tier == "Very Expensive":
+            flag(
+                "warning",
+                "💸",
+                f"Very expensive to borrow — CTB ~{ctb_rate:.0f}%",
+                "Extremely high cost-to-borrow rate indicates heavy short interest and "
+                "a precondition for a short squeeze. High volatility likely.",
+            )
+
+    # Risk-Off Panic regime
+    if regime_data:
+        regime = regime_data.get("regime", "")
+        if regime == "Risk-Off Panic":
+            flag(
+                "danger",
+                "🚨",
+                "Risk-Off Panic regime detected",
+                "Cross-asset signals indicate a panic/crisis market environment. "
+                "All equity positions carry elevated tail risk. Reduce exposure.",
+            )
+        elif regime == "Risk-Off Defensive":
+            flag(
+                "warning",
+                "🛡️",
+                "Risk-Off Defensive regime",
+                "Market is rotating defensively. Cyclical and growth stocks face "
+                "headwinds. Prefer defensive sectors.",
+            )
+
+    # Bearish options sweep
+    if options_flow_data:
+        flow_type = options_flow_data.get("flow_type", "")
+        if flow_type == "BEARISH_SWEEP":
+            pcr = options_flow_data.get("put_call_ratio", 1.0)
+            flag(
+                "warning",
+                "📉",
+                "Bearish options sweep detected",
+                f"Unusual put buying detected (P/C ratio: {pcr:.2f}). "
+                f"Large bearish sweeps can indicate informed selling before a move.",
+            )
+        elif flow_type == "EARNINGS_BET":
+            flag(
+                "info",
+                "🎲",
+                "Earnings bet detected in options",
+                "Short-dated, OTM call and put activity suggests traders are "
+                "positioning for a large binary move around an upcoming event.",
+            )
+
     return flags
 
 
@@ -637,6 +787,14 @@ def compute_risk(
     macro_context: dict | None = None,
     account_size: float | None = None,
     max_position_pct: float = 0.05,
+    # Alpha feature data
+    congress_data: dict | None = None,
+    crowding_data: dict | None = None,
+    catalyst_data: dict | None = None,
+    supply_chain_data: dict | None = None,
+    borrow_rate_data: dict | None = None,
+    regime_data: dict | None = None,
+    options_flow_data: dict | None = None,
 ) -> dict:
     """Compute risk score and flags from available data.
 
@@ -674,6 +832,13 @@ def compute_risk(
         macro_context=macro_context,
         account_size=account_size,
         max_position_pct=max_position_pct,
+        congress_data=congress_data,
+        crowding_data=crowding_data,
+        catalyst_data=catalyst_data,
+        supply_chain_data=supply_chain_data,
+        borrow_rate_data=borrow_rate_data,
+        regime_data=regime_data,
+        options_flow_data=options_flow_data,
     )
 
     # Flag count dimension: each flag adds 20 pts, capped at 100

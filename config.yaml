@@ -13,6 +13,20 @@ factor_weights:
   analyst: 0.10
   range: 0.05
   alt_data: 0.05
+  # Alpha feature weights
+  congress: 0.05
+  institutional_flow: 0.06
+  estimate_velocity: 0.08
+  buyback: 0.04
+  guidance_quality: 0.06
+  options_flow: 0.05
+  dark_pool: 0.04
+  supply_chain: 0.04
+  special_situation: 0.06
+  cross_asset: 0.04
+  geo_revenue: 0.04
+  crowding_risk: 0.0   # informational penalty, not additive weight
+  regime: 0.0          # applied as multiplier, not additive weight
 
 # P21.5: Alternative data signal settings
 alt_data:
@@ -132,3 +146,77 @@ openclaw:
   # Event scheduler settings
   event_scheduler_interval_seconds: 300
   earnings_alert_days_ahead: 3
+
+# Congressional trade tracker settings
+congress:
+  enabled: true
+  lookback_days: 90
+  cache_ttl_hours: 12
+
+# 13F Institutional flow settings
+institutional_flow:
+  enabled: true
+  snapshot_ttl_hours: 24
+
+# Estimate revision velocity settings
+estimate_revision:
+  velocity_window_days: 60
+  consecutive_threshold: 3
+
+# Short squeeze + CTB enhancement
+short_squeeze:
+  ctb_high_threshold: 50.0
+  ctb_moderate_threshold: 20.0
+  gamma_squeeze_threshold: -20.0
+
+# Options flow anomaly detector
+options_flow:
+  sweep_vol_oi_threshold: 3.0
+  min_volume: 100
+  iv_spike_multiplier: 1.5
+
+# Event-driven catalyst calendar
+catalyst_calendar:
+  enabled: true
+  days_ahead: 60
+
+# Dark pool / ATS signal
+dark_pool:
+  enabled: true
+  ats_spike_threshold: 1.5
+  cache_ttl_hours: 48
+
+# Market regime detector
+market_regime:
+  states: 5
+  lookback_days: 252
+  cache_ttl_hours: 1
+
+# Cross-asset leading indicators
+cross_asset:
+  enabled: true
+  cache_ttl_hours: 4
+
+# Geographic revenue overlay
+geo_revenue:
+  enabled: true
+
+# Supply chain risk
+supply_chain:
+  sole_source_penalty: 15
+  high_risk_region_penalty: 10
+
+# Buyback effectiveness
+buyback:
+  min_yield_pct: 1.0
+
+# Special situations
+special_situations:
+  enabled: true
+  cache_ttl_hours: 24
+
+# Factor crowding risk
+crowding:
+  enabled: true
+  high_similarity_threshold: 0.82
+  extreme_similarity_threshold: 0.92
