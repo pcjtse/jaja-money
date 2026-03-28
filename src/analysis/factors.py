@@ -751,6 +751,37 @@ def _factor_estimate_revisions(revisions: dict | None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# P21.5: Alternative Data Signal (Google Trends + Job Posting Velocity)
+# ---------------------------------------------------------------------------
+
+
+def _factor_alt_data(alt_data: dict | None) -> dict:
+    """Alternative data factor: Google Trends + job posting velocity.
+
+    Scores 0-100 based on search-interest acceleration and hiring velocity.
+    Returns neutral score (50) when data is unavailable.
+    """
+    weight = _get_weight("alt_data", 0.05)
+
+    if not alt_data or not alt_data.get("available"):
+        return dict(
+            name="Alt Data Signal",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Alternative data unavailable — scored as neutral",
+        )
+
+    score = int(alt_data.get("score", 50))
+    label = alt_data.get("label", "Neutral alt signal")
+    detail = alt_data.get("detail", "")
+
+    return dict(
+        name="Alt Data Signal", score=score, weight=weight, label=label, detail=detail
+    )
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -764,12 +795,13 @@ def compute_factors(
     sentiment_agg: dict | None,
     sector: str | None = None,
     revisions: dict | None = None,
+    alt_data: dict | None = None,
 ) -> list[dict]:
     """Compute factors and return them as a list of dicts.
 
     Each dict has keys: name, score (0–100), label, detail, weight.
     Now includes sector-relative valuation (P5.1), dividend yield (P5.7),
-    and estimate revision momentum (P5.2).
+    estimate revision momentum (P5.2), and alt data signal (P21.5).
     """
     _c = quote.get("c")
     price = float(_c) if (_c is not None and float(_c) > 0) else None
@@ -785,6 +817,7 @@ def compute_factors(
         _factor_range_position(financials, price),
         _factor_dividend_yield(financials),
         _factor_estimate_revisions(revisions),
+        _factor_alt_data(alt_data),
     ]
     log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
     return factors

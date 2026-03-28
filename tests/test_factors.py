@@ -235,7 +235,7 @@ def test_trend_strong_downtrend():
 
 def test_trend_weight():
     f = _factor_trend(None, None)
-    assert f["weight"] == pytest.approx(0.20)
+    assert f["weight"] == pytest.approx(0.15)
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +600,7 @@ def test_compute_factors_returns_10():
             "counts": {"positive": 7, "negative": 2, "neutral": 1},
         },
     )
-    assert len(result) == 10  # 8 original + dividend yield + estimate revisions
+    assert len(result) == 11  # 8 original + dividend yield + estimate revisions + alt data
 
 
 def test_compute_factors_keys():
@@ -631,7 +631,7 @@ def test_compute_factors_zero_price_handled():
         recommendations=[],
         sentiment_agg=None,
     )
-    assert len(result) == 10  # 8 original + dividend yield + estimate revisions
+    assert len(result) == 11  # 8 original + dividend yield + estimate revisions + alt data
 
 
 def test_compute_factors_all_none():

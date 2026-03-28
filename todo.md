@@ -959,10 +959,10 @@ Integrate at least one non-traditional, publicly accessible data source that lea
 | 20 | News Impact Scoring (Claude per-article) | [x] Done |
 | 20 | Signal Change Notifications | [x] Done |
 | 20 | Weekly Portfolio Performance Email Report | [x] Done |
-| 21 | ML-Trained Adaptive Factor Weights | [ ] Pending |
+| 21 | ML-Trained Adaptive Factor Weights | ✅ Done |
 | 21 | Enable Live Trade Execution via Alpaca | [ ] Pending |
-| 21 | Signal Validity Dashboard | [ ] Pending |
-| 21 | Cross-Sectional Ranking: Daily Long/Short List | [ ] Pending |
+| 21 | Signal Validity Dashboard | ✅ Done |
+| 21 | Cross-Sectional Ranking: Daily Long/Short List | ✅ Done |
 | 21 | Alternative Data Signal: Google Trends + Job Postings | [ ] Pending |
 
 ---

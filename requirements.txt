@@ -34,4 +34,6 @@ redis
 fastapi
 uvicorn[standard]
 httpx
+# P21.5: Alternative data signals (optional — gracefully skipped if absent)
+pytrends
 # OpenClaw integration: Alpaca broker (optional — set ALPACA_API_KEY / ALPACA_API_SECRET)

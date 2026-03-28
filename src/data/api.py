@@ -846,6 +846,32 @@ class FinnhubAPI:
         )
         return results
 
+    def get_alt_data_signals(self, symbol: str, company_name: str) -> dict:
+        """Return combined Google Trends + job posting velocity signal.
+
+        Results are cached for 6 hours.  Returns ``{"available": False}``
+        when either the optional libraries or API credentials are absent.
+        """
+        from src.data.alt_data import compute_alt_data_signals
+        from src.core.config import cfg
+
+        trends_w = float(cfg.get("alt_data", "trends_weight", default=0.5))
+        jobs_w = float(cfg.get("alt_data", "jobs_weight", default=0.5))
+
+        def _fetch():
+            return compute_alt_data_signals(
+                symbol=symbol,
+                company_name=company_name,
+                trends_weight=trends_w,
+                jobs_weight=jobs_w,
+            )
+
+        return self._cached(
+            f"alt_data:{symbol}",
+            _fetch,
+            ttl=int(cfg.get("alt_data", "cache_ttl_hours", default=6)) * 3600,
+        )
+
 
 def _timed_call(fn):
     """Call fn() and return (result, elapsed_seconds)."""
@@ -1010,6 +1036,32 @@ class MockFinnhubAPI:
         from src.data.mock_data import get_mock_dividends
 
         return get_mock_dividends(symbol)
+
+    def get_alt_data_signals(self, symbol: str, company_name: str) -> dict:
+        """Return synthetic alternative data signal for testing."""
+        return {
+            "available": True,
+            "score": 62,
+            "label": "Positive alt signal",
+            "detail": "Trends: Accelerating interest (68/100) | Jobs: Hiring growth (56/100)",
+            "trends": {
+                "available": True,
+                "values": [45, 48, 52, 55, 60, 63, 68],
+                "slope": 0.035,
+                "score": 68,
+                "label": "Accelerating interest",
+                "detail": "Google Trends: accelerating | Recent interest: 68/100 | 90-day slope: +0.035",
+            },
+            "jobs": {
+                "available": True,
+                "recent_count": 120,
+                "prior_count": 100,
+                "velocity_pct": 20.0,
+                "score": 56,
+                "label": "Hiring growth",
+                "detail": "Job postings: 120 (last 30d) vs 100 (prior 30d) | Velocity: +20.0%",
+            },
+        }
 
     def fetch_all_parallel(self, symbol: str) -> dict:
         """Mock parallel fetch — just calls each method sequentially."""
