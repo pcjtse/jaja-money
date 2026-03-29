@@ -125,11 +125,20 @@ flowchart LR
 - **Insider trading** — recent insider buy/sell activity with cluster detection
 - **Short interest** — short % of float, days-to-cover, and squeeze potential indicator
 - **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread with elevated-risk banner
-- **Options market data** — IV surface and hedge suggestions
+- **Options market data** — IV surface, sweep/flow classification, gamma exposure, and hedge suggestions
+- **Dark pool activity** — FINRA ATS weekly volume share with spike detection (>1.5× 4-week average)
+- **Congressional trades** — STOCK Act disclosure tracker with net buy/sell signal
+- **Institutional flow** — 13F-proxy QoQ delta showing entering and exiting institutions
+- **Catalyst calendar** — Aggregated FOMC dates, earnings, and ex-dividend events with alpha-weight flags
+- **Cross-asset signals** — Sector ETF momentum (HYG/IEF spread, XLF, XLE, etc.) with weighted composite
+- **Geographic revenue risk** — Region-weighted exposure score from SEC text with growth signal overlay
+- **Supply chain risk** — Sole-source concentration and high-risk region exposure parsed from 10-K filings
+- **Special situations** — M&A, spinoff, and restructuring deal tracker via EDGAR full-text search
+- **Market regime** — 5-state classifier (Risk-On Growth → Risk-Off Panic) with composite score multiplier
 - **Export** — CSV, HTML report, or PDF download
 
 ### Factor Score Engine
-Ten factors scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy),
+Twenty-three factors scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy),
 displayed as a gauge, radar chart, and progress-bar breakdown. Valuation is scored relative to the
 sector median rather than absolute thresholds. Weights are configurable in `config.yaml` and can be
 overridden by the optional ML adaptive weighting module.
@@ -146,8 +155,22 @@ overridden by the optional ML adaptive weighting module.
 | 52-Week Strength | 5% |
 | Dividend Yield | 5% |
 | Estimate Revisions | 8% |
+| Congressional Signal | 5% |
+| Institutional Flow | 6% |
+| Estimate Velocity | 8% |
+| Buyback Effectiveness | 4% |
+| Guidance Quality | 6% |
+| Options Flow | 5% |
+| Dark Pool Signal | 4% |
+| Supply Chain Risk | 4% |
+| Special Situation | 6% |
+| Cross-Asset Signal | 4% |
+| Geographic Revenue Risk | 4% |
+| Crowding Risk | 0% (penalty only) |
+| Market Regime | 0% (multiplier only) |
 
 > Weights are applied proportionally; factors without available data are excluded from the composite.
+> Crowding Risk applies a score penalty (0–15 pts) and Market Regime applies a composite multiplier (−12 to +8 pts).
 
 ### Risk Guardrails
 Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme),
