@@ -796,12 +796,27 @@ def compute_factors(
     sector: str | None = None,
     revisions: dict | None = None,
     alt_data: dict | None = None,
+    # Alpha feature data (all optional for backward compatibility)
+    congress_data: dict | None = None,
+    institutional_flow: dict | None = None,
+    estimate_velocity: dict | None = None,
+    buyback_score: dict | None = None,
+    guidance_quality: dict | None = None,
+    options_flow_data: dict | None = None,
+    dark_pool_data: dict | None = None,
+    supply_chain_score: dict | None = None,
+    special_situation_score: dict | None = None,
+    cross_asset_data: dict | None = None,
+    geo_revenue_data: dict | None = None,
+    crowding_data: dict | None = None,
+    regime_data: dict | None = None,
 ) -> list[dict]:
     """Compute factors and return them as a list of dicts.
 
     Each dict has keys: name, score (0–100), label, detail, weight.
-    Now includes sector-relative valuation (P5.1), dividend yield (P5.7),
-    estimate revision momentum (P5.2), and alt data signal (P21.5).
+    Includes all original factors plus 13 new alpha-feature factors.
+    New alpha parameters are all optional (default None) for backward
+    compatibility with existing callers.
     """
     _c = quote.get("c")
     price = float(_c) if (_c is not None and float(_c) > 0) else None
@@ -818,6 +833,19 @@ def compute_factors(
         _factor_dividend_yield(financials),
         _factor_estimate_revisions(revisions),
         _factor_alt_data(alt_data),
+        # Alpha feature factors
+        _factor_congress_signal(congress_data),
+        _factor_institutional_flow(institutional_flow),
+        _factor_estimate_velocity(estimate_velocity),
+        _factor_buyback(buyback_score),
+        _factor_guidance_quality(guidance_quality),
+        _factor_options_flow(options_flow_data),
+        _factor_dark_pool(dark_pool_data),
+        _factor_supply_chain_risk(supply_chain_score),
+        _factor_special_situation(special_situation_score),
+        _factor_cross_asset(cross_asset_data),
+        _factor_geo_revenue(geo_revenue_data),
+        _factor_regime(regime_data),
     ]
     log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
     return factors
@@ -1767,3 +1795,286 @@ def compute_seasonal_bias(month: int | None = None, day: int | None = None) -> d
         "active_event": active_event,
         "detail": detail,
     }
+
+
+# ---------------------------------------------------------------------------
+# Alpha Feature Factors (15 new signals)
+# ---------------------------------------------------------------------------
+
+
+def _factor_congress_signal(congress_data: dict | None) -> dict:
+    """Congressional STOCK Act trade signal (alpha factor)."""
+    weight = _get_weight("congress", 0.05)
+    if not congress_data or not congress_data.get("available"):
+        return dict(
+            name="Congress Signal",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="No congressional trading data",
+        )
+    score = int(congress_data.get("score", 50))
+    net_signal = congress_data.get("net_signal", "Mixed")
+    detail = congress_data.get("detail", "")
+    label_map = {
+        "Buying": "Congress net buying",
+        "Selling": "Congress net selling",
+        "No activity": "No congressional activity",
+        "Mixed": "Mixed congressional activity",
+    }
+    label = label_map.get(net_signal, net_signal)
+    return dict(name="Congress Signal", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_institutional_flow(flow_data: dict | None) -> dict:
+    """13F institutional holdings QoQ flow signal."""
+    weight = _get_weight("institutional_flow", 0.06)
+    if not flow_data or not flow_data.get("available"):
+        return dict(
+            name="Institutional Flow",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="13F flow data unavailable",
+        )
+    score = int(flow_data.get("score", 50))
+    entering = len(flow_data.get("entering", []))
+    exiting = len(flow_data.get("exiting", []))
+    net_change = flow_data.get("net_change_pct", 0)
+    if score >= 65:
+        label = f"Smart money entering (+{entering} institutions)"
+    elif score <= 35:
+        label = f"Smart money exiting ({exiting} exits)"
+    else:
+        label = "Stable institutional base"
+    detail = flow_data.get("detail", f"Net change: {net_change:+.2f}%")
+    return dict(name="Institutional Flow", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_estimate_velocity(velocity_data: dict | None) -> dict:
+    """Earnings estimate revision velocity signal."""
+    weight = _get_weight("estimate_velocity", 0.08)
+    if not velocity_data:
+        return dict(
+            name="Estimate Velocity",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Estimate velocity data unavailable",
+        )
+    score = int(velocity_data.get("velocity_score", 50))
+    up_streak = velocity_data.get("consecutive_up", 0)
+    down_streak = velocity_data.get("consecutive_down", 0)
+    if score >= 78:
+        label = f"Accelerating upward revisions ({up_streak} streak)"
+    elif score <= 25:
+        label = f"Decelerating — consecutive misses ({down_streak} streak)"
+    else:
+        label = "Stable estimate trend"
+    detail = velocity_data.get("detail", "")
+    return dict(name="Estimate Velocity", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_buyback(buyback_score_data: dict | None) -> dict:
+    """Buyback effectiveness signal."""
+    weight = _get_weight("buyback", 0.04)
+    if not buyback_score_data:
+        return dict(
+            name="Buyback Effectiveness",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Buyback data unavailable",
+        )
+    score = int(buyback_score_data.get("score", 50))
+    label = buyback_score_data.get("label", "")
+    detail = buyback_score_data.get("detail", "")
+    return dict(name="Buyback Effectiveness", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_guidance_quality(guidance_data: dict | None) -> dict:
+    """Earnings guidance quality scorecard signal."""
+    weight = _get_weight("guidance_quality", 0.06)
+    if not guidance_data:
+        return dict(
+            name="Guidance Quality",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Guidance quality data unavailable",
+        )
+    score = int(guidance_data.get("score", 50))
+    label = guidance_data.get("label", "")
+    detail = guidance_data.get("detail", "")
+    return dict(name="Guidance Quality", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_options_flow(options_flow_data: dict | None) -> dict:
+    """Options flow anomaly directional signal."""
+    weight = _get_weight("options_flow", 0.05)
+    if not options_flow_data:
+        return dict(
+            name="Options Flow",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Options flow data unavailable",
+        )
+    score = int(options_flow_data.get("score", 50))
+    label = options_flow_data.get("label", "Neutral")
+    detail = options_flow_data.get("detail", "")
+    return dict(name="Options Flow", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_dark_pool(dark_pool_data: dict | None) -> dict:
+    """Dark pool / ATS volume signal."""
+    weight = _get_weight("dark_pool", 0.04)
+    if not dark_pool_data or not dark_pool_data.get("available"):
+        return dict(
+            name="Dark Pool Signal",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="ATS volume data unavailable",
+        )
+    score = int(dark_pool_data.get("score", 50))
+    trend = dark_pool_data.get("trend", "flat")
+    spike = dark_pool_data.get("spike", False)
+    label_parts = [f"ATS trend: {trend}"]
+    if spike:
+        label_parts.append("volume spike")
+    label = " | ".join(label_parts)
+    detail = dark_pool_data.get("detail", "")
+    return dict(name="Dark Pool Signal", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_supply_chain_risk(supply_chain_score: dict | None) -> dict:
+    """Supply chain concentration and geographic risk signal."""
+    weight = _get_weight("supply_chain", 0.04)
+    if not supply_chain_score:
+        return dict(
+            name="Supply Chain Risk",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Supply chain data unavailable",
+        )
+    score = int(supply_chain_score.get("score", 50))
+    label = supply_chain_score.get("label", "")
+    detail = supply_chain_score.get("detail", "")
+    return dict(name="Supply Chain Risk", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_special_situation(situation_score: dict | None) -> dict:
+    """Special situation (M&A, spin-off) alpha signal."""
+    weight = _get_weight("special_situation", 0.06)
+    if not situation_score:
+        return dict(
+            name="Special Situation",
+            score=50,
+            weight=weight,
+            label="No special situation",
+            detail="No M&A or spin-off activity",
+        )
+    score = int(situation_score.get("score", 50))
+    label = situation_score.get("label", "")
+    detail = situation_score.get("detail", "")
+    return dict(name="Special Situation", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_cross_asset(cross_asset_data: dict | None) -> dict:
+    """Cross-asset macro leading indicator signal."""
+    weight = _get_weight("cross_asset", 0.04)
+    if not cross_asset_data or not cross_asset_data.get("available"):
+        return dict(
+            name="Cross-Asset Signal",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Cross-asset data unavailable",
+        )
+    score = int(cross_asset_data.get("score", 50))
+    detail = cross_asset_data.get("detail", "")
+    if score >= 70:
+        label = "Macro tailwinds for sector"
+    elif score >= 55:
+        label = "Mild macro support"
+    elif score >= 45:
+        label = "Neutral macro environment"
+    elif score >= 30:
+        label = "Mild macro headwinds"
+    else:
+        label = "Macro headwinds for sector"
+    return dict(name="Cross-Asset Signal", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_geo_revenue(geo_data: dict | None) -> dict:
+    """Geographic revenue macro overlay signal."""
+    weight = _get_weight("geo_revenue", 0.04)
+    if not geo_data or not geo_data.get("available"):
+        return dict(
+            name="Geo Revenue Macro",
+            score=50,
+            weight=weight,
+            label="No data",
+            detail="Geographic revenue data unavailable",
+        )
+    score = int(geo_data.get("score", 50))
+    top_regions = geo_data.get("top_regions", [])
+    risk = geo_data.get("weighted_risk", 0)
+    label = f"Top: {', '.join(top_regions[:2])}" if top_regions else "Global exposure"
+    detail = geo_data.get("detail", f"Geo risk: {risk:.2f}")
+    return dict(name="Geo Revenue Macro", score=score, weight=weight, label=label, detail=detail)
+
+
+def _factor_crowding_risk(crowding_data: dict | None, composite_score: int = 50) -> dict:
+    """Factor crowding risk — penalty factor for over-owned profiles."""
+    weight = _get_weight("crowding_risk", 0.0)  # informational; penalty applied separately
+    if not crowding_data:
+        return dict(
+            name="Crowding Risk",
+            score=50,
+            weight=weight,
+            label="Unknown",
+            detail="Insufficient history for crowding analysis",
+        )
+    penalty = int(crowding_data.get("penalty", 0))
+    risk_level = crowding_data.get("risk_level", "Low")
+    adjusted = max(0, composite_score - penalty)
+    label = f"Crowding: {risk_level} (penalty -{penalty} pts)"
+    detail = crowding_data.get("detail", "")
+    return dict(
+        name="Crowding Risk",
+        score=adjusted,
+        weight=weight,
+        label=label,
+        detail=detail,
+        crowding_penalty=penalty,
+    )
+
+
+def _factor_regime(regime_data: dict | None) -> dict:
+    """Market regime signal — returns multiplier info as a factor."""
+    weight = _get_weight("regime", 0.0)  # informational; applied via multiplier
+    if not regime_data:
+        return dict(
+            name="Market Regime",
+            score=50,
+            weight=weight,
+            label="Unknown",
+            detail="Regime data unavailable",
+        )
+    regime = regime_data.get("regime", "Sideways")
+    confidence = regime_data.get("confidence", 0.5)
+    multiplier = regime_data.get("multiplier", 0)
+    label = f"{regime} ({confidence:.0%} confidence)"
+    detail = regime_data.get("detail", "")
+    sign = "+" if multiplier >= 0 else ""
+    return dict(
+        name="Market Regime",
+        score=50,
+        weight=weight,
+        label=label,
+        detail=f"{detail} | Adjustment: {sign}{multiplier} pts",
+        regime_multiplier=multiplier,
+    )

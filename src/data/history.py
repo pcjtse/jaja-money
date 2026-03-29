@@ -105,6 +105,155 @@ def _ensure_paper_tables() -> None:
 _ensure_paper_tables()
 
 
+# ---------------------------------------------------------------------------
+# Alpha feature tables (congress, institutional flow, estimates, dark pool,
+# catalyst events, special situations, regime history)
+# ---------------------------------------------------------------------------
+
+
+def _ensure_alpha_tables() -> None:
+    """Create all alpha-feature SQLite tables if they don't exist."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS congress_trades (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol           TEXT NOT NULL,
+                politician       TEXT,
+                trade_date       TEXT,
+                transaction_type TEXT,
+                amount_range     TEXT,
+                party            TEXT,
+                chamber          TEXT,
+                fetched_at       INTEGER
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_congress_symbol "
+            "ON congress_trades (symbol, trade_date)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS institutional_snapshots (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol              TEXT NOT NULL,
+                snapshot_date       TEXT NOT NULL,
+                holder              TEXT NOT NULL,
+                shares              INTEGER,
+                pct_held            REAL,
+                fetched_at          INTEGER,
+                UNIQUE(symbol, snapshot_date, holder)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inst_symbol_date "
+            "ON institutional_snapshots (symbol, snapshot_date)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS estimate_history (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol              TEXT NOT NULL,
+                snapshot_date       TEXT NOT NULL,
+                forward_eps         REAL,
+                analyst_count       INTEGER,
+                revision_direction  TEXT,
+                fetched_at          INTEGER,
+                UNIQUE(symbol, snapshot_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_estimate_symbol "
+            "ON estimate_history (symbol, snapshot_date)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS dark_pool_history (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol       TEXT NOT NULL,
+                week_date    TEXT NOT NULL,
+                ats_volume   INTEGER,
+                total_volume INTEGER,
+                ats_pct      REAL,
+                fetched_at   INTEGER,
+                UNIQUE(symbol, week_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dp_symbol "
+            "ON dark_pool_history (symbol, week_date)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS catalyst_events (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol       TEXT,
+                event_type   TEXT NOT NULL,
+                event_date   TEXT NOT NULL,
+                description  TEXT,
+                alpha_weight REAL DEFAULT 1.0,
+                fetched_at   INTEGER,
+                UNIQUE(symbol, event_type, event_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_catalyst_symbol_date "
+            "ON catalyst_events (symbol, event_date)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS special_situations (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol         TEXT NOT NULL,
+                situation_type TEXT NOT NULL,
+                deal_date      TEXT,
+                description    TEXT,
+                form_type      TEXT,
+                accession      TEXT,
+                fetched_at     INTEGER,
+                UNIQUE(symbol, situation_type, deal_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_situations_symbol "
+            "ON special_situations (symbol)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS regime_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL UNIQUE,
+                regime      TEXT NOT NULL,
+                confidence  REAL,
+                vix         REAL,
+                spy_vs_200d REAL,
+                hyg_ief     REAL,
+                fetched_at  INTEGER
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS supply_chain_nodes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                node_name   TEXT NOT NULL,
+                node_type   TEXT NOT NULL,
+                region      TEXT,
+                fetched_at  INTEGER,
+                UNIQUE(symbol, node_name, node_type)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sc_nodes_symbol "
+            "ON supply_chain_nodes (symbol)"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS supply_chain_edges (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_symbol TEXT NOT NULL,
+                to_node     TEXT NOT NULL,
+                edge_type   TEXT NOT NULL,
+                weight      REAL DEFAULT 1.0,
+                fetched_at  INTEGER
+            )
+        """)
+
+
+_ensure_alpha_tables()
+
+
 def save_analysis(
     symbol: str,
     price: float | None,
