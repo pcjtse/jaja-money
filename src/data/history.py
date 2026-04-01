@@ -981,3 +981,35 @@ def get_all_analysis_signals() -> list[dict]:
     except Exception as exc:
         log.warning("Failed to load analysis signals: %s", exc)
         return []
+
+
+# ---------------------------------------------------------------------------
+# Per-factor IC attribution — joined dataset for factor_attribution.py
+# ---------------------------------------------------------------------------
+
+
+def get_attributed_analysis_rows() -> list[dict]:
+    """Return analysis_history rows INNER JOINed with signal_returns.
+
+    Intended use: factor research, T+21/T+63/T+126 trading-day horizons only.
+    Do NOT use for paper trade performance tracking (different horizons, different
+    data store — see TODOS.md TODO-004).
+
+    Filters: factors_json must be non-null and non-empty. JOIN requires a
+    matching signal_returns row (both symbol and date must match).
+    """
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """SELECT ah.symbol, ah.date, ah.factors_json,
+                          sr.return_21d, sr.return_63d, sr.return_126d
+                   FROM analysis_history ah
+                   INNER JOIN signal_returns sr
+                     ON ah.symbol = sr.symbol AND ah.date = sr.signal_date
+                   WHERE ah.factors_json IS NOT NULL AND ah.factors_json != '[]'
+                   ORDER BY ah.date ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("Failed to load attributed analysis rows: %s", exc)
+        return []
