@@ -101,6 +101,68 @@ def test_decay_table_win_rate(tmp_path, monkeypatch):
     assert trend_row["win_t30"] == pytest.approx(0.8, abs=1e-9)
 
 
+def test_decay_table_wilson_ci_present(tmp_path, monkeypatch):
+    """Sufficient factor rows have Wilson CI columns populated."""
+    import src.analysis.ledger as L
+
+    monkeypatch.setattr(L, "_LEDGER_PATH", tmp_path / "ledger.json")
+    monkeypatch.setattr(L, "_TMP_PATH", tmp_path / "ledger.json.tmp")
+
+    from src.analysis.ledger import add_signal, close_position
+
+    for i in range(5):
+        entry = 100.0
+        sig = add_signal(
+            ticker=f"W{i}",
+            composite_score=80.0,
+            factor_scores={"Momentum (RSI)": 88.0},
+            price=entry,
+            spy_price=500.0,
+        )
+        close_position(sig, 110.0, 505.0, 102.0, 105.0, 110.0)
+
+    from src.analysis.signal_decay import get_signal_decay_table
+
+    df = get_signal_decay_table(min_n=5)
+    row = df[df["factor"] == "Momentum (RSI)"].iloc[0]
+
+    assert row["ci_lo_t30"] is not None
+    assert row["ci_hi_t30"] is not None
+    # CI must be a valid interval: lo < win_rate < hi (or at boundary for extreme rates)
+    assert row["ci_lo_t30"] <= row["win_t30"]
+    assert row["ci_hi_t30"] >= row["win_t30"]
+
+
+def test_decay_table_avg_pnl_present(tmp_path, monkeypatch):
+    """avg_pnl columns are populated for sufficient factor groups."""
+    import src.analysis.ledger as L
+
+    monkeypatch.setattr(L, "_LEDGER_PATH", tmp_path / "ledger.json")
+    monkeypatch.setattr(L, "_TMP_PATH", tmp_path / "ledger.json.tmp")
+
+    from src.analysis.ledger import add_signal, close_position
+
+    # 5 positions, each gaining 10% at T+30
+    for i in range(5):
+        sig = add_signal(
+            ticker=f"P{i}",
+            composite_score=77.0,
+            factor_scores={"News Sentiment": 85.0},
+            price=100.0,
+            spy_price=500.0,
+        )
+        close_position(sig, 110.0, 505.0, 102.0, 105.0, 110.0)
+
+    from src.analysis.signal_decay import get_signal_decay_table
+
+    df = get_signal_decay_table(min_n=5)
+    row = df[df["factor"] == "News Sentiment"].iloc[0]
+
+    assert row["avg_pnl_t30"] is not None
+    # T+30 price is 110, entry 100 → +10%
+    assert row["avg_pnl_t30"] == pytest.approx(10.0, abs=0.01)
+
+
 def test_decay_table_insufficient_below_min_n(tmp_path, monkeypatch):
     """Factor with n < min_n should have win_t5/t10/t30 = None."""
     import src.analysis.ledger as L
