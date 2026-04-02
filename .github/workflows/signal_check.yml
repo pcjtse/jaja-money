@@ -1,0 +1,38 @@
+name: Daily Signal Check
+
+on:
+  schedule:
+    - cron: '0 21 * * 1-5'   # 21:00 UTC weekdays (after US market close)
+  workflow_dispatch:           # manual trigger for testing
+
+jobs:
+  check-signals:
+    # Loop guard: don't re-run on auto-commits from this workflow
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ledger check
+        run: python -m src.analysis.ledger_check
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+
+      - name: Commit ledger changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: signal check [skip ci]"
+          file_pattern: "data/ledger.json data/price_cache.json"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"

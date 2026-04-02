@@ -339,3 +339,93 @@ class DataProvider:
             except Exception:
                 pass
         return _yf_peers(symbol)
+
+
+# ---------------------------------------------------------------------------
+# Historical single-date price lookup (ledger T+5/T+10/T+30 fills)
+# ---------------------------------------------------------------------------
+
+_PRICE_CACHE_PATH = "data/price_cache.json"
+
+
+def _load_price_cache() -> dict:
+    import json
+    from pathlib import Path
+
+    p = Path(_PRICE_CACHE_PATH)
+    if p.exists():
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_price_cache(cache: dict) -> None:
+    import json
+    from pathlib import Path
+
+    p = Path(_PRICE_CACHE_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cache, indent=2))
+    tmp.rename(p)
+
+
+def get_price_on_date(ticker: str, date: str) -> float | None:
+    """Return closing price for *ticker* on *date* (YYYY-MM-DD).
+
+    Uses Finnhub /stock/candle (1-day resolution). Results are cached to
+    data/price_cache.json so repeated calls for the same ticker/date are free.
+
+    Returns None if the Finnhub lookup fails or returns no data — callers
+    must not block on this function (ledger closes proceed even if None).
+    """
+    from src.data.api import get_api
+
+    cache_key = f"{ticker}:{date}"
+    cache = _load_price_cache()
+    if cache_key in cache:
+        return cache[cache_key]
+
+    try:
+        import datetime as _dt
+
+        # Parse target date and compute a narrow 1-day window
+        dt = _dt.date.fromisoformat(date)
+        # Extend by one day on each side to handle weekends/holidays
+        from_ts = int(
+            _dt.datetime(dt.year, dt.month, dt.day, tzinfo=_dt.timezone.utc).timestamp()
+        ) - 86400
+        to_ts = from_ts + 3 * 86400
+
+        api = get_api()
+        data = api.client.stock_candles(ticker, "D", from_ts, to_ts)
+        if not data or data.get("s") != "ok":
+            cache[cache_key] = None
+            _save_price_cache(cache)
+            return None
+
+        # Match the closest trading day on or after the target date
+        timestamps = data.get("t", [])
+        closes = data.get("c", [])
+        target_ts = int(
+            _dt.datetime(dt.year, dt.month, dt.day, tzinfo=_dt.timezone.utc).timestamp()
+        )
+        best_price: float | None = None
+        best_diff = float("inf")
+        for ts, c in zip(timestamps, closes):
+            diff = abs(ts - target_ts)
+            if diff < best_diff:
+                best_diff = diff
+                best_price = float(c)
+
+        cache[cache_key] = best_price
+        _save_price_cache(cache)
+        return best_price
+
+    except Exception as exc:
+        log.warning("get_price_on_date(%s, %s) failed: %s", ticker, date, exc)
+        cache[cache_key] = None
+        _save_price_cache(cache)
+        return None

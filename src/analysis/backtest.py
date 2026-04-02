@@ -536,3 +536,182 @@ def run_parameter_sweep(
         "best_params": best_params,
         "boundary_warning": boundary_warning,
     }
+
+
+# ---------------------------------------------------------------------------
+# Quintile universe analysis (P_LEDGER Phase 4)
+# ---------------------------------------------------------------------------
+
+# Top 50 S&P 500 tickers by approximate market cap (as of early 2026).
+# NOTE: Survivorship bias applies — these are current constituents only.
+# Stocks that were removed from the S&P 500 before the analysis window are
+# not included, which overstates historical performance. All charts must
+# display the survivorship bias disclaimer.
+SP500_TOP50 = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "BRK.B",
+    "JPM", "LLY", "V", "UNH", "XOM", "MA", "JNJ", "PG", "COST", "HD", "ORCL",
+    "BAC", "ABBV", "WMT", "KO", "MRK", "CVX", "NFLX", "CRM", "AMD", "PEP",
+    "TMO", "ACN", "LIN", "MCD", "ABT", "CSCO", "GE", "NOW", "DHR", "IBM",
+    "TXN", "INTU", "AMGN", "CAT", "VZ", "MS", "GS", "ISRG", "RTX", "BKNG",
+]
+
+_BACKTEST_CACHE_PATH = "data/backtest_cache.json"
+_BACKTEST_CACHE_TTL = 7 * 24 * 3600  # 7 days
+
+
+def _load_backtest_cache() -> dict:
+    import json
+    import time as _time
+    from pathlib import Path
+
+    p = Path(_BACKTEST_CACHE_PATH)
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text())
+        # Evict stale entries
+        now = _time.time()
+        fresh = {k: v for k, v in data.items() if now - v.get("_ts", 0) < _BACKTEST_CACHE_TTL}
+        return fresh
+    except Exception:
+        return {}
+
+
+def _save_backtest_cache(cache: dict) -> None:
+    import json
+    from pathlib import Path
+
+    p = Path(_BACKTEST_CACHE_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cache))
+    tmp.rename(p)
+
+
+def _fetch_close_series(ticker: str) -> pd.Series | None:
+    """Fetch 2-year daily close prices for *ticker*, with 7-day disk cache."""
+    import time as _time
+
+    cache = _load_backtest_cache()
+    if ticker in cache:
+        closes = cache[ticker].get("closes")
+        if closes:
+            return pd.Series(closes, dtype=float)
+
+    try:
+        from src.data.api import get_api
+
+        api = get_api()
+        data = api.get_daily(ticker, years=2)
+        if not data or data.get("s") != "ok":
+            return None
+        closes = data.get("c", [])
+        if not closes:
+            return None
+
+        cache[ticker] = {"closes": closes, "_ts": _time.time()}
+        _save_backtest_cache(cache)
+        return pd.Series(closes, dtype=float)
+    except Exception as exc:
+        log.warning("Failed to fetch close series for %s: %s", ticker, exc)
+        return None
+
+
+def run_quintile_backtest(
+    universe: list[str] | None = None,
+    forward_days: int = 30,
+) -> dict:
+    """Compute quintile signal scores and forward returns for the universe.
+
+    Scores each ticker using the simplified price-based signal (_compute_signal),
+    groups into Q1 (top 20%) and Q5 (bottom 20%), and measures average
+    forward return over *forward_days* trading days.
+
+    Parameters
+    ----------
+    universe : list of tickers (defaults to SP500_TOP50)
+    forward_days : trading-day forward return window (default 30)
+
+    Returns
+    -------
+    dict with keys:
+        quintile_df  — DataFrame: ticker | score | fwd_return | quintile
+        q1_avg       — float: average forward return for Q1
+        q5_avg       — float: average forward return for Q5
+        spy_avg      — float: average forward return for SPY
+        n_tickers    — int: number of tickers with valid data
+        survivorship_bias_disclaimer — str
+    """
+    if universe is None:
+        universe = SP500_TOP50
+
+    records = []
+    for ticker in universe:
+        close = _fetch_close_series(ticker)
+        if close is None or len(close) < 60:
+            continue
+
+        # Score at the midpoint of the series (avoids look-ahead into forward window)
+        midpoint = len(close) - forward_days - 1
+        if midpoint < 35:
+            continue
+
+        score = _compute_signal(close, midpoint)
+
+        # Forward return: midpoint → midpoint + forward_days
+        entry_price = float(close.iloc[midpoint])
+        exit_price = float(close.iloc[midpoint + forward_days])
+        if entry_price <= 0:
+            continue
+        fwd_return = (exit_price - entry_price) / entry_price * 100
+
+        records.append({"ticker": ticker, "score": score, "fwd_return": fwd_return})
+
+    if not records:
+        return {
+            "quintile_df": pd.DataFrame(),
+            "q1_avg": None,
+            "q5_avg": None,
+            "spy_avg": None,
+            "n_tickers": 0,
+            "survivorship_bias_disclaimer": _SURVIVORSHIP_DISCLAIMER,
+        }
+
+    df = pd.DataFrame(records).sort_values("score")
+    n = len(df)
+    q_size = max(1, n // 5)
+
+    df["quintile"] = "Q2-Q4"
+    df.iloc[:q_size, df.columns.get_loc("quintile")] = "Q5 (lowest)"
+    df.iloc[-q_size:, df.columns.get_loc("quintile")] = "Q1 (highest)"
+
+    q1 = df[df["quintile"] == "Q1 (highest)"]["fwd_return"]
+    q5 = df[df["quintile"] == "Q5 (lowest)"]["fwd_return"]
+
+    # SPY benchmark over same window
+    spy_avg = None
+    spy_close = _fetch_close_series("SPY")
+    if spy_close is not None and len(spy_close) >= 60:
+        midpoint = len(spy_close) - forward_days - 1
+        if midpoint >= 0:
+            entry = float(spy_close.iloc[midpoint])
+            exit_ = float(spy_close.iloc[midpoint + forward_days])
+            if entry > 0:
+                spy_avg = (exit_ - entry) / entry * 100
+
+    return {
+        "quintile_df": df.reset_index(drop=True),
+        "q1_avg": float(q1.mean()) if not q1.empty else None,
+        "q5_avg": float(q5.mean()) if not q5.empty else None,
+        "spy_avg": spy_avg,
+        "n_tickers": n,
+        "survivorship_bias_disclaimer": _SURVIVORSHIP_DISCLAIMER,
+    }
+
+
+_SURVIVORSHIP_DISCLAIMER = (
+    "Technical Factor Quintile Analysis — SMA, RSI, MACD only (3 of 23 factors). "
+    "Universe: top 50 S&P 500 tickers by market cap (current constituents). "
+    "Survivorship bias applies: stocks removed from the S&P 500 before the "
+    "analysis window are excluded, which overstates historical performance."
+)

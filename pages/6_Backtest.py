@@ -417,3 +417,89 @@ if st.button("Run Backtest", type="primary"):
                 st.error(f"Analysis failed: {e}")
 else:
     st.info("Configure parameters above and click **Run Backtest** to start.")
+
+# ---------------------------------------------------------------------------
+# Quintile Universe Analysis (P_LEDGER Phase 4)
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.subheader("Technical Factor Quintile Analysis")
+st.caption(
+    "SMA, RSI, MACD only (3 of 23 factors). Universe: top 50 S&P 500 tickers by market cap "
+    "(current constituents). **Survivorship bias applies** — stocks removed from the S&P 500 "
+    "before the analysis window are excluded, which overstates historical performance."
+)
+
+run_quintile = st.button("Run Quintile Analysis", key="run_quintile")
+
+if run_quintile:
+    from src.analysis.backtest import run_quintile_backtest
+
+    with st.spinner("Fetching price history for 50 tickers and SPY..."):
+        try:
+            result_q = run_quintile_backtest()
+        except Exception as exc:
+            st.error(f"Quintile analysis failed: {exc}")
+            result_q = None
+
+    if result_q and not result_q["quintile_df"].empty:
+        import plotly.graph_objects as go
+
+        q1_avg = result_q["q1_avg"]
+        q5_avg = result_q["q5_avg"]
+        spy_avg = result_q["spy_avg"]
+        n = result_q["n_tickers"]
+
+        col_a, col_b, col_c, col_d = st.columns(4)
+        col_a.metric("Tickers scored", n)
+        col_b.metric("Q1 avg return", f"{q1_avg:+.2f}%" if q1_avg is not None else "—")
+        col_c.metric("Q5 avg return", f"{q5_avg:+.2f}%" if q5_avg is not None else "—")
+        col_d.metric("SPY return", f"{spy_avg:+.2f}%" if spy_avg is not None else "—")
+
+        # Bar chart: Q1 vs Q5 vs SPY
+        categories = ["Q1 (top 20%)", "Q5 (bottom 20%)", "SPY"]
+        values = [q1_avg or 0, q5_avg or 0, spy_avg or 0]
+        colors = ["#2da44e" if v > 0 else "#e05252" for v in values]
+        colors[2] = "#8B949E"  # SPY always gray
+
+        fig_q = go.Figure(
+            go.Bar(
+                x=categories,
+                y=values,
+                marker_color=colors,
+                text=[f"{v:+.2f}%" for v in values],
+                textposition="auto",
+            )
+        )
+        fig_q.add_hline(y=0, line_dash="dash", line_color="#484F58")
+        fig_q.update_layout(
+            height=300,
+            yaxis_title="30-day forward return %",
+            margin=dict(t=10, b=10),
+            plot_bgcolor="#0D1117",
+            paper_bgcolor="#0D1117",
+            font=dict(color="#E6EDF3"),
+        )
+        st.plotly_chart(fig_q, use_container_width=True)
+
+        # Detailed table
+        with st.expander("Show scored tickers"):
+            df_q = result_q["quintile_df"].sort_values("score", ascending=False)
+            st.dataframe(
+                df_q[["ticker", "score", "fwd_return", "quintile"]].rename(
+                    columns={
+                        "ticker": "Ticker",
+                        "score": "Signal Score",
+                        "fwd_return": "30d Return %",
+                        "quintile": "Quintile",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.caption(f"⚠️ {result_q['survivorship_bias_disclaimer']}")
+    elif result_q:
+        st.warning("Not enough tickers returned valid price data to run quintile analysis.")
+else:
+    st.info("Click **Run Quintile Analysis** to score the top 50 S&P 500 tickers.")
