@@ -217,7 +217,7 @@ def _factor_valuation(financials: dict | None) -> dict:
             name="Valuation (P/E)",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="P/E ratio unavailable",
         )
     pe = float(pe)
@@ -258,7 +258,7 @@ def _factor_trend(close: pd.Series | None, price: float | None) -> dict:
             name="Trend (SMA)",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Price data unavailable",
         )
 
@@ -314,7 +314,7 @@ def _factor_rsi(close: pd.Series | None) -> dict:
             name="Momentum (RSI)",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Price data unavailable",
         )
 
@@ -362,7 +362,7 @@ def _factor_macd(close: pd.Series | None) -> dict:
             name="MACD Signal",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Price data unavailable",
         )
 
@@ -403,7 +403,7 @@ def _factor_sentiment(sentiment_agg: dict | None) -> dict:
             name="News Sentiment",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Sentiment data unavailable",
         )
 
@@ -435,7 +435,7 @@ def _factor_earnings(earnings: list) -> dict:
             name="Earnings Quality",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="No EPS surprise data",
         )
 
@@ -471,7 +471,7 @@ def _factor_analyst(recommendations: list) -> dict:
             name="Analyst Consensus",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="No analyst recommendations",
         )
 
@@ -527,7 +527,7 @@ def _factor_range_position(financials: dict | None, price: float | None) -> dict
             name="52-Wk Strength",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="52-week range unavailable",
         )
 
@@ -618,7 +618,7 @@ def _factor_valuation_sector_adjusted(
             name="Valuation (P/E)",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="P/E ratio unavailable",
         )
     pe = float(pe)
@@ -675,7 +675,7 @@ def _factor_dividend_yield(financials: dict | None) -> dict:
             name="Dividend Yield",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Dividend data unavailable",
         )
 
@@ -727,7 +727,7 @@ def _factor_estimate_revisions(revisions: dict | None) -> dict:
             name="Estimate Revisions",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Estimate revision data unavailable",
         )
 
@@ -773,7 +773,7 @@ def _factor_alt_data(alt_data: dict | None) -> dict:
             name="Alt Data Signal",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Alternative data unavailable — scored as neutral",
         )
 
@@ -1303,7 +1303,7 @@ def _factor_graham_number(financials: dict | None, price: float | None) -> dict:
             name="Graham Number",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="EPS or BVPS unavailable",
             graham_number=None,
             margin_of_safety=None,
@@ -1459,7 +1459,7 @@ def compute_piotroski_fscore(financials: dict | None) -> dict:
 
     # Scale label
     if available_count == 0:
-        quality_label = "No data"
+        quality_label = FACTOR_ABSENT_LABEL
     elif total_score >= 7:
         quality_label = "Strong"
     elif total_score >= 5:
@@ -1501,7 +1501,7 @@ def _factor_piotroski(financials: dict | None) -> dict:
             name="Piotroski F-Score",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Fundamental data unavailable",
             fscore=None,
         )
@@ -1815,7 +1815,7 @@ def _factor_congress_signal(congress_data: dict | None) -> dict:
             name="Congress Signal",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="No congressional trading data",
         )
     score = int(congress_data.get("score", 50))
@@ -1841,7 +1841,7 @@ def _factor_institutional_flow(flow_data: dict | None) -> dict:
             name="Institutional Flow",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="13F flow data unavailable",
         )
     score = int(flow_data.get("score", 50))
@@ -1872,7 +1872,7 @@ def _factor_estimate_velocity(velocity_data: dict | None) -> dict:
             name="Estimate Velocity",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Estimate velocity data unavailable",
         )
     score = int(velocity_data.get("velocity_score", 50))
@@ -1898,7 +1898,7 @@ def _factor_buyback(buyback_score_data: dict | None) -> dict:
             name="Buyback Effectiveness",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Buyback data unavailable",
         )
     score = int(buyback_score_data.get("score", 50))
@@ -1921,7 +1921,7 @@ def _factor_guidance_quality(guidance_data: dict | None) -> dict:
             name="Guidance Quality",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Guidance quality data unavailable",
         )
     score = int(guidance_data.get("score", 50))
@@ -1940,7 +1940,7 @@ def _factor_options_flow(options_flow_data: dict | None) -> dict:
             name="Options Flow",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Options flow data unavailable",
         )
     score = int(options_flow_data.get("score", 50))
@@ -1959,7 +1959,7 @@ def _factor_dark_pool(dark_pool_data: dict | None) -> dict:
             name="Dark Pool Signal",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="ATS volume data unavailable",
         )
     score = int(dark_pool_data.get("score", 50))
@@ -1983,7 +1983,7 @@ def _factor_supply_chain_risk(supply_chain_score: dict | None) -> dict:
             name="Supply Chain Risk",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Supply chain data unavailable",
         )
     score = int(supply_chain_score.get("score", 50))
@@ -2021,7 +2021,7 @@ def _factor_cross_asset(cross_asset_data: dict | None) -> dict:
             name="Cross-Asset Signal",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Cross-asset data unavailable",
         )
     score = int(cross_asset_data.get("score", 50))
@@ -2053,7 +2053,7 @@ def _factor_geo_revenue(geo_data: dict | None) -> dict:
             name="Geo Revenue Macro",
             score=50,
             weight=weight,
-            label="No data",
+            label=FACTOR_ABSENT_LABEL,
             detail="Geographic revenue data unavailable",
         )
     score = int(geo_data.get("score", 50))
