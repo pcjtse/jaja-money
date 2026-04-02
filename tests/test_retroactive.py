@@ -253,4 +253,4 @@ def test_source_field_distinguishes_retroactive(patched_ledger, patched_history,
 
     sources = {s["ticker"]: s.get("source") for s in signals}
     assert sources["META"] == "retroactive"
-    assert sources["AAPL"] is None  # live signals have no source field
+    assert sources["AAPL"] == "forward"  # live signals have source="forward"

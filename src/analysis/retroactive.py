@@ -38,8 +38,6 @@ def seed_from_history(buy_threshold: int | None = None, dry_run: bool = False) -
         add_signal,
         close_position,
         get_all_signals,
-        _load,
-        _save,
     )
 
     if buy_threshold is None:
@@ -58,23 +56,15 @@ def seed_from_history(buy_threshold: int | None = None, dry_run: bool = False) -
         if factor_score < buy_threshold:
             continue
 
-        # Duplicate guard: check if ticker already has any entry for this date
-        existing = get_all_signals()
-        already_exists = any(
-            s["ticker"] == symbol and s["fired_at"][:10] == signal_date
-            for s in existing
-        )
-        if already_exists:
-            skipped += 1
-            log.debug("Skipping %s %s — already in ledger", symbol, signal_date)
-            continue
-
         if dry_run:
             seeded += 1
             continue
 
         # Fetch SPY price on that date
         spy_price = get_price_on_date("SPY", signal_date) or 0.0
+
+        # Snapshot existing signal IDs to detect idempotency after add_signal()
+        existing_ids = {s["signal_id"] for s in get_all_signals()}
 
         try:
             signal_id = add_signal(
@@ -83,19 +73,18 @@ def seed_from_history(buy_threshold: int | None = None, dry_run: bool = False) -
                 factor_scores={},
                 price=float(price),
                 spy_price=float(spy_price),
+                source="retroactive",
             )
         except ValueError as exc:
             log.info("Skipping %s %s: %s", symbol, signal_date, exc)
             skipped += 1
             continue
 
-        # Tag the entry as retroactive
-        signals = _load()
-        for entry in signals:
-            if entry["signal_id"] == signal_id:
-                entry["source"] = "retroactive"
-                break
-        _save(signals)
+        if signal_id in existing_ids:
+            # add_signal() idempotency guard fired — entry already existed
+            skipped += 1
+            log.debug("Skipping %s %s — already in ledger", symbol, signal_date)
+            continue
 
         # Compute T+5/T+10/T+30 prices
         try:

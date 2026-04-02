@@ -64,14 +64,35 @@ def add_signal(
     direction: str = "long",
     is_baseline: bool = False,
     regime: str = "flat",
+    source: str = "forward",
 ) -> str:
     """Append a new open signal to the ledger. Returns the new signal_id.
 
-    Raises ValueError if ticker already has an open position (duplicate guard).
+    source: "forward" (live cron) | "retroactive" (history.db replay) | "baseline" (control co-fire)
+
+    Idempotency guard: if (ticker, fired_at_date, source) already exists today,
+    returns the existing signal_id silently — safe for cron retries.
+
+    Raises ValueError if ticker already has an open position from a prior day.
     """
     signals = _load()
+    today = datetime.now(timezone.utc).date().isoformat()
 
-    # Duplicate guard — one open position per ticker
+    # Idempotency guard: (ticker, date, source) — cron retry safety
+    for s in signals:
+        if (
+            s["ticker"] == ticker
+            and s.get("source", "forward") == source
+            and s["fired_at"][:10] == today
+        ):
+            log.debug(
+                "Idempotency guard: %s/%s already exists today — returning existing ID",
+                ticker,
+                source,
+            )
+            return s["signal_id"]
+
+    # Open-position guard — prevent overlapping positions from different days
     for s in signals:
         if s["ticker"] == ticker and s["status"] == "open":
             raise ValueError(
@@ -84,6 +105,7 @@ def add_signal(
         "signal_id": signal_id,
         "ticker": ticker,
         "fired_at": datetime.now(timezone.utc).isoformat(),
+        "source": source,
         "composite_score": float(composite_score),
         "factor_scores": {k: float(v) for k, v in factor_scores.items()},
         "price_at_signal": float(price),
@@ -96,6 +118,7 @@ def add_signal(
         "exit_at": None,
         "pnl_pct": None,
         "spy_pnl_pct": None,
+        "spy_price_t30": None,
         "price_t5": None,
         "price_t10": None,
         "price_t30": None,
@@ -115,11 +138,16 @@ def close_position(
     price_t5: float | None,
     price_t10: float | None,
     price_t30: float | None,
+    spy_price_t30: float | None = None,
 ) -> None:
     """Close an open position and record exit prices and P&L.
 
-    price_t5/t10/t30 may be None if the Finnhub lookup failed — that's OK.
+    price_t5/t10/t30 may be None if the price lookup failed — that's OK.
     Never block a close on API failure.
+
+    spy_price_t30: SPY price at T+30 calendar days from signal date.
+    If provided, spy_pnl_pct is computed as (spy_price_t30 - spy_entry_price) / spy_entry_price.
+    Otherwise falls back to spy_exit_price for backward compatibility.
 
     Raises ValueError if signal_id is not found or is already closed.
     """
@@ -137,8 +165,11 @@ def close_position(
                 if entry_price > 0
                 else None
             )
+            # Use spy_price_t30 for the apples-to-apples 30-day SPY comparison;
+            # fall back to spy_exit_price (current price) when not available.
+            spy_ref = spy_price_t30 if spy_price_t30 is not None else spy_exit_price
             spy_pnl_pct = (
-                ((float(spy_exit_price) - spy_entry) / spy_entry * 100)
+                ((float(spy_ref) - spy_entry) / spy_entry * 100)
                 if spy_entry > 0
                 else None
             )
@@ -150,6 +181,7 @@ def close_position(
             s["spy_pnl_pct"] = (
                 round(spy_pnl_pct, 4) if spy_pnl_pct is not None else None
             )
+            s["spy_price_t30"] = float(spy_price_t30) if spy_price_t30 is not None else None
             s["price_t5"] = float(price_t5) if price_t5 is not None else None
             s["price_t10"] = float(price_t10) if price_t10 is not None else None
             s["price_t30"] = float(price_t30) if price_t30 is not None else None
