@@ -61,19 +61,12 @@ def _parse_factors_json(factors_json: str) -> dict[str, float]:
     """Extract {factor_key: score} from a stored factors_json blob.
 
     Each element is a dict with at least 'name' and 'score' keys.
-    We map the displayed name back to a canonical key.
+    We map the displayed name back to a canonical key using CORE_FACTOR_NAMES
+    from factor_attribution.py so the mapping stays in sync.
     """
-    name_to_key = {
-        "Valuation (P/E)": "valuation",
-        "Sector-Adjusted Valuation": "valuation",
-        "Price Trend": "trend",
-        "RSI": "rsi",
-        "MACD": "macd",
-        "Sentiment": "sentiment",
-        "Earnings Surprise": "earnings",
-        "Analyst Recommendations": "analyst",
-        "52-Week Range": "range",
-    }
+    from src.analysis.factor_attribution import CORE_FACTOR_NAMES
+
+    name_to_key = CORE_FACTOR_NAMES  # {display_name: col_key}
     scores: dict[str, float] = {}
     try:
         items = (
@@ -86,6 +79,12 @@ def _parse_factors_json(factors_json: str) -> dict[str, float]:
                 scores[key] = float(item["score"])
     except Exception:
         pass
+    if len(scores) < 4:
+        log.debug(
+            "_parse_factors_json: only %d factor names matched (expected >= 4); "
+            "check display names in factors_json against CORE_FACTOR_NAMES",
+            len(scores),
+        )
     return scores
 
 
@@ -119,12 +118,13 @@ def build_training_dataset(
 
         factor_scores = _parse_factors_json(snap.get("factors_json", "[]"))
         # Only include rows where we have at least the core factors
-        if len(factor_scores) < 4:
+        if len(factor_scores) < 6:
             continue
 
         row = {"date": date, "target": int(fwd_price > price)}
         for key in FACTOR_KEYS:
-            row[key] = factor_scores.get(key, 50.0)  # fill missing with neutral
+            val = factor_scores.get(key)
+            row[key] = float(val) if val is not None else float("nan")
         rows.append(row)
     return rows
 
@@ -228,6 +228,7 @@ def walk_forward_train(
 
     try:
         import numpy as np
+        import pandas as pd
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import roc_auc_score
         from sklearn.preprocessing import StandardScaler
@@ -235,6 +236,16 @@ def walk_forward_train(
         raise RuntimeError(
             f"scikit-learn / numpy required for ML training: {exc}"
         ) from exc
+
+    # Drop rows with NaN in any factor column before training
+    df = pd.DataFrame(rows)
+    df = df.dropna(subset=FACTOR_KEYS)
+    rows = df.to_dict("records")
+
+    if len(rows) < min_samples:
+        raise ValueError(
+            f"Insufficient data after dropna: {len(rows)} rows < MIN_SAMPLES={min_samples}"
+        )
 
     # Sort chronologically
     rows_sorted = sorted(rows, key=lambda r: r["date"])

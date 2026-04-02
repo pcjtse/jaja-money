@@ -23,6 +23,11 @@ from src.core.log_setup import get_logger
 
 log = get_logger(__name__)
 
+# Canonical absence sentinel. ALL _factor_* functions MUST use this string
+# for label when data is unavailable. factor_attribution.py imports this
+# to detect absent sparse signals.
+FACTOR_ABSENT_LABEL: str = "No data"
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -1823,7 +1828,9 @@ def _factor_congress_signal(congress_data: dict | None) -> dict:
         "Mixed": "Mixed congressional activity",
     }
     label = label_map.get(net_signal, net_signal)
-    return dict(name="Congress Signal", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Congress Signal", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_institutional_flow(flow_data: dict | None) -> dict:
@@ -1848,7 +1855,13 @@ def _factor_institutional_flow(flow_data: dict | None) -> dict:
     else:
         label = "Stable institutional base"
     detail = flow_data.get("detail", f"Net change: {net_change:+.2f}%")
-    return dict(name="Institutional Flow", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Institutional Flow",
+        score=score,
+        weight=weight,
+        label=label,
+        detail=detail,
+    )
 
 
 def _factor_estimate_velocity(velocity_data: dict | None) -> dict:
@@ -1872,7 +1885,9 @@ def _factor_estimate_velocity(velocity_data: dict | None) -> dict:
     else:
         label = "Stable estimate trend"
     detail = velocity_data.get("detail", "")
-    return dict(name="Estimate Velocity", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Estimate Velocity", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_buyback(buyback_score_data: dict | None) -> dict:
@@ -1889,7 +1904,13 @@ def _factor_buyback(buyback_score_data: dict | None) -> dict:
     score = int(buyback_score_data.get("score", 50))
     label = buyback_score_data.get("label", "")
     detail = buyback_score_data.get("detail", "")
-    return dict(name="Buyback Effectiveness", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Buyback Effectiveness",
+        score=score,
+        weight=weight,
+        label=label,
+        detail=detail,
+    )
 
 
 def _factor_guidance_quality(guidance_data: dict | None) -> dict:
@@ -1906,7 +1927,9 @@ def _factor_guidance_quality(guidance_data: dict | None) -> dict:
     score = int(guidance_data.get("score", 50))
     label = guidance_data.get("label", "")
     detail = guidance_data.get("detail", "")
-    return dict(name="Guidance Quality", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Guidance Quality", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_options_flow(options_flow_data: dict | None) -> dict:
@@ -1923,7 +1946,9 @@ def _factor_options_flow(options_flow_data: dict | None) -> dict:
     score = int(options_flow_data.get("score", 50))
     label = options_flow_data.get("label", "Neutral")
     detail = options_flow_data.get("detail", "")
-    return dict(name="Options Flow", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Options Flow", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_dark_pool(dark_pool_data: dict | None) -> dict:
@@ -1945,7 +1970,9 @@ def _factor_dark_pool(dark_pool_data: dict | None) -> dict:
         label_parts.append("volume spike")
     label = " | ".join(label_parts)
     detail = dark_pool_data.get("detail", "")
-    return dict(name="Dark Pool Signal", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Dark Pool Signal", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_supply_chain_risk(supply_chain_score: dict | None) -> dict:
@@ -1962,7 +1989,9 @@ def _factor_supply_chain_risk(supply_chain_score: dict | None) -> dict:
     score = int(supply_chain_score.get("score", 50))
     label = supply_chain_score.get("label", "")
     detail = supply_chain_score.get("detail", "")
-    return dict(name="Supply Chain Risk", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Supply Chain Risk", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_special_situation(situation_score: dict | None) -> dict:
@@ -1979,7 +2008,9 @@ def _factor_special_situation(situation_score: dict | None) -> dict:
     score = int(situation_score.get("score", 50))
     label = situation_score.get("label", "")
     detail = situation_score.get("detail", "")
-    return dict(name="Special Situation", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Special Situation", score=score, weight=weight, label=label, detail=detail
+    )
 
 
 def _factor_cross_asset(cross_asset_data: dict | None) -> dict:
@@ -2005,7 +2036,13 @@ def _factor_cross_asset(cross_asset_data: dict | None) -> dict:
         label = "Mild macro headwinds"
     else:
         label = "Macro headwinds for sector"
-    return dict(name="Cross-Asset Signal", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Cross-Asset Signal",
+        score=score,
+        weight=weight,
+        label=label,
+        detail=detail,
+    )
 
 
 def _factor_geo_revenue(geo_data: dict | None) -> dict:
@@ -2024,12 +2061,18 @@ def _factor_geo_revenue(geo_data: dict | None) -> dict:
     risk = geo_data.get("weighted_risk", 0)
     label = f"Top: {', '.join(top_regions[:2])}" if top_regions else "Global exposure"
     detail = geo_data.get("detail", f"Geo risk: {risk:.2f}")
-    return dict(name="Geo Revenue Macro", score=score, weight=weight, label=label, detail=detail)
+    return dict(
+        name="Geo Revenue Macro", score=score, weight=weight, label=label, detail=detail
+    )
 
 
-def _factor_crowding_risk(crowding_data: dict | None, composite_score: int = 50) -> dict:
+def _factor_crowding_risk(
+    crowding_data: dict | None, composite_score: int = 50
+) -> dict:
     """Factor crowding risk — penalty factor for over-owned profiles."""
-    weight = _get_weight("crowding_risk", 0.0)  # informational; penalty applied separately
+    weight = _get_weight(
+        "crowding_risk", 0.0
+    )  # informational; penalty applied separately
     if not crowding_data:
         return dict(
             name="Crowding Risk",

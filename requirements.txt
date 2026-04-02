@@ -3,6 +3,7 @@ finnhub-python
 python-dotenv
 plotly
 pandas
+scipy
 anthropic
 transformers
 torch

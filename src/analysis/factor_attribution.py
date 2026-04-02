@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
+from src.analysis.factors import FACTOR_ABSENT_LABEL as ABSENT_LABEL
 from src.core.log_setup import get_logger
 
 log = get_logger(__name__)
@@ -67,9 +68,8 @@ ALL_FACTOR_NAMES: dict[str, str] = {**CORE_FACTOR_NAMES, **ALPHA_FACTOR_NAMES}
 
 # Absence detection: factor functions return score=50 with label="No data"
 # when data is unavailable. Do NOT use score==50 as the absence signal —
-# a genuine neutral score of 50 is valid. See TODOS.md TODO-003 for plan
-# to enforce this convention with a FACTOR_ABSENT_LABEL constant in factors.py.
-ABSENT_LABEL: str = "No data"
+# a genuine neutral score of 50 is valid. FACTOR_ABSENT_LABEL is the canonical
+# constant defined in factors.py; imported at module top as ABSENT_LABEL.
 
 VALID_HORIZONS: frozenset[str] = frozenset({"return_21d", "return_63d", "return_126d"})
 
