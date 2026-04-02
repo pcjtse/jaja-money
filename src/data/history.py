@@ -880,7 +880,16 @@ def get_latest_thesis() -> dict | None:
 
 
 def _ensure_signal_returns_table() -> None:
-    """Create signal_returns table if it doesn't exist."""
+    """Create signal_returns table for T+21/T+63/T+126 trading-day forward returns.
+
+    IMPORTANT — Horizon separation: this table stores trading-day forward returns
+    (T+21 ≈ 1 month, T+63 ≈ 3 months, T+126 ≈ 6 months) for factor IC research.
+    It is intentionally SEPARATE from data/ledger.json, which stores T+5/T+10/T+30
+    calendar-day prices for paper trade P&L tracking.
+
+    Do NOT join these two systems or reuse this table for ledger performance tracking.
+    See TODOS.md TODO-004 for rationale.
+    """
     with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS signal_returns (

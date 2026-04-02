@@ -2126,6 +2126,37 @@ with st.expander("Track in Paper Portfolio (Forward Test)"):
             f"(factor={_composite}, risk={_rscore})"
         )
 
+# Signal Ledger: Log to Signal Ledger
+with st.expander("Log to Signal Ledger"):
+    from src.analysis.ledger import add_signal as _ledger_add
+    from src.core.config import cfg as _cfg
+
+    _ledger_threshold = int(_cfg.get("ledger", "buy_threshold", default=75))
+    if _composite >= _ledger_threshold:
+        st.caption(f"Score {_composite} meets ledger threshold ({_ledger_threshold}).")
+        if st.button("Log Signal", key="log_to_ledger_btn"):
+            try:
+                _spy_quote = get_api().get_quote("SPY")
+                _spy_price_val = float(_spy_quote.get("c") or 0)
+                _ledger_factor_scores = {f["name"]: float(f["score"]) for f in _factors}
+                _new_signal_id = _ledger_add(
+                    ticker=symbol,
+                    composite_score=_composite,
+                    factor_scores=_ledger_factor_scores,
+                    price=price,
+                    spy_price=_spy_price_val,
+                )
+                st.success(f"Signal logged for {symbol} (id={_new_signal_id[:8]})")
+            except ValueError as _e:
+                st.error(str(_e))
+            except Exception as _e:
+                st.error(f"Failed to log signal: {_e}")
+    else:
+        st.info(
+            f"Score {_composite} is below the ledger threshold ({_ledger_threshold}). "
+            "No signal logged."
+        )
+
 # P2.5: Price Alerts configuration
 with st.expander("Configure Price Alert"):
     a_col1, a_col2, a_col3 = st.columns(3)

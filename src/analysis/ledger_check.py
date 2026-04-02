@@ -53,7 +53,9 @@ def _resolve_watchlist() -> list[str]:
             ).fetchall()
         symbols = [r[0] for r in rows if r[0]]
         if symbols:
-            log.info("Watchlist resolved from analysis_history: %d symbols", len(symbols))
+            log.info(
+                "Watchlist resolved from analysis_history: %d symbols", len(symbols)
+            )
             return symbols
     except Exception as exc:
         log.warning("Could not load watchlist from history: %s", exc)
@@ -91,12 +93,30 @@ def _score_ticker(ticker: str) -> tuple[int, dict[str, float], float] | None:
             log.warning("Zero price for %s — skipping", ticker)
             return None
 
-        financials = data.get("financials") if not isinstance(data.get("financials"), Exception) else None
-        daily_data = data.get("daily") if not isinstance(data.get("daily"), Exception) else None
+        financials = (
+            data.get("financials")
+            if not isinstance(data.get("financials"), Exception)
+            else None
+        )
+        daily_data = (
+            data.get("daily") if not isinstance(data.get("daily"), Exception) else None
+        )
         news = data.get("news") if not isinstance(data.get("news"), Exception) else []
-        earnings = data.get("earnings") if not isinstance(data.get("earnings"), Exception) else []
-        recommendations = data.get("recommendations") if not isinstance(data.get("recommendations"), Exception) else []
-        profile = data.get("profile") if not isinstance(data.get("profile"), Exception) else {}
+        earnings = (
+            data.get("earnings")
+            if not isinstance(data.get("earnings"), Exception)
+            else []
+        )
+        recommendations = (
+            data.get("recommendations")
+            if not isinstance(data.get("recommendations"), Exception)
+            else []
+        )
+        profile = (
+            data.get("profile")
+            if not isinstance(data.get("profile"), Exception)
+            else {}
+        )
 
         # Build close series
         close: pd.Series | None = None
@@ -122,7 +142,9 @@ def _score_ticker(ticker: str) -> tuple[int, dict[str, float], float] | None:
             financials=financials,
             close=close,
             earnings=earnings if isinstance(earnings, list) else [],
-            recommendations=recommendations if isinstance(recommendations, list) else [],
+            recommendations=recommendations
+            if isinstance(recommendations, list)
+            else [],
             sentiment_agg=sentiment_agg,
             sector=sector,
         )
@@ -189,7 +211,10 @@ def _close_expired_positions(spy_price: float | None, summary: dict) -> None:
         if current_score is not None and current_score < _EXIT_SCORE:
             should_close = True
             log.info(
-                "Early exit: %s score=%d < exit_score=%d", ticker, current_score, _EXIT_SCORE
+                "Early exit: %s score=%d < exit_score=%d",
+                ticker,
+                current_score,
+                _EXIT_SCORE,
             )
 
         if not should_close:
@@ -228,6 +253,75 @@ def _close_expired_positions(spy_price: float | None, summary: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Market regime
+# ---------------------------------------------------------------------------
+
+
+def _get_market_regime(spy_price: float | None) -> str:
+    """Return 'bull', 'bear', or 'flat' based on SPY 20-day return."""
+    try:
+        from src.data.api import get_api
+
+        api = get_api()
+        data = api.get_daily("SPY", years=1)
+        if not data or data.get("s") != "ok":
+            return "flat"
+        closes = data.get("c", [])
+        if len(closes) < 21:
+            return "flat"
+        recent = float(closes[-1])
+        twenty_days_ago = float(closes[-21])
+        if twenty_days_ago <= 0:
+            return "flat"
+        ret = (recent - twenty_days_ago) / twenty_days_ago
+        if ret > 0.02:
+            return "bull"
+        elif ret < -0.02:
+            return "bear"
+        return "flat"
+    except Exception:
+        return "flat"
+
+
+# ---------------------------------------------------------------------------
+# Baseline co-fire
+# ---------------------------------------------------------------------------
+
+
+def _fire_baseline_signal(
+    real_ticker: str,
+    spy_price: float | None,
+    score: int,
+    factor_scores: dict,
+    regime: str = "flat",
+) -> None:
+    """Co-fire a baseline (SPY-proxy) signal alongside a real signal."""
+    from src.core.config import cfg
+    from src.analysis.ledger import add_signal, get_open_positions
+
+    universe = cfg.get("screener", "default_universe", default=[]) or []
+    open_tickers = {p["ticker"] for p in get_open_positions(include_baseline=True)}
+    candidates = [t for t in universe if t != real_ticker and t not in open_tickers]
+    if not candidates:
+        return
+    import random
+
+    baseline_ticker = random.choice(candidates)
+    try:
+        add_signal(
+            ticker=baseline_ticker,
+            composite_score=score,
+            factor_scores=factor_scores,
+            price=spy_price or 0.0,
+            spy_price=spy_price or 0.0,
+            is_baseline=True,
+            regime=regime,
+        )
+    except ValueError:
+        pass  # already has open position
+
+
+# ---------------------------------------------------------------------------
 # Signal fire logic
 # ---------------------------------------------------------------------------
 
@@ -241,6 +335,8 @@ def _fire_new_signals(
     from src.analysis.ledger import add_signal, get_open_positions
 
     open_tickers = {p["ticker"] for p in get_open_positions()}
+
+    regime = _get_market_regime(spy_price)
 
     for ticker in watchlist:
         if ticker in open_tickers:
@@ -269,9 +365,13 @@ def _fire_new_signals(
                 factor_scores=factor_scores,
                 price=price,
                 spy_price=spy_price or 0.0,
+                regime=regime,
             )
-            log.info("BUY signal fired: %s score=%d id=%s", ticker, score, signal_id[:8])
+            log.info(
+                "BUY signal fired: %s score=%d id=%s", ticker, score, signal_id[:8]
+            )
             summary["signals_fired"].append(ticker)
+            _fire_baseline_signal(ticker, spy_price, score, factor_scores, regime)
         except ValueError as exc:
             # Duplicate guard hit — position already exists
             log.info("Signal skipped for %s: %s", ticker, exc)

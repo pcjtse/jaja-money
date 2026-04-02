@@ -47,15 +47,16 @@ def _make_snapshot(symbol: str, date: str, price: float, scores: dict) -> dict:
 
 
 def _key_to_name(key: str) -> str:
+    # Names must match CORE_FACTOR_NAMES in factor_attribution.py
     return {
         "valuation": "Valuation (P/E)",
-        "trend": "Price Trend",
-        "rsi": "RSI",
-        "macd": "MACD",
-        "sentiment": "Sentiment",
-        "earnings": "Earnings Surprise",
-        "analyst": "Analyst Recommendations",
-        "range": "52-Week Range",
+        "trend": "Trend (SMA)",
+        "rsi": "Momentum (RSI)",
+        "macd": "MACD Signal",
+        "sentiment": "News Sentiment",
+        "earnings": "Earnings Quality",
+        "analyst": "Analyst Consensus",
+        "range": "52-Wk Strength",
     }.get(key, key)
 
 
@@ -86,8 +87,8 @@ def _make_rows(n: int = MIN_SAMPLES + 10) -> list[dict]:
 def test_parse_factors_json_known_names():
     factors = [
         {"name": "Valuation (P/E)", "score": 70, "weight": 0.15},
-        {"name": "Price Trend", "score": 80, "weight": 0.20},
-        {"name": "RSI", "score": 60, "weight": 0.10},
+        {"name": "Trend (SMA)", "score": 80, "weight": 0.20},
+        {"name": "Momentum (RSI)", "score": 60, "weight": 0.10},
     ]
     result = _parse_factors_json(json.dumps(factors))
     assert result["valuation"] == 70.0
@@ -174,7 +175,9 @@ def test_build_training_dataset_drops_sparse_factors():
         "symbol": "AAPL",
         "date": "2024-01-01",
         "price": 100.0,
-        "factors_json": json.dumps([{"name": "RSI", "score": 60, "weight": 0.1}]),
+        "factors_json": json.dumps(
+            [{"name": "Momentum (RSI)", "score": 60, "weight": 0.1}]
+        ),
     }
     fwd = {("AAPL", "2024-01-01"): 110.0}
     rows = build_training_dataset([snap], fwd)

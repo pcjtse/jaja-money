@@ -62,6 +62,8 @@ def add_signal(
     price: float,
     spy_price: float,
     direction: str = "long",
+    is_baseline: bool = False,
+    regime: str = "flat",
 ) -> str:
     """Append a new open signal to the ledger. Returns the new signal_id.
 
@@ -87,6 +89,8 @@ def add_signal(
         "price_at_signal": float(price),
         "spy_entry_price": float(spy_price),
         "direction": direction,
+        "is_baseline": is_baseline,
+        "regime": regime,
         "status": "open",
         "exit_price": None,
         "exit_at": None,
@@ -98,7 +102,9 @@ def add_signal(
     }
     signals.append(entry)
     _save(signals)
-    log.info("Signal added: %s %s composite=%.1f", ticker, signal_id[:8], composite_score)
+    log.info(
+        "Signal added: %s %s composite=%.1f", ticker, signal_id[:8], composite_score
+    )
     return signal_id
 
 
@@ -141,7 +147,9 @@ def close_position(
             s["exit_price"] = float(exit_price)
             s["exit_at"] = datetime.now(timezone.utc).isoformat()
             s["pnl_pct"] = round(pnl_pct, 4) if pnl_pct is not None else None
-            s["spy_pnl_pct"] = round(spy_pnl_pct, 4) if spy_pnl_pct is not None else None
+            s["spy_pnl_pct"] = (
+                round(spy_pnl_pct, 4) if spy_pnl_pct is not None else None
+            )
             s["price_t5"] = float(price_t5) if price_t5 is not None else None
             s["price_t10"] = float(price_t10) if price_t10 is not None else None
             s["price_t30"] = float(price_t30) if price_t30 is not None else None
@@ -158,14 +166,40 @@ def close_position(
     raise ValueError(f"Signal {signal_id} not found in ledger")
 
 
-def get_open_positions() -> list[dict]:
-    """Return all signals with status='open'."""
-    return [s for s in _load() if s["status"] == "open"]
+def get_open_positions(include_baseline: bool = False) -> list[dict]:
+    """Return all signals with status='open'.
+
+    Parameters
+    ----------
+    include_baseline : if False (default), exclude entries where is_baseline=True
+    """
+    signals = _load()
+    result = []
+    for s in signals:
+        if s["status"] != "open":
+            continue
+        if not include_baseline and s.get("is_baseline", False):
+            continue
+        result.append(s)
+    return result
 
 
-def get_closed_positions() -> list[dict]:
-    """Return all signals with status='closed'."""
-    return [s for s in _load() if s["status"] == "closed"]
+def get_closed_positions(include_baseline: bool = False) -> list[dict]:
+    """Return all signals with status='closed'.
+
+    Parameters
+    ----------
+    include_baseline : if False (default), exclude entries where is_baseline=True
+    """
+    signals = _load()
+    result = []
+    for s in signals:
+        if s["status"] != "closed":
+            continue
+        if not include_baseline and s.get("is_baseline", False):
+            continue
+        result.append(s)
+    return result
 
 
 def get_all_signals() -> list[dict]:
