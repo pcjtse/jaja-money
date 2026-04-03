@@ -59,10 +59,48 @@ def test_add_signal_returns_uuid(ledger_dir):
     assert str(parsed) == sig_id
 
 
+def test_add_signal_same_day_idempotent(ledger_dir):
+    """Same ticker+date+source on the same day → returns existing ID (cron retry safety)."""
+    from src.analysis.ledger import add_signal, get_all_signals
+
+    sig1 = add_signal("NVDA", 80.0, {}, 500.0, 510.0)
+    sig2 = add_signal("NVDA", 82.0, {}, 510.0, 512.0)
+    assert sig1 == sig2
+    assert len(get_all_signals()) == 1
+
+
 def test_add_signal_duplicate_raises(ledger_dir):
+    """Ticker with open position from a prior date → ValueError."""
+    import json
     from src.analysis.ledger import add_signal
 
-    add_signal("NVDA", 80.0, {}, 500.0, 510.0)
+    # Seed a signal that was fired "yesterday" so idempotency guard doesn't fire
+    prior = [
+        {
+            "signal_id": "prior-id-0000",
+            "ticker": "NVDA",
+            "fired_at": "2020-01-01T00:00:00+00:00",
+            "source": "forward",
+            "composite_score": 80.0,
+            "factor_scores": {},
+            "price_at_signal": 500.0,
+            "spy_entry_price": 510.0,
+            "direction": "long",
+            "is_baseline": False,
+            "regime": "flat",
+            "status": "open",
+            "exit_price": None,
+            "exit_at": None,
+            "pnl_pct": None,
+            "spy_pnl_pct": None,
+            "spy_price_t30": None,
+            "price_t5": None,
+            "price_t10": None,
+            "price_t30": None,
+        }
+    ]
+    (ledger_dir / "ledger.json").write_text(json.dumps(prior))
+
     with pytest.raises(ValueError, match="already has an open position"):
         add_signal("NVDA", 82.0, {}, 510.0, 512.0)
 

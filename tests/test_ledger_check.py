@@ -97,8 +97,9 @@ def test_closes_expired_position(isolated_ledger, monkeypatch):
 
     monkeypatch.setattr(LC, "_score_ticker", lambda t: (50, {}, 105.0))
     monkeypatch.setattr(LC, "_get_spy_price", lambda: 520.0)
+    # Mock _fetch_t_prices (replaces get_price_on_date; uses get_daily() internally)
     monkeypatch.setattr(
-        "src.data.providers.get_price_on_date", lambda ticker, date: 102.0
+        LC, "_fetch_t_prices", lambda ticker, fired_date: (102.0, 102.0, 102.0, 522.0)
     )
 
     LC.run_ledger_check(["AAPL"])
@@ -107,6 +108,35 @@ def test_closes_expired_position(isolated_ledger, monkeypatch):
     assert len(closed) == 1
     assert closed[0]["ticker"] == "AAPL"
     assert closed[0]["status"] == "closed"
+
+
+def test_signal_source_field_forward(isolated_ledger, monkeypatch):
+    """Signals fired by cron should have source='forward'."""
+    import src.analysis.ledger_check as LC
+    from src.analysis.ledger import get_all_signals
+
+    monkeypatch.setattr(LC, "_score_ticker", lambda t: (80, {}, 100.0))
+
+    LC.run_ledger_check(["AAPL"])
+
+    real_signals = [s for s in get_all_signals() if not s.get("is_baseline")]
+    assert len(real_signals) == 1
+    assert real_signals[0]["source"] == "forward"
+
+
+def test_baseline_one_per_day(isolated_ledger, monkeypatch):
+    """Only one baseline signal should fire per day, even with multiple real signals."""
+    import src.analysis.ledger_check as LC
+    from src.analysis.ledger import get_all_signals
+
+    monkeypatch.setattr(LC, "_score_ticker", lambda t: (80, {}, 100.0))
+
+    # Two tickers qualify — should produce 2 real signals but only 1 baseline
+    LC.run_ledger_check(["AAPL", "MSFT"])
+
+    all_sigs = get_all_signals()
+    baseline_sigs = [s for s in all_sigs if s.get("source") == "baseline"]
+    assert len(baseline_sigs) <= 1
 
 
 def test_api_failure_graceful(isolated_ledger, monkeypatch):

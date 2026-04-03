@@ -191,10 +191,68 @@ def _days_since(iso_datetime: str) -> int:
         return 0
 
 
+def _price_from_daily(daily_data: dict, target_date: str) -> float | None:
+    """Return closing price on or before target_date from a get_daily() response.
+
+    Finds the nearest prior trading day if target_date falls on a weekend or holiday.
+    """
+    if not daily_data or daily_data.get("s") != "ok":
+        return None
+    timestamps = daily_data.get("t", [])
+    closes = daily_data.get("c", [])
+    if not timestamps or not closes:
+        return None
+    try:
+        import datetime as _dt
+
+        target = _dt.date.fromisoformat(target_date)
+        best_close = None
+        best_date: _dt.date | None = None
+        for ts, c in zip(timestamps, closes):
+            dt = _dt.datetime.fromtimestamp(ts, tz=_dt.timezone.utc).date()
+            if dt <= target:
+                if best_date is None or dt > best_date:
+                    best_date = dt
+                    best_close = c
+        return float(best_close) if best_close is not None else None
+    except Exception:
+        return None
+
+
+def _fetch_t_prices(
+    ticker: str, fired_date_str: str
+) -> tuple[float | None, float | None, float | None, float | None]:
+    """Fetch T+5, T+10, T+30 prices for ticker and SPY T+30 using get_daily().
+
+    Returns (price_t5, price_t10, price_t30, spy_price_t30).
+    Never raises — returns None values on any API failure.
+    """
+    try:
+        from src.data.api import get_api
+
+        api = get_api()
+        fired_dt = date.fromisoformat(fired_date_str)
+        t5_str = (fired_dt + timedelta(days=5)).isoformat()
+        t10_str = (fired_dt + timedelta(days=10)).isoformat()
+        t30_str = (fired_dt + timedelta(days=30)).isoformat()
+
+        daily = api.get_daily(ticker, years=2)
+        p5 = _price_from_daily(daily, t5_str)
+        p10 = _price_from_daily(daily, t10_str)
+        p30 = _price_from_daily(daily, t30_str)
+
+        spy_daily = api.get_daily("SPY", years=2)
+        spy_t30 = _price_from_daily(spy_daily, t30_str)
+
+        return p5, p10, p30, spy_t30
+    except Exception as exc:
+        log.warning("T-price fetch failed for %s: %s", ticker, exc)
+        return None, None, None, None
+
+
 def _close_expired_positions(spy_price: float | None, summary: dict) -> None:
     """Close positions that have passed hold_days or dropped below exit_score."""
     from src.analysis.ledger import get_open_positions, close_position
-    from src.data.providers import get_price_on_date
 
     open_positions = get_open_positions()
     for pos in open_positions:
@@ -220,20 +278,11 @@ def _close_expired_positions(spy_price: float | None, summary: dict) -> None:
         if not should_close:
             continue
 
-        # Fetch T+5/T+10/T+30 prices (calendar days from signal fire date)
+        # Fetch T+5/T+10/T+30 and SPY T+30 prices via get_daily()
         fired_date = pos["fired_at"][:10]
-        try:
-            fired_dt = date.fromisoformat(fired_date)
-        except ValueError:
-            fired_dt = date.today()
-
-        def _price_on_offset(n_days: int) -> float | None:
-            target = (fired_dt + timedelta(days=n_days)).isoformat()
-            return get_price_on_date(ticker, target)
-
-        price_t5 = _price_on_offset(5)
-        price_t10 = _price_on_offset(10)
-        price_t30 = _price_on_offset(30)
+        price_t5, price_t10, price_t30, spy_price_t30 = _fetch_t_prices(
+            ticker, fired_date
+        )
 
         exit_price = current_price or pos.get("price_at_signal", 0)
         exit_spy = spy_price or pos.get("spy_entry_price", 0)
@@ -246,6 +295,7 @@ def _close_expired_positions(spy_price: float | None, summary: dict) -> None:
                 price_t5=price_t5,
                 price_t10=price_t10,
                 price_t30=price_t30,
+                spy_price_t30=spy_price_t30,
             )
             summary["closed"].append(ticker)
         except Exception as exc:
@@ -295,14 +345,30 @@ def _fire_baseline_signal(
     factor_scores: dict,
     regime: str = "flat",
 ) -> None:
-    """Co-fire a baseline (SPY-proxy) signal alongside a real signal."""
+    """Co-fire a baseline (SPY-proxy) signal alongside a real signal.
+
+    One baseline per cron run per day — if any source='baseline' entry already
+    exists for today, skip entirely regardless of ticker.
+    """
     from src.core.config import cfg
-    from src.analysis.ledger import add_signal, get_open_positions
+    from src.analysis.ledger import add_signal, get_open_positions, get_all_signals
+
+    # One-per-day guard: skip if any baseline signal already fired today
+    today = datetime.now(timezone.utc).date().isoformat()
+    for s in get_all_signals():
+        if s.get("source") == "baseline" and s["fired_at"][:10] == today:
+            log.debug("Baseline already fired today — skipping co-fire for %s", real_ticker)
+            return
 
     universe = cfg.get("screener", "default_universe", default=[]) or []
     open_tickers = {p["ticker"] for p in get_open_positions(include_baseline=True)}
     candidates = [t for t in universe if t != real_ticker and t not in open_tickers]
     if not candidates:
+        log.debug(
+            "No baseline target available for %s (%d open positions) — pool exhausted",
+            real_ticker,
+            len(open_tickers),
+        )
         return
     import random
 
@@ -316,6 +382,7 @@ def _fire_baseline_signal(
             spy_price=spy_price or 0.0,
             is_baseline=True,
             regime=regime,
+            source="baseline",
         )
     except ValueError:
         pass  # already has open position
@@ -366,6 +433,7 @@ def _fire_new_signals(
                 price=price,
                 spy_price=spy_price or 0.0,
                 regime=regime,
+                source="forward",
             )
             log.info(
                 "BUY signal fired: %s score=%d id=%s", ticker, score, signal_id[:8]

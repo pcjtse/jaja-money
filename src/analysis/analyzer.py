@@ -1155,6 +1155,148 @@ Analyze this strategy comprehensively."""
 
 
 # ---------------------------------------------------------------------------
+# Signal Ledger Research Narrative
+# ---------------------------------------------------------------------------
+
+_LEDGER_NARRATIVE_SYSTEM = """\
+You are a quantitative research analyst reviewing an algorithmic trading signal ledger.
+Synthesize the provided closed-position data into a clear research narrative.
+
+Structure your response:
+1. **Overall Track Record** — hit rate, avg P&L, and what it means statistically
+2. **Factor Edge** — which factors showed the strongest predictive power and which were noise
+3. **Regime Breakdown** — did signals work better in bull/bear/flat markets?
+4. **Baseline Comparison** — how did real signals compare to random-ticker baseline?
+5. **Key Takeaways** — 2-3 concrete, actionable findings for the strategy
+
+Be honest about uncertainty. Small sample sizes mean wide confidence intervals.
+Do not overstate statistical significance. Reference actual numbers from the data.\
+"""
+
+
+def stream_ledger_narrative(use_cache: bool = True):
+    """Stream a Claude research narrative synthesizing the signal ledger track record.
+
+    Gated on 20+ closed positions. Returns a generator that yields text chunks.
+    If fewer than 20 closed positions exist, yields a single status string and returns.
+
+    The narrative covers: hit rates, avg P&L by factor, regime breakdown,
+    baseline comparison, and Wilson CI-informed uncertainty.
+    """
+    from src.analysis.ledger import get_closed_positions
+    from src.analysis.signal_decay import get_signal_decay_table
+
+    closed = get_closed_positions()
+    n_closed = len(closed)
+
+    if n_closed < 20:
+        yield f"Collecting data... ({n_closed}/20 closed positions needed for narrative synthesis)"
+        return
+
+    client = _get_client()
+
+    # Build summary stats for the prompt
+    wins = [p for p in closed if (p.get("pnl_pct") or 0) > 0]
+    hit_rate = len(wins) / n_closed * 100
+    pnl_vals = [p["pnl_pct"] for p in closed if p.get("pnl_pct") is not None]
+    avg_pnl = sum(pnl_vals) / len(pnl_vals) if pnl_vals else 0.0
+
+    spy_vals = [p["spy_pnl_pct"] for p in closed if p.get("spy_pnl_pct") is not None]
+    avg_alpha = (
+        sum(p - s for p, s in zip(pnl_vals, spy_vals)) / len(pnl_vals)
+        if len(pnl_vals) == len(spy_vals) and spy_vals
+        else None
+    )
+
+    # Regime breakdown
+    regime_stats: dict[str, dict] = {}
+    for pos in closed:
+        reg = pos.get("regime", "unknown")
+        if reg not in regime_stats:
+            regime_stats[reg] = {"n": 0, "wins": 0, "pnl_sum": 0.0}
+        regime_stats[reg]["n"] += 1
+        if (pos.get("pnl_pct") or 0) > 0:
+            regime_stats[reg]["wins"] += 1
+        regime_stats[reg]["pnl_sum"] += pos.get("pnl_pct") or 0.0
+
+    regime_lines = []
+    for reg, stats in regime_stats.items():
+        wr = stats["wins"] / stats["n"] * 100 if stats["n"] else 0
+        ap = stats["pnl_sum"] / stats["n"] if stats["n"] else 0
+        regime_lines.append(f"  {reg}: n={stats['n']}, hit={wr:.0f}%, avg_pnl={ap:+.2f}%")
+
+    # Baseline comparison
+    from src.analysis.ledger import get_closed_positions as _closed_all
+    baseline_closed = [p for p in _closed_all(include_baseline=True) if p.get("is_baseline")]
+    if baseline_closed:
+        b_wins = sum(1 for p in baseline_closed if (p.get("pnl_pct") or 0) > 0)
+        b_hit = b_wins / len(baseline_closed) * 100
+        b_pnl = sum(p.get("pnl_pct") or 0 for p in baseline_closed) / len(baseline_closed)
+        baseline_str = (
+            f"Random baseline (n={len(baseline_closed)}): hit={b_hit:.0f}%, avg_pnl={b_pnl:+.2f}%"
+        )
+    else:
+        baseline_str = "No baseline data yet."
+
+    # Per-factor decay summary
+    decay_df = get_signal_decay_table(min_n=3)
+    sufficient = decay_df[decay_df["sufficient"]]
+    if not sufficient.empty:
+        factor_lines = []
+        for _, row in sufficient.sort_values("win_t30", ascending=False).iterrows():
+            factor_lines.append(
+                f"  {row['factor']}: n={int(row['n'])}, "
+                f"win_t30={row['win_t30']*100:.0f}%, "
+                f"avg_pnl_t30={row['avg_pnl_t30']:+.2f}%"
+                if row["avg_pnl_t30"] is not None
+                else f"  {row['factor']}: n={int(row['n'])}, win_t30={row['win_t30']*100:.0f}%"
+            )
+        factor_str = "\n".join(factor_lines)
+    else:
+        factor_str = "Insufficient per-factor data (need ≥3 closes per factor group)."
+
+    prompt = f"""## Signal Ledger Research Summary
+
+**Closed positions:** {n_closed}
+**Hit rate:** {hit_rate:.1f}% ({len(wins)} wins / {n_closed - len(wins)} losses)
+**Avg P&L:** {avg_pnl:+.2f}%
+**Avg alpha vs SPY:** {f"{avg_alpha:+.2f}%" if avg_alpha is not None else "n/a"}
+
+**Regime breakdown:**
+{chr(10).join(regime_lines) if regime_lines else "  No regime data."}
+
+**Per-factor decay (T+30):**
+{factor_str}
+
+**Baseline comparison:**
+{baseline_str}
+
+Synthesize these results into a research narrative."""
+
+    if use_cache:
+        cache_key = _compute_context_hash(prompt)
+        cached = _get_cached_response(cache_key)
+        if cached:
+            yield cached
+            return
+
+    log.info("Starting ledger narrative stream (%d closed positions)", n_closed)
+    full_text = ""
+    for chunk in _iter_text_stream(
+        client,
+        model="claude-opus-4-6",
+        max_tokens=1500,
+        system=_LEDGER_NARRATIVE_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    ):
+        full_text += chunk
+        yield chunk
+
+    if use_cache and full_text:
+        _store_cached_response(_compute_context_hash(prompt), full_text)
+
+
+# ---------------------------------------------------------------------------
 # P9.4: Claude Sector Rotation Narrative
 # ---------------------------------------------------------------------------
 

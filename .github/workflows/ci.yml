@@ -62,6 +62,11 @@ jobs:
             --cov=src.ui.export \
             --cov=src.core.cache \
             --cov=src.core.config \
+            --cov=src.analysis.ledger \
+            --cov=src.analysis.ledger_check \
+            --cov=src.analysis.retroactive \
+            --cov=src.analysis.signal_decay \
+            --cov=src.analysis.factor_attribution \
             --cov-report=term-missing \
             --cov-fail-under=50
 

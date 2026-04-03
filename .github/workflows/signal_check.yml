@@ -21,6 +21,12 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Cache FinBERT model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub/models--ProsusAI--finbert
+          key: ${{ runner.os }}-finbert-${{ hashFiles('requirements.txt') }}-v1
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 

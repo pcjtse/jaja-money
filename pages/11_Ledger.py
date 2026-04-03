@@ -189,34 +189,81 @@ else:
     # Sort by win_t30 descending
     plot_df = sufficient.sort_values("win_t30", ascending=False)
 
-    fig = go.Figure()
-    for _, row in plot_df.iterrows():
-        factor = row["factor"]
-        w5 = (row["win_t5"] or 0) * 100
-        w10 = (row["win_t10"] or 0) * 100
-        w30 = (row["win_t30"] or 0) * 100
-        fig.add_trace(
-            go.Scatter(
-                x=["T+5", "T+10", "T+30"],
-                y=[w5, w10, w30],
-                mode="lines+markers",
-                name=f"{factor} (n={int(row['n'])})",
-            )
-        )
+    tab_win, tab_pnl = st.tabs(["Win Rate (with 95% CI)", "Avg P&L %"])
 
-    fig.add_hline(y=50, line_dash="dash", line_color="#484F58", annotation_text="50% (coin flip)")
-    fig.update_layout(
-        height=400,
-        margin=dict(l=0, r=0, t=20, b=20),
-        xaxis_title="Horizon",
-        yaxis_title="Win Rate %",
-        yaxis=dict(range=[0, 100]),
-        plot_bgcolor="#0D1117",
-        paper_bgcolor="#0D1117",
-        font=dict(color="#E6EDF3"),
-        legend=dict(bgcolor="#161B22", bordercolor="#30363D"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    with tab_win:
+        fig = go.Figure()
+        for _, row in plot_df.iterrows():
+            factor = row["factor"]
+            xs = ["T+5", "T+10", "T+30"]
+            ys = [(row[f"win_{h}"] or 0) * 100 for h in ("t5", "t10", "t30")]
+            # Wilson CI error bars (already 0-1 scale, convert to %)
+            err_lo = [
+                max(0.0, (row[f"win_{h}"] or 0) - (row[f"ci_lo_{h}"] or 0)) * 100
+                for h in ("t5", "t10", "t30")
+            ]
+            err_hi = [
+                max(0.0, (row[f"ci_hi_{h}"] or 0) - (row[f"win_{h}"] or 0)) * 100
+                for h in ("t5", "t10", "t30")
+            ]
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="lines+markers",
+                    name=f"{factor} (n={int(row['n'])})",
+                    error_y=dict(
+                        type="data",
+                        symmetric=False,
+                        array=err_hi,
+                        arrayminus=err_lo,
+                        thickness=1.5,
+                        width=4,
+                    ),
+                )
+            )
+
+        fig.add_hline(y=50, line_dash="dash", line_color="#484F58", annotation_text="50% (coin flip)")
+        fig.update_layout(
+            height=400,
+            margin=dict(l=0, r=0, t=20, b=20),
+            xaxis_title="Horizon",
+            yaxis_title="Win Rate %",
+            yaxis=dict(range=[0, 100]),
+            plot_bgcolor="#0D1117",
+            paper_bgcolor="#0D1117",
+            font=dict(color="#E6EDF3"),
+            legend=dict(bgcolor="#161B22", bordercolor="#30363D"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Error bars = 95% Wilson score confidence intervals.")
+
+    with tab_pnl:
+        fig2 = go.Figure()
+        for _, row in plot_df.iterrows():
+            factor = row["factor"]
+            ys2 = [row.get(f"avg_pnl_{h}") or 0 for h in ("t5", "t10", "t30")]
+            fig2.add_trace(
+                go.Bar(
+                    x=["T+5", "T+10", "T+30"],
+                    y=ys2,
+                    name=f"{factor} (n={int(row['n'])})",
+                )
+            )
+
+        fig2.add_hline(y=0, line_dash="solid", line_color="#484F58")
+        fig2.update_layout(
+            height=400,
+            barmode="group",
+            margin=dict(l=0, r=0, t=20, b=20),
+            xaxis_title="Horizon",
+            yaxis_title="Avg P&L %",
+            plot_bgcolor="#0D1117",
+            paper_bgcolor="#0D1117",
+            font=dict(color="#E6EDF3"),
+            legend=dict(bgcolor="#161B22", bordercolor="#30363D"),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
 # Insufficient factors summary
 if not insufficient.empty:
@@ -225,6 +272,34 @@ if not insufficient.empty:
         for _, row in insufficient.iterrows():
             needed = max(0, 5 - int(row["n"]))
             st.caption(f"• {row['factor']} — {int(row['n'])} / 5 closes ({needed} more needed)")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Claude Research Narrative (gated on 20+ closed positions)
+# ---------------------------------------------------------------------------
+
+st.subheader("Research Narrative")
+
+_NARRATIVE_MIN = 20
+
+if n_closed < _NARRATIVE_MIN:
+    st.info(
+        f"Collecting data... ({n_closed}/{_NARRATIVE_MIN} closed positions needed). "
+        "Once you have 20+ closed trades, Claude will synthesize your factor track record "
+        "— hit rates, which factors had real edge, regime breakdown, and baseline comparison."
+    )
+    st.progress(min(n_closed / _NARRATIVE_MIN, 1.0), text=f"{n_closed} / {_NARRATIVE_MIN} closed positions")
+else:
+    if st.button("Generate Research Narrative", key="ledger_narrative_btn"):
+        from src.analysis.analyzer import stream_ledger_narrative
+
+        with st.spinner("Synthesizing track record..."):
+            narrative_text = ""
+            placeholder = st.empty()
+            for chunk in stream_ledger_narrative(use_cache=True):
+                narrative_text += chunk
+                placeholder.markdown(narrative_text)
 
 st.divider()
 
