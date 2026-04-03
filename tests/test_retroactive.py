@@ -254,3 +254,82 @@ def test_source_field_distinguishes_retroactive(patched_ledger, patched_history,
     sources = {s["ticker"]: s.get("source") for s in signals}
     assert sources["META"] == "retroactive"
     assert sources["AAPL"] == "forward"  # live signals have source="forward"
+
+
+# ---------------------------------------------------------------------------
+# test_factors_json_parsed
+# ---------------------------------------------------------------------------
+
+
+def test_factors_json_parsed(patched_ledger, patched_history, monkeypatch):
+    """factors_json column is parsed into factor_scores on the seeded ledger entry."""
+    import src.analysis.retroactive as R
+    import src.data.providers as P
+
+    monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: None)
+    # Patch regime lookup to avoid API calls
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
+
+    from datetime import date, timedelta
+
+    future_date = (date.today() + timedelta(days=5)).isoformat()
+    factors_json = '[{"name": "Trend (SMA)", "score": 88}, {"name": "Momentum (RSI)", "score": 72}]'
+    _insert_history_row(patched_history, "NVDA", future_date, 500.0, 82, factors_json)
+
+    R.seed_from_history(buy_threshold=75)
+
+    from src.analysis.ledger import get_all_signals
+
+    signals = get_all_signals()
+    assert len(signals) == 1
+    fs = signals[0]["factor_scores"]
+    assert fs.get("Trend (SMA)") == 88.0
+    assert fs.get("Momentum (RSI)") == 72.0
+
+
+# ---------------------------------------------------------------------------
+# test_historical_regime_annotated
+# ---------------------------------------------------------------------------
+
+
+def test_historical_regime_annotated(patched_ledger, patched_history, monkeypatch):
+    """Seeded entries carry the historical regime, not default 'flat'."""
+    import src.analysis.retroactive as R
+    import src.data.providers as P
+
+    monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: None)
+    # Simulate a bull market at signal date
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
+
+    from datetime import date, timedelta
+
+    future_date = (date.today() + timedelta(days=5)).isoformat()
+    _insert_history_row(patched_history, "TSLA", future_date, 200.0, 80)
+
+    R.seed_from_history(buy_threshold=75)
+
+    from src.analysis.ledger import get_all_signals
+
+    signals = get_all_signals()
+    assert len(signals) == 1
+    assert signals[0]["regime"] == "bull"
+
+
+# ---------------------------------------------------------------------------
+# test_parse_factors_json helper
+# ---------------------------------------------------------------------------
+
+
+def test_parse_factors_json_valid():
+    from src.analysis.retroactive import _parse_factors_json
+
+    result = _parse_factors_json('[{"name": "Valuation (P/E)", "score": 75.0}]')
+    assert result == {"Valuation (P/E)": 75.0}
+
+
+def test_parse_factors_json_empty():
+    from src.analysis.retroactive import _parse_factors_json
+
+    assert _parse_factors_json(None) == {}
+    assert _parse_factors_json("[]") == {}
+    assert _parse_factors_json("") == {}
