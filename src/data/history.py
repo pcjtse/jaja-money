@@ -977,11 +977,11 @@ def get_signal_returns(symbol: str | None = None) -> list[dict]:
 
 
 def get_all_analysis_signals() -> list[dict]:
-    """Return all rows from analysis_history with symbol, date, price, factor_score."""
+    """Return all rows from analysis_history with symbol, date, price, factor_score, factors_json."""
     try:
         with _connect() as conn:
             rows = conn.execute(
-                """SELECT symbol, date, price, factor_score
+                """SELECT symbol, date, price, factor_score, factors_json
                    FROM analysis_history
                    WHERE factor_score IS NOT NULL
                    ORDER BY date ASC"""

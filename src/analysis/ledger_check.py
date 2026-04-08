@@ -324,9 +324,9 @@ def _get_market_regime(spy_price: float | None) -> str:
         if twenty_days_ago <= 0:
             return "flat"
         ret = (recent - twenty_days_ago) / twenty_days_ago
-        if ret > 0.02:
+        if ret > 0.01:
             return "bull"
-        elif ret < -0.02:
+        elif ret < -0.01:
             return "bear"
         return "flat"
     except Exception:

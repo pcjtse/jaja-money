@@ -124,6 +124,39 @@ def test_signal_source_field_forward(isolated_ledger, monkeypatch):
     assert real_signals[0]["source"] == "forward"
 
 
+def test_regime_threshold_one_percent(monkeypatch):
+    """Regime uses ±1% thresholds (not ±2%)."""
+    import src.analysis.ledger_check as LC
+    import src.data.api as _api_mod
+    import time as _t
+
+    # SPY gained +1.5% over 20 days: bull at ±1%, would be flat at ±2%
+    base = 100.0
+    closes = [base] * 20 + [base * 1.015]
+    now_ts = int(_t.time())
+    timestamps = [now_ts - (20 - i) * 86400 for i in range(21)]
+    mock_daily = {"s": "ok", "c": closes, "t": timestamps}
+
+    class _MockAPI:
+        def get_daily(self, sym, years=1):
+            return mock_daily
+
+    monkeypatch.setattr(_api_mod, "get_api", lambda: _MockAPI())
+
+    assert LC._get_market_regime(spy_price=None) == "bull"
+
+    # Also verify bear at -1.5%
+    closes_bear = [base * 1.015] * 20 + [base]
+    mock_daily_bear = {"s": "ok", "c": closes_bear, "t": timestamps}
+
+    class _MockAPIBear:
+        def get_daily(self, sym, years=1):
+            return mock_daily_bear
+
+    monkeypatch.setattr(_api_mod, "get_api", lambda: _MockAPIBear())
+    assert LC._get_market_regime(spy_price=None) == "bear"
+
+
 def test_baseline_one_per_day(isolated_ledger, monkeypatch):
     """Only one baseline signal should fire per day, even with multiple real signals."""
     import src.analysis.ledger_check as LC
