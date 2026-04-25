@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 import time
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -99,8 +100,8 @@ _api_key_query = APIKeyQuery(name="api_key", auto_error=False)
 
 
 async def _get_api_key(
-    header_key: str | None = Security(_api_key_header),
-    query_key: str | None = Security(_api_key_query),
+    header_key: Optional[str] = Security(_api_key_header),
+    query_key: Optional[str] = Security(_api_key_query),
 ) -> str:
     """Validate API key. If JAJA_API_KEY is not set, auth is disabled."""
     if not _API_KEY:
@@ -135,8 +136,8 @@ class ScreenRequest(BaseModel):
 
 
 class PortfolioRequest(BaseModel):
-    tickers: list[str] = Field(..., description="Portfolio tickers")
-    weights: list[float] | None = Field(
+    tickers: List[str] = Field(..., description="Portfolio tickers")
+    weights: Optional[List[float]] = Field(
         None, description="Portfolio weights (sum to 1)"
     )
 
@@ -149,8 +150,8 @@ class ForwardTradeRequest(BaseModel):
     portfolio_id: int = Field(..., description="Target portfolio ID")
     symbol: str = Field(..., description="Stock ticker symbol")
     entry_price: float = Field(..., gt=0, description="Entry price per share")
-    factor_score: int | None = Field(None, ge=0, le=100)
-    risk_score: int | None = Field(None, ge=0, le=100)
+    factor_score: Optional[int] = Field(None, ge=0, le=100)
+    risk_score: Optional[int] = Field(None, ge=0, le=100)
     shares: float = Field(1.0, gt=0, description="Number of shares")
 
 
@@ -161,15 +162,15 @@ class SignalsRequest(BaseModel):
 class OpenClawWebhookRequest(BaseModel):
     event_type: str = Field(..., description="OpenClaw event type")
     payload: dict = Field(default={}, description="Event payload")
-    agent_id: str | None = Field(None, description="Originating OpenClaw agent ID")
+    agent_id: Optional[str] = Field(None, description="Originating OpenClaw agent ID")
 
 
 class RebalanceRequest(BaseModel):
-    tickers: list[str] = Field(..., description="Portfolio tickers", max_length=30)
-    target_weights: dict[str, float] = Field(
+    tickers: List[str] = Field(..., description="Portfolio tickers", max_length=30)
+    target_weights: Dict[str, float] = Field(
         ..., description="Target weights per ticker (sum to 1)"
     )
-    current_weights: dict[str, float] | None = Field(
+    current_weights: Optional[Dict[str, float]] = Field(
         None, description="Current weights per ticker (computed if omitted)"
     )
 
@@ -599,7 +600,7 @@ async def score_endpoint(
 
 @app.get("/alerts", tags=["openclaw"])
 async def alerts_endpoint(
-    symbol: str | None = None,
+    symbol: Optional[str] = None,
     _key: str = Depends(_get_api_key),
 ):
     """Return active and triggered price/signal alerts.
