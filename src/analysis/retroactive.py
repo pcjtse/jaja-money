@@ -86,9 +86,7 @@ def _historical_regime(signal_date: str) -> str:
         )
 
         # Find closes on or before target and on or before 28 calendar days prior
-        price_now = next(
-            (c for d, c in reversed(pairs) if d <= target), None
-        )
+        price_now = next((c for d, c in reversed(pairs) if d <= target), None)
         price_then = next(
             (c for d, c in reversed(pairs) if d <= twenty_days_before), None
         )

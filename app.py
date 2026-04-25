@@ -379,12 +379,15 @@ with st.sidebar:
         new_weights = {}
         for key, label, default in weight_keys:
             val = current_weights.get(key, default)
+            # Snap to step grid to avoid slider values/step conflict warning
+            _step = 0.05
+            val_snapped = round(round(float(val) / _step) * _step, 10)
             new_weights[key] = st.slider(
                 label,
                 0.0,
                 0.50,
-                float(val),
-                0.05,
+                val_snapped,
+                _step,
                 key=f"wt_{key}",
             )
         # Normalize weights to sum to 1.0 and update cfg for this run

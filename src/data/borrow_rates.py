@@ -16,7 +16,7 @@ log = get_logger(__name__)
 
 # Approximate CTB tiers based on short float (heuristic when no API data)
 _CTB_TIERS = [
-    (30.0, 75.0),   # > 30% short float → ~75% CTB
+    (30.0, 75.0),  # > 30% short float → ~75% CTB
     (20.0, 40.0),
     (15.0, 20.0),
     (10.0, 10.0),
@@ -55,17 +55,35 @@ def _fetch_quiver(symbol: str) -> dict:
             headers={"User-Agent": "jaja-money/1.0"},
         )
         if resp.status_code != 200:
-            return {"available": False, "ctb_rate": None, "ctb_tier": "Unknown", "source": "none", "detail": ""}
+            return {
+                "available": False,
+                "ctb_rate": None,
+                "ctb_tier": "Unknown",
+                "source": "none",
+                "detail": "",
+            }
 
         data = resp.json()
         items = data if isinstance(data, list) else [data]
         if not items:
-            return {"available": False, "ctb_rate": None, "ctb_tier": "Unknown", "source": "none", "detail": ""}
+            return {
+                "available": False,
+                "ctb_rate": None,
+                "ctb_tier": "Unknown",
+                "source": "none",
+                "detail": "",
+            }
 
         latest = items[0]
         ctb = latest.get("CTB") or latest.get("ctb") or latest.get("borrowRate")
         if ctb is None:
-            return {"available": False, "ctb_rate": None, "ctb_tier": "Unknown", "source": "none", "detail": ""}
+            return {
+                "available": False,
+                "ctb_rate": None,
+                "ctb_tier": "Unknown",
+                "source": "none",
+                "detail": "",
+            }
 
         ctb = float(ctb)
         tier = _classify_ctb(ctb)
@@ -78,7 +96,13 @@ def _fetch_quiver(symbol: str) -> dict:
         }
     except Exception as exc:
         log.debug("Quiver CTB fetch failed for %s: %s", symbol, exc)
-        return {"available": False, "ctb_rate": None, "ctb_tier": "Unknown", "source": "none", "detail": ""}
+        return {
+            "available": False,
+            "ctb_rate": None,
+            "ctb_tier": "Unknown",
+            "source": "none",
+            "detail": "",
+        }
 
 
 def _estimate_from_short_interest(symbol: str) -> dict:

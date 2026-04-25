@@ -500,6 +500,8 @@ if run_quintile:
 
         st.caption(f"⚠️ {result_q['survivorship_bias_disclaimer']}")
     elif result_q:
-        st.warning("Not enough tickers returned valid price data to run quintile analysis.")
+        st.warning(
+            "Not enough tickers returned valid price data to run quintile analysis."
+        )
 else:
     st.info("Click **Run Quintile Analysis** to score the top 50 S&P 500 tickers.")

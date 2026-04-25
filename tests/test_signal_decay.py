@@ -14,9 +14,9 @@ def test_leading_factor_highest_above_50():
     from src.analysis.signal_decay import get_leading_factor
 
     scores = {
-        "Valuation (P/E)": 80.0,   # above 50 by 30
-        "Trend (SMA)": 90.0,        # above 50 by 40 — winner
-        "Momentum (RSI)": 60.0,     # above 50 by 10
+        "Valuation (P/E)": 80.0,  # above 50 by 30
+        "Trend (SMA)": 90.0,  # above 50 by 40 — winner
+        "Momentum (RSI)": 60.0,  # above 50 by 10
     }
     assert get_leading_factor(scores) == "Trend (SMA)"
 

@@ -71,7 +71,9 @@ def _fetch_capitol_trades(symbol: str, days: int = 90) -> list[dict]:
         data = resp.json()
 
         trades = []
-        items = data if isinstance(data, list) else data.get("trades", data.get("data", []))
+        items = (
+            data if isinstance(data, list) else data.get("trades", data.get("data", []))
+        )
         for item in items:
             ticker = (
                 item.get("ticker")
@@ -80,14 +82,26 @@ def _fetch_capitol_trades(symbol: str, days: int = 90) -> list[dict]:
             )
             if str(ticker).upper() != symbol.upper():
                 continue
-            trades.append({
-                "politician": item.get("politician", {}).get("name", item.get("politician", "")),
-                "trade_date": item.get("traded", item.get("tradeDate", item.get("date", ""))),
-                "transaction_type": item.get("txType", item.get("type", "purchase")),
-                "amount_range": str(item.get("size", item.get("amount", ""))),
-                "party": item.get("politician", {}).get("party", item.get("party", "")),
-                "chamber": item.get("politician", {}).get("chamber", item.get("chamber", "")),
-            })
+            trades.append(
+                {
+                    "politician": item.get("politician", {}).get(
+                        "name", item.get("politician", "")
+                    ),
+                    "trade_date": item.get(
+                        "traded", item.get("tradeDate", item.get("date", ""))
+                    ),
+                    "transaction_type": item.get(
+                        "txType", item.get("type", "purchase")
+                    ),
+                    "amount_range": str(item.get("size", item.get("amount", ""))),
+                    "party": item.get("politician", {}).get(
+                        "party", item.get("party", "")
+                    ),
+                    "chamber": item.get("politician", {}).get(
+                        "chamber", item.get("chamber", "")
+                    ),
+                }
+            )
         return trades
     except Exception as exc:
         log.debug("Capitol Trades fetch failed for %s: %s", symbol, exc)
@@ -112,14 +126,18 @@ def _fetch_quiver_quant(symbol: str) -> list[dict]:
         trades = []
         for item in items:
             tx = str(item.get("Transaction", "")).lower()
-            trades.append({
-                "politician": item.get("Representative", ""),
-                "trade_date": item.get("Date", ""),
-                "transaction_type": "purchase" if "purchase" in tx or "buy" in tx else "sale",
-                "amount_range": str(item.get("Range", item.get("Amount", ""))),
-                "party": item.get("Party", ""),
-                "chamber": item.get("Chamber", ""),
-            })
+            trades.append(
+                {
+                    "politician": item.get("Representative", ""),
+                    "trade_date": item.get("Date", ""),
+                    "transaction_type": "purchase"
+                    if "purchase" in tx or "buy" in tx
+                    else "sale",
+                    "amount_range": str(item.get("Range", item.get("Amount", ""))),
+                    "party": item.get("Party", ""),
+                    "chamber": item.get("Chamber", ""),
+                }
+            )
         return trades
     except Exception as exc:
         log.debug("Quiver Quant fallback failed for %s: %s", symbol, exc)
@@ -216,10 +234,18 @@ def fetch_congress_trades(symbol: str, lookback_days: int = 90) -> dict:
     cutoff_30d = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
     recent = [t for t in trades if (t.get("trade_date") or "") >= cutoff_30d]
 
-    all_buys = sum(1 for t in trades if "purchase" in str(t.get("transaction_type", "")).lower())
-    all_sells = sum(1 for t in trades if "sale" in str(t.get("transaction_type", "")).lower())
-    recent_buys = sum(1 for t in recent if "purchase" in str(t.get("transaction_type", "")).lower())
-    recent_sells = sum(1 for t in recent if "sale" in str(t.get("transaction_type", "")).lower())
+    all_buys = sum(
+        1 for t in trades if "purchase" in str(t.get("transaction_type", "")).lower()
+    )
+    all_sells = sum(
+        1 for t in trades if "sale" in str(t.get("transaction_type", "")).lower()
+    )
+    recent_buys = sum(
+        1 for t in recent if "purchase" in str(t.get("transaction_type", "")).lower()
+    )
+    recent_sells = sum(
+        1 for t in recent if "sale" in str(t.get("transaction_type", "")).lower()
+    )
 
     if recent_buys > 0 and recent_sells == 0:
         score, net_signal = 80, "Buying"

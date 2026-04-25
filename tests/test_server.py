@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import pytest
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Skip the whole module if fastapi[testclient] or httpx is not available.
 # We must guard the import itself, because conftest.py stubs `fastapi` as a
@@ -36,9 +36,12 @@ def client():
     # Reset module-level singleton so each test gets a fresh mock
     server._api_instance = None
     server._api_error = None
+    server._API_KEY = ""
 
-    with TestClient(server.app) as c:
-        yield c
+    # Disable rate limiting so token exhaustion doesn't produce spurious 429s
+    with patch.object(server, "_check_rate_limit", lambda _limiter: None):
+        with TestClient(server.app) as c:
+            yield c
 
 
 def _mock_api():
@@ -252,6 +255,7 @@ class TestAuthentication:
 
             server._api_instance = None
             server._api_error = None
+            server._API_KEY = "secret123"
             with TestClient(server.app) as c:
                 response = c.post(
                     "/forward-test/portfolio", json={"name": "Unauthorized"}
@@ -262,6 +266,7 @@ class TestAuthentication:
             import src.services.server as server
 
             server._api_instance = None
+            server._API_KEY = ""
 
     def test_valid_key_accepted(self):
         """When JAJA_API_KEY is configured, correct key is accepted."""
@@ -271,6 +276,7 @@ class TestAuthentication:
 
             server._api_instance = None
             server._api_error = None
+            server._API_KEY = "secret123"
             with TestClient(server.app) as c:
                 response = c.post(
                     "/forward-test/portfolio",
@@ -283,3 +289,4 @@ class TestAuthentication:
             import src.services.server as server
 
             server._api_instance = None
+            server._API_KEY = ""

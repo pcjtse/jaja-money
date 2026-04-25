@@ -57,11 +57,13 @@ def compute_guidance_quality_score(
         estimate = e.get("estimate")
         if actual is not None and estimate is not None:
             try:
-                valid.append({
-                    "actual": float(actual),
-                    "estimate": float(estimate),
-                    "surprise_pct": e.get("surprisePercent"),
-                })
+                valid.append(
+                    {
+                        "actual": float(actual),
+                        "estimate": float(estimate),
+                        "surprise_pct": e.get("surprisePercent"),
+                    }
+                )
             except (TypeError, ValueError):
                 continue
 
@@ -81,7 +83,9 @@ def compute_guidance_quality_score(
     surprise_pcts = [
         v["surprise_pct"] for v in valid if v.get("surprise_pct") is not None
     ]
-    avg_surprise = round(sum(surprise_pcts) / len(surprise_pcts), 2) if surprise_pcts else 0.0
+    avg_surprise = (
+        round(sum(surprise_pcts) / len(surprise_pcts), 2) if surprise_pcts else 0.0
+    )
 
     # Consecutive beats from most recent
     consecutive_beats = 0

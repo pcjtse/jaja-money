@@ -74,8 +74,12 @@ def score_articles(articles: list) -> list[dict]:
             results.append({"label": "neutral", "score": 1.0})
             continue
 
-        # With top_k=None, pipeline returns a list of dicts sorted by score desc
+        # With top_k=None, pipeline returns either a flat list of dicts or a
+        # list-of-lists depending on the transformers version (newer versions
+        # wrap single-input results in an extra list as a batch dimension).
         preds = pipe(headline)
+        if preds and isinstance(preds[0], list):
+            preds = preds[0]  # unwrap batch dimension
         top = preds[0]  # highest-confidence prediction
         results.append({"label": top["label"].lower(), "score": top["score"]})
 

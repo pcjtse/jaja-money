@@ -394,9 +394,14 @@ def get_price_on_date(ticker: str, date: str) -> float | None:
         # Parse target date and compute a narrow 1-day window
         dt = _dt.date.fromisoformat(date)
         # Extend by one day on each side to handle weekends/holidays
-        from_ts = int(
-            _dt.datetime(dt.year, dt.month, dt.day, tzinfo=_dt.timezone.utc).timestamp()
-        ) - 86400
+        from_ts = (
+            int(
+                _dt.datetime(
+                    dt.year, dt.month, dt.day, tzinfo=_dt.timezone.utc
+                ).timestamp()
+            )
+            - 86400
+        )
         to_ts = from_ts + 3 * 86400
 
         api = get_api()

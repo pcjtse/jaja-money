@@ -84,9 +84,13 @@ def client():
 
     server._api_instance = None
     server._api_error = None
+    server._API_KEY = ""
 
-    with TestClient(server.app) as c:
-        yield c
+    # Disable rate limiting for the entire test module so token exhaustion
+    # from earlier test classes doesn't produce spurious 429 responses
+    with patch.object(server, "_check_rate_limit", lambda _limiter: None):
+        with TestClient(server.app) as c:
+            yield c
 
 
 def _mock_api():

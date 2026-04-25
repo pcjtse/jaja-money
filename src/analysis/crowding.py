@@ -99,7 +99,11 @@ def _get_top_decile_centroid() -> list[float] | None:
                 continue
             try:
                 factors = json.loads(fj)
-                vec = [float(f.get("score", 50)) / 100.0 for f in factors if f.get("score") is not None]
+                vec = [
+                    float(f.get("score", 50)) / 100.0
+                    for f in factors
+                    if f.get("score") is not None
+                ]
                 if vec:
                     all_vectors.append(vec)
             except (json.JSONDecodeError, TypeError):
@@ -114,8 +118,7 @@ def _get_top_decile_centroid() -> list[float] | None:
 
         # Compute centroid (mean vector)
         centroid = [
-            sum(v[i] for v in all_vectors) / len(all_vectors)
-            for i in range(min_len)
+            sum(v[i] for v in all_vectors) / len(all_vectors) for i in range(min_len)
         ]
         return centroid
     except Exception as exc:

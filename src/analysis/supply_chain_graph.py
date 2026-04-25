@@ -25,8 +25,15 @@ _DB_FILE = _DATA_DIR / "history.db"
 
 # Countries considered elevated geopolitical risk for supply chain
 _HIGH_RISK_REGIONS = {
-    "china", "russia", "iran", "north korea", "belarus",
-    "myanmar", "venezuela", "cuba", "syria",
+    "china",
+    "russia",
+    "iran",
+    "north korea",
+    "belarus",
+    "myanmar",
+    "venezuela",
+    "cuba",
+    "syria",
 }
 
 _SUPPLIER_KEYWORDS = [
@@ -244,7 +251,13 @@ def _persist_nodes(
                 """INSERT OR REPLACE INTO supply_chain_nodes
                    (symbol, node_name, node_type, region, fetched_at)
                    VALUES (?,?,?,?,?)""",
-                (symbol, f"{symbol}_suppliers", node_type, ",".join(regions) or "unknown", now),
+                (
+                    symbol,
+                    f"{symbol}_suppliers",
+                    node_type,
+                    ",".join(regions) or "unknown",
+                    now,
+                ),
             )
     except Exception as exc:
         log.debug("Supply chain node persist failed: %s", exc)

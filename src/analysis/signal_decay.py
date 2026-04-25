@@ -175,21 +175,15 @@ def get_signal_decay_table(min_n: int = 5) -> pd.DataFrame:
             if not _sufficient:
                 return None, None, None, None
             valid = [
-                p
-                for p in _positions
-                if p[price_key] is not None and p["entry"] > 0
+                p for p in _positions if p[price_key] is not None and p["entry"] > 0
             ]
             if not valid:
                 return None, None, None, None
             wins = sum(1 for p in valid if float(p[price_key]) > p["entry"])
             win_rate = wins / len(valid)
-            avg_pnl = (
-                sum(
-                    (float(p[price_key]) - p["entry"]) / p["entry"] * 100
-                    for p in valid
-                )
-                / len(valid)
-            )
+            avg_pnl = sum(
+                (float(p[price_key]) - p["entry"]) / p["entry"] * 100 for p in valid
+            ) / len(valid)
             ci_lo, ci_hi = _wilson_ci(wins, len(valid))
             return win_rate, avg_pnl, ci_lo, ci_hi
 

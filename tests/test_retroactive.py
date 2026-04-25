@@ -109,6 +109,7 @@ def test_high_score_written(patched_ledger, patched_history, monkeypatch):
 
     # Patch get_price_on_date to return None (past dates, won't close)
     monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: None)
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
 
     # Use a future date so T+30 hasn't passed and position stays open
     from datetime import date, timedelta
@@ -138,6 +139,7 @@ def test_duplicate_guard_retroactive(patched_ledger, patched_history, monkeypatc
     import src.data.providers as P
 
     monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: None)
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
 
     from datetime import date, timedelta
 
@@ -168,6 +170,7 @@ def test_past_signal_auto_closed(patched_ledger, patched_history, monkeypatch):
 
     # Return 105.0 for all price lookups
     monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: 105.0)
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
 
     _insert_history_row(patched_history, "TSLA", "2024-01-15", 200.0, 78)
 
@@ -229,12 +232,15 @@ def test_atomic_write_no_tmp_persists(patched_ledger):
 # ---------------------------------------------------------------------------
 
 
-def test_source_field_distinguishes_retroactive(patched_ledger, patched_history, monkeypatch):
+def test_source_field_distinguishes_retroactive(
+    patched_ledger, patched_history, monkeypatch
+):
     """source='retroactive' is set; live signals have no source field."""
     import src.analysis.retroactive as R
     import src.data.providers as P
 
     monkeypatch.setattr(P, "get_price_on_date", lambda *a, **k: None)
+    monkeypatch.setattr(R, "_historical_regime", lambda d: "bull")
 
     from datetime import date, timedelta
 

@@ -130,7 +130,9 @@ def fetch_13f_changes(symbol: str) -> dict:
             for _, row in df.iterrows():
                 holder_name = str(row.get("Holder", row.get("holder", "")))
                 shares = int(row.get("Shares", row.get("shares", 0)) or 0)
-                pct_raw = row.get("% Out", row.get("pctHeld", row.get("pct_held", None)))
+                pct_raw = row.get(
+                    "% Out", row.get("pctHeld", row.get("pct_held", None))
+                )
                 pct = 0.0
                 if pct_raw is not None:
                     try:
@@ -138,7 +140,9 @@ def fetch_13f_changes(symbol: str) -> dict:
                         pct = pct_val * 100 if pct_val < 1.0 else pct_val
                     except (TypeError, ValueError):
                         pct = 0.0
-                current_holders.append({"holder": holder_name, "shares": shares, "pct_held": round(pct, 4)})
+                current_holders.append(
+                    {"holder": holder_name, "shares": shares, "pct_held": round(pct, 4)}
+                )
     except Exception as exc:
         log.warning("13F yfinance fetch failed for %s: %s", symbol, exc)
 

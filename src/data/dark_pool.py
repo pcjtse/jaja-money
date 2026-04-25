@@ -117,11 +117,20 @@ def _fetch_finra_ats(symbol: str) -> list[dict]:
             items = data if isinstance(data, list) else data.get("data", [])
             result = []
             for item in items:
-                result.append({
-                    "week_date": str(item.get("weeklyEndingDate", item.get("date", "")))[:10],
-                    "ats_volume": int(item.get("totalWeeklyShareQuantity", item.get("volume", 0)) or 0),
-                    "total_volume": int(item.get("totalWeeklyShareQuantity", 0) or 0),
-                })
+                result.append(
+                    {
+                        "week_date": str(
+                            item.get("weeklyEndingDate", item.get("date", ""))
+                        )[:10],
+                        "ats_volume": int(
+                            item.get("totalWeeklyShareQuantity", item.get("volume", 0))
+                            or 0
+                        ),
+                        "total_volume": int(
+                            item.get("totalWeeklyShareQuantity", 0) or 0
+                        ),
+                    }
+                )
             return result
         return []
     except Exception as exc:
@@ -133,6 +142,7 @@ def _estimate_from_yfinance(symbol: str) -> list[dict]:
     """Estimate ATS signal from volume patterns (heuristic proxy)."""
     try:
         import yfinance as yf
+
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period="60d")
         if hist.empty or "Volume" not in hist.columns:
@@ -146,11 +156,13 @@ def _estimate_from_yfinance(symbol: str) -> list[dict]:
             avg_vol = float(group["Volume"].mean())
             # Heuristic: dark pool is roughly 30-45% of total in normal markets
             ats_est_pct = 0.38  # baseline estimate
-            result.append({
-                "week_date": str(week.end_time)[:10],
-                "ats_volume": int(avg_vol * ats_est_pct),
-                "total_volume": int(avg_vol),
-            })
+            result.append(
+                {
+                    "week_date": str(week.end_time)[:10],
+                    "ats_volume": int(avg_vol * ats_est_pct),
+                    "total_volume": int(avg_vol),
+                }
+            )
         return result[-8:]
     except Exception as exc:
         log.debug("yfinance dark pool estimation failed for %s: %s", symbol, exc)
@@ -241,11 +253,7 @@ def _compute_signal(history: list[dict]) -> dict:
     else:
         score = 50
 
-    detail = (
-        f"ATS vol (latest): {latest:.1f}% | "
-        f"4w avg: {avg_4w:.1f}% | "
-        f"Trend: {trend}"
-    )
+    detail = f"ATS vol (latest): {latest:.1f}% | 4w avg: {avg_4w:.1f}% | Trend: {trend}"
     if spike:
         detail += " | Spike detected"
 
