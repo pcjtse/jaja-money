@@ -357,7 +357,9 @@ def _fire_baseline_signal(
     today = datetime.now(timezone.utc).date().isoformat()
     for s in get_all_signals():
         if s.get("source") == "baseline" and s["fired_at"][:10] == today:
-            log.debug("Baseline already fired today — skipping co-fire for %s", real_ticker)
+            log.debug(
+                "Baseline already fired today — skipping co-fire for %s", real_ticker
+            )
             return
 
     universe = cfg.get("screener", "default_universe", default=[]) or []

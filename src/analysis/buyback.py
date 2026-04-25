@@ -53,7 +53,10 @@ def fetch_buyback_data(symbol: str) -> dict:
         if bs is not None and not bs.empty:
             for row_name in bs.index:
                 rn_lower = str(row_name).lower()
-                if "ordinary shares number" in rn_lower or "common stock shares" in rn_lower:
+                if (
+                    "ordinary shares number" in rn_lower
+                    or "common stock shares" in rn_lower
+                ):
                     vals = bs.loc[row_name].dropna()
                     share_counts = [float(v) for v in vals.values[:4] if v is not None]
                     break

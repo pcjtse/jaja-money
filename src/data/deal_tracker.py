@@ -29,12 +29,19 @@ _SITUATION_FORMS = {
 }
 
 _MERGER_KEYWORDS = [
-    "merger agreement", "acquisition agreement", "definitive agreement",
-    "transaction agreement", "business combination", "merger consideration",
+    "merger agreement",
+    "acquisition agreement",
+    "definitive agreement",
+    "transaction agreement",
+    "business combination",
+    "merger consideration",
 ]
 
 _SPINOFF_KEYWORDS = [
-    "spin-off", "spinoff", "separation", "distribution of shares",
+    "spin-off",
+    "spinoff",
+    "separation",
+    "distribution of shares",
     "new independent company",
 ]
 
@@ -70,7 +77,9 @@ def _ensure_situations_table() -> None:
 _ensure_situations_table()
 
 
-def _search_edgar_full_text(symbol: str, keywords: list[str], forms: list[str]) -> list[dict]:
+def _search_edgar_full_text(
+    symbol: str, keywords: list[str], forms: list[str]
+) -> list[dict]:
     """Search EDGAR full-text for keywords in specific form types."""
     results = []
     try:
@@ -84,7 +93,9 @@ def _search_edgar_full_text(symbol: str, keywords: list[str], forms: list[str]) 
                 "entity": symbol,
                 "forms": ",".join(forms),
                 "dateRange": "custom",
-                "startdt": (datetime.utcnow() - timedelta(days=365)).strftime("%Y-%m-%d"),
+                "startdt": (datetime.utcnow() - timedelta(days=365)).strftime(
+                    "%Y-%m-%d"
+                ),
                 "enddt": datetime.utcnow().strftime("%Y-%m-%d"),
             },
             timeout=10,
@@ -97,13 +108,15 @@ def _search_edgar_full_text(symbol: str, keywords: list[str], forms: list[str]) 
         hits = data.get("hits", {}).get("hits", [])
         for hit in hits[:5]:
             src = hit.get("_source", {})
-            results.append({
-                "form_type": src.get("form_type", ""),
-                "filed_at": src.get("file_date", ""),
-                "accession": src.get("accession_no", ""),
-                "description": src.get("period_of_report", ""),
-                "entity_name": src.get("entity_name", ""),
-            })
+            results.append(
+                {
+                    "form_type": src.get("form_type", ""),
+                    "filed_at": src.get("file_date", ""),
+                    "accession": src.get("accession_no", ""),
+                    "description": src.get("period_of_report", ""),
+                    "entity_name": src.get("entity_name", ""),
+                }
+            )
     except Exception as exc:
         log.debug("EDGAR full-text search failed for %s: %s", symbol, exc)
     return results
@@ -143,8 +156,12 @@ def get_special_situation_filings(symbol: str) -> dict:
     except Exception:
         pass
 
-    merger_filings = _search_edgar_full_text(symbol, _MERGER_KEYWORDS, _SITUATION_FORMS["merger"])
-    spinoff_filings = _search_edgar_full_text(symbol, _SPINOFF_KEYWORDS, _SITUATION_FORMS["spinoff"])
+    merger_filings = _search_edgar_full_text(
+        symbol, _MERGER_KEYWORDS, _SITUATION_FORMS["merger"]
+    )
+    spinoff_filings = _search_edgar_full_text(
+        symbol, _SPINOFF_KEYWORDS, _SITUATION_FORMS["spinoff"]
+    )
 
     situation_type = "none"
     filings = []
@@ -160,7 +177,9 @@ def get_special_situation_filings(symbol: str) -> dict:
         situation_type = "spinoff"
         filings = spinoff_filings
         deal_date = spinoff_filings[0].get("filed_at", "")
-        description = f"Spin-off filing detected: {spinoff_filings[0].get('form_type', '')}"
+        description = (
+            f"Spin-off filing detected: {spinoff_filings[0].get('form_type', '')}"
+        )
 
     if situation_type != "none":
         try:

@@ -92,13 +92,15 @@ def fetch_cross_asset_signals(sector: str | None = None) -> dict:
             contribution = 20
 
         weighted_score += (contribution - 50) * weight
-        leading.append({
-            "ticker": ticker,
-            "pct_change_5d": round(change, 2),
-            "direction": direction,
-            "signal_contribution": contribution,
-            "weight": weight,
-        })
+        leading.append(
+            {
+                "ticker": ticker,
+                "pct_change_5d": round(change, 2),
+                "direction": direction,
+                "signal_contribution": contribution,
+                "weight": weight,
+            }
+        )
 
     score = max(0, min(100, int(weighted_score)))
 
@@ -141,14 +143,23 @@ def _fetch_price_changes(tickers: list[str]) -> dict[str, float]:
                 progress=False,
                 auto_adjust=True,
             )
-            close = data.get("Close", data) if isinstance(data.columns, object) else data
+            close = (
+                data.get("Close", data) if isinstance(data.columns, object) else data
+            )
 
             if hasattr(close, "columns"):
                 for t in yf_tickers:
                     if t in close.columns:
                         col = close[t].dropna()
                         if len(col) >= 2:
-                            pct = (float(col.iloc[-1]) - float(col.iloc[-6 if len(col) >= 6 else 0])) / float(col.iloc[-6 if len(col) >= 6 else 0]) * 100
+                            pct = (
+                                (
+                                    float(col.iloc[-1])
+                                    - float(col.iloc[-6 if len(col) >= 6 else 0])
+                                )
+                                / float(col.iloc[-6 if len(col) >= 6 else 0])
+                                * 100
+                            )
                             results[t] = round(pct, 3)
             elif len(yf_tickers) == 1:
                 col = close.dropna() if hasattr(close, "dropna") else close
@@ -156,10 +167,14 @@ def _fetch_price_changes(tickers: list[str]) -> dict[str, float]:
                     start = col.iloc[-6 if len(col) >= 6 else 0]
                     end = col.iloc[-1]
                     if float(start) != 0:
-                        results[yf_tickers[0]] = round((float(end) - float(start)) / float(start) * 100, 3)
+                        results[yf_tickers[0]] = round(
+                            (float(end) - float(start)) / float(start) * 100, 3
+                        )
 
         if vix_tickers:
-            vix_data = yf.download("^VIX", period="10d", progress=False, auto_adjust=True)
+            vix_data = yf.download(
+                "^VIX", period="10d", progress=False, auto_adjust=True
+            )
             if not vix_data.empty and len(vix_data) >= 2:
                 vix_close = vix_data["Close"].dropna()
                 start = float(vix_close.iloc[-6 if len(vix_close) >= 6 else 0])

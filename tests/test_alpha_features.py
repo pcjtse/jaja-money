@@ -475,7 +475,11 @@ class TestRegime:
         assert regime == "Sideways"
 
     def test_multipliers_defined(self):
-        from src.analysis.regime import REGIME_MULTIPLIERS, REGIME_RISK_ON_GROWTH, REGIME_RISK_OFF_PANIC
+        from src.analysis.regime import (
+            REGIME_MULTIPLIERS,
+            REGIME_RISK_ON_GROWTH,
+            REGIME_RISK_OFF_PANIC,
+        )
 
         assert REGIME_MULTIPLIERS[REGIME_RISK_ON_GROWTH] > 0
         assert REGIME_MULTIPLIERS[REGIME_RISK_OFF_PANIC] < 0
@@ -526,7 +530,12 @@ class TestCrossAsset:
     def test_high_score_tailwind(self):
         from src.analysis.factors import _factor_cross_asset
 
-        data = {"available": True, "sector": "Technology", "score": 75, "detail": "Tailwinds"}
+        data = {
+            "available": True,
+            "sector": "Technology",
+            "score": 75,
+            "detail": "Tailwinds",
+        }
         r = _factor_cross_asset(data)
         assert r["score"] == 75
         assert "tailwind" in r["label"].lower()
@@ -715,7 +724,12 @@ class TestGuardrailAlphaFlags:
 
     def test_congress_selling_flag(self):
         flags = self._minimal_call(
-            congress_data={"available": True, "net_signal": "Selling", "sells": 3, "buys": 0}
+            congress_data={
+                "available": True,
+                "net_signal": "Selling",
+                "sells": 3,
+                "buys": 0,
+            }
         )
         titles = [f["title"] for f in flags]
         assert any("congressional" in t.lower() for t in titles)
@@ -750,7 +764,11 @@ class TestGuardrailAlphaFlags:
 
     def test_risk_off_panic_flag(self):
         flags = self._minimal_call(
-            regime_data={"regime": "Risk-Off Panic", "multiplier": -12, "detail": "test"}
+            regime_data={
+                "regime": "Risk-Off Panic",
+                "multiplier": -12,
+                "detail": "test",
+            }
         )
         titles = [f["title"] for f in flags]
         assert any("panic" in t.lower() for t in titles)
@@ -796,8 +814,20 @@ class TestComputeFactorsIntegration:
             earnings=[],
             recommendations=[],
             sentiment_agg=None,
-            congress_data={"available": True, "score": 75, "net_signal": "Buying", "detail": "", "buys": 2, "sells": 0},
-            regime_data={"regime": "Risk-On Growth", "confidence": 0.8, "multiplier": 8, "detail": ""},
+            congress_data={
+                "available": True,
+                "score": 75,
+                "net_signal": "Buying",
+                "detail": "",
+                "buys": 2,
+                "sells": 0,
+            },
+            regime_data={
+                "regime": "Risk-On Growth",
+                "confidence": 0.8,
+                "multiplier": 8,
+                "detail": "",
+            },
         )
         assert len(factors) >= 23
         factor_names = [f["name"] for f in factors]

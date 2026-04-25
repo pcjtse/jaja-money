@@ -312,20 +312,29 @@ Please provide:
         {"symbol": t, "weight": w, "sector": "Unknown"}
         for t, w in zip(tickers, weights)
     ]
+    # Convert list to dict[ticker -> {weight, sector}] as required by the functions
+    _positions_dict = {p["symbol"]: {"weight": p["weight"], "sector": p["sector"]} for p in _positions}
     _total_value = st.number_input(
         "Portfolio Value ($)", value=100000, step=10000, key="port_val"
     )
     try:
-        _stress_results = run_stress_tests(_positions, _total_value)
+        _stress_results = run_stress_tests(_positions_dict, _total_value)
         if _stress_results:
             stress_rows = []
             for _sr in _stress_results:
+                _loss_pct = _sr["portfolio_loss_pct"] * 100
+                _loss_dollar = _sr["portfolio_loss_dollar"]
+                _severity = (
+                    "High" if abs(_sr["portfolio_loss_pct"]) > 0.3
+                    else "Medium" if abs(_sr["portfolio_loss_pct"]) > 0.15
+                    else "Low"
+                )
                 stress_rows.append(
                     {
                         "Scenario": _sr["scenario"],
-                        "Est. Loss": f"${_sr['estimated_loss']:,.0f}",
-                        "Loss %": f"{_sr['loss_pct']:.1f}%",
-                        "Severity": _sr["severity"],
+                        "Est. Loss": f"${abs(_loss_dollar):,.0f}",
+                        "Loss %": f"{_loss_pct:.1f}%",
+                        "Severity": _severity,
                     }
                 )
             st.dataframe(
@@ -341,13 +350,13 @@ Please provide:
     st.subheader("Tax-Loss Harvesting Suggestions (P17.3)")
     if returns_df is not None and not returns_df.empty:
         try:
-            _tl_opportunities = find_tax_loss_opportunities(_positions, returns_df)
+            _tl_opportunities = find_tax_loss_opportunities(_positions_dict, returns_df)
             if _tl_opportunities:
                 for _tl in _tl_opportunities:
                     st.info(
-                        f"**{_tl['symbol']}** → swap for **{_tl['swap_candidate']}** "
-                        f"(correlation: {_tl.get('correlation', 0):.2f}, "
-                        f"current loss: {_tl.get('ytd_return_pct', 0):.1f}%)"
+                        f"**{_tl['ticker']}** → swap for **{_tl['corr_replacement']}** "
+                        f"(correlation: {_tl.get('correlation') or 0:.2f}, "
+                        f"current loss: {_tl.get('loss_pct', 0):.1f}%)"
                     )
             else:
                 st.caption("No tax-loss harvesting opportunities found.")
@@ -368,15 +377,15 @@ Please provide:
         t: 1 / len(tickers) for t in tickers
     }  # equal-weight target by default
     try:
-        _drift_results = compute_portfolio_drift(
-            [{**p, "current_weight": w} for p, w in zip(_positions, weights)],
-            _target_weights,
-        )
-        _drifted = [d for d in _drift_results if d.get("needs_rebalance")]
+        _positions_with_weights = {
+            p["symbol"]: {"current_weight": w} for p, w in zip(_positions, weights)
+        }
+        _drift_results = compute_portfolio_drift(_positions_with_weights, _target_weights)
+        _drifted = [d for d in _drift_results if d.get("drifted")]
         if _drifted:
             for _dr in _drifted:
                 st.warning(
-                    f"**{_dr['symbol']}** drifted {_dr['drift_pct']:+.1f}% from target "
+                    f"**{_dr['ticker']}** drifted {_dr['drift'] * 100:+.1f}% from target "
                     f"({_dr['target_weight'] * 100:.1f}% → {_dr['current_weight'] * 100:.1f}%)"
                 )
         else:

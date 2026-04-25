@@ -548,11 +548,56 @@ def run_parameter_sweep(
 # not included, which overstates historical performance. All charts must
 # display the survivorship bias disclaimer.
 SP500_TOP50 = [
-    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "BRK.B",
-    "JPM", "LLY", "V", "UNH", "XOM", "MA", "JNJ", "PG", "COST", "HD", "ORCL",
-    "BAC", "ABBV", "WMT", "KO", "MRK", "CVX", "NFLX", "CRM", "AMD", "PEP",
-    "TMO", "ACN", "LIN", "MCD", "ABT", "CSCO", "GE", "NOW", "DHR", "IBM",
-    "TXN", "INTU", "AMGN", "CAT", "VZ", "MS", "GS", "ISRG", "RTX", "BKNG",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "TSLA",
+    "AVGO",
+    "BRK.B",
+    "JPM",
+    "LLY",
+    "V",
+    "UNH",
+    "XOM",
+    "MA",
+    "JNJ",
+    "PG",
+    "COST",
+    "HD",
+    "ORCL",
+    "BAC",
+    "ABBV",
+    "WMT",
+    "KO",
+    "MRK",
+    "CVX",
+    "NFLX",
+    "CRM",
+    "AMD",
+    "PEP",
+    "TMO",
+    "ACN",
+    "LIN",
+    "MCD",
+    "ABT",
+    "CSCO",
+    "GE",
+    "NOW",
+    "DHR",
+    "IBM",
+    "TXN",
+    "INTU",
+    "AMGN",
+    "CAT",
+    "VZ",
+    "MS",
+    "GS",
+    "ISRG",
+    "RTX",
+    "BKNG",
 ]
 
 _BACKTEST_CACHE_PATH = "data/backtest_cache.json"
@@ -571,7 +616,9 @@ def _load_backtest_cache() -> dict:
         data = json.loads(p.read_text())
         # Evict stale entries
         now = _time.time()
-        fresh = {k: v for k, v in data.items() if now - v.get("_ts", 0) < _BACKTEST_CACHE_TTL}
+        fresh = {
+            k: v for k, v in data.items() if now - v.get("_ts", 0) < _BACKTEST_CACHE_TTL
+        }
         return fresh
     except Exception:
         return {}

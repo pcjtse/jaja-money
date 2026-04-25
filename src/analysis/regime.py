@@ -31,11 +31,11 @@ REGIME_RISK_OFF_PANIC = "Risk-Off Panic"
 
 # Score multiplier for composite factor score by regime
 REGIME_MULTIPLIERS = {
-    REGIME_RISK_ON_GROWTH:    +8,
-    REGIME_RISK_ON_MOMENTUM:  +4,
-    REGIME_SIDEWAYS:           0,
+    REGIME_RISK_ON_GROWTH: +8,
+    REGIME_RISK_ON_MOMENTUM: +4,
+    REGIME_SIDEWAYS: 0,
     REGIME_RISK_OFF_DEFENSIVE: -5,
-    REGIME_RISK_OFF_PANIC:    -12,
+    REGIME_RISK_OFF_PANIC: -12,
 }
 
 
@@ -131,7 +131,9 @@ def _fetch_regime_signals(macro_context: dict | None) -> dict:
             spy_close = spy["Close"].iloc[-1]
             spy_200 = spy["Close"].rolling(200).mean().iloc[-1]
             if spy_200 > 0:
-                signals["spy_vs_200_pct"] = round((float(spy_close) - float(spy_200)) / float(spy_200) * 100, 2)
+                signals["spy_vs_200_pct"] = round(
+                    (float(spy_close) - float(spy_200)) / float(spy_200) * 100, 2
+                )
                 signals["spy_above_200d"] = float(spy_close) > float(spy_200)
     except Exception as exc:
         log.debug("Regime cross-asset fetch failed: %s", exc)

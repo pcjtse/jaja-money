@@ -67,8 +67,7 @@ def classify_options_flow(
     earnings_bet = False
     if days_to_earnings is not None and days_to_earnings <= 14:
         short_dated_unusual = [
-            s for s in unusual_strikes
-            if s.get("days_to_expiry", 999) <= 14
+            s for s in unusual_strikes if s.get("days_to_expiry", 999) <= 14
         ]
         if len(short_dated_unusual) >= 2:
             call_unusual = sum(1 for s in short_dated_unusual if s["type"] == "call")
@@ -150,16 +149,18 @@ def _find_unusual_strikes(options: list, current_price: float | None) -> list[di
             moneyness = None
             if strike and current_price:
                 moneyness = round(float(strike) / float(current_price) - 1, 4)
-            unusual.append({
-                "type": "call" if "call" in opt_type else "put",
-                "strike": strike,
-                "expiry": expiry,
-                "volume": vol,
-                "open_interest": oi,
-                "vol_oi_ratio": round(vol / max(oi, 1), 1),
-                "moneyness": moneyness,
-                "days_to_expiry": days_to_expiry,
-            })
+            unusual.append(
+                {
+                    "type": "call" if "call" in opt_type else "put",
+                    "strike": strike,
+                    "expiry": expiry,
+                    "volume": vol,
+                    "open_interest": oi,
+                    "vol_oi_ratio": round(vol / max(oi, 1), 1),
+                    "moneyness": moneyness,
+                    "days_to_expiry": days_to_expiry,
+                }
+            )
     unusual.sort(key=lambda x: x["vol_oi_ratio"], reverse=True)
     return unusual
 
@@ -205,7 +206,9 @@ def _bullish_score(pcr: float, unusual_calls: list, iv_spike: bool) -> int:
     if iv_spike:
         base += 5
     # OTM calls are more aggressive
-    otm_calls = [c for c in unusual_calls if c.get("moneyness") and c["moneyness"] > 0.03]
+    otm_calls = [
+        c for c in unusual_calls if c.get("moneyness") and c["moneyness"] > 0.03
+    ]
     if otm_calls:
         base += 5
     return min(96, base)
@@ -219,7 +222,9 @@ def _bearish_score(pcr: float, unusual_puts: list, iv_spike: bool) -> int:
         base -= 8
     if iv_spike:
         base -= 5
-    otm_puts = [p for p in unusual_puts if p.get("moneyness") and p["moneyness"] < -0.03]
+    otm_puts = [
+        p for p in unusual_puts if p.get("moneyness") and p["moneyness"] < -0.03
+    ]
     if otm_puts:
         base -= 5
     return max(4, base)
@@ -257,11 +262,21 @@ def compute_gamma_exposure(
         detail (str)
     """
     if not chain_data:
-        return {"net_gamma_pct": None, "gamma_condition": "unknown", "squeeze_risk": False, "detail": "No data"}
+        return {
+            "net_gamma_pct": None,
+            "gamma_condition": "unknown",
+            "squeeze_risk": False,
+            "detail": "No data",
+        }
 
     options = chain_data.get("options", [])
     if not options or current_price is None:
-        return {"net_gamma_pct": None, "gamma_condition": "unknown", "squeeze_risk": False, "detail": "No options data"}
+        return {
+            "net_gamma_pct": None,
+            "gamma_condition": "unknown",
+            "squeeze_risk": False,
+            "detail": "No options data",
+        }
 
     call_gamma = 0.0
     put_gamma = 0.0
@@ -289,7 +304,12 @@ def compute_gamma_exposure(
 
     total = call_gamma + put_gamma
     if total == 0:
-        return {"net_gamma_pct": None, "gamma_condition": "unknown", "squeeze_risk": False, "detail": "No gamma data"}
+        return {
+            "net_gamma_pct": None,
+            "gamma_condition": "unknown",
+            "squeeze_risk": False,
+            "detail": "No gamma data",
+        }
 
     net_gamma = call_gamma - put_gamma
     net_gamma_pct = round(net_gamma / total * 100, 1)

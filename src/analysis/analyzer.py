@@ -1223,18 +1223,23 @@ def stream_ledger_narrative(use_cache: bool = True):
     for reg, stats in regime_stats.items():
         wr = stats["wins"] / stats["n"] * 100 if stats["n"] else 0
         ap = stats["pnl_sum"] / stats["n"] if stats["n"] else 0
-        regime_lines.append(f"  {reg}: n={stats['n']}, hit={wr:.0f}%, avg_pnl={ap:+.2f}%")
+        regime_lines.append(
+            f"  {reg}: n={stats['n']}, hit={wr:.0f}%, avg_pnl={ap:+.2f}%"
+        )
 
     # Baseline comparison
     from src.analysis.ledger import get_closed_positions as _closed_all
-    baseline_closed = [p for p in _closed_all(include_baseline=True) if p.get("is_baseline")]
+
+    baseline_closed = [
+        p for p in _closed_all(include_baseline=True) if p.get("is_baseline")
+    ]
     if baseline_closed:
         b_wins = sum(1 for p in baseline_closed if (p.get("pnl_pct") or 0) > 0)
         b_hit = b_wins / len(baseline_closed) * 100
-        b_pnl = sum(p.get("pnl_pct") or 0 for p in baseline_closed) / len(baseline_closed)
-        baseline_str = (
-            f"Random baseline (n={len(baseline_closed)}): hit={b_hit:.0f}%, avg_pnl={b_pnl:+.2f}%"
+        b_pnl = sum(p.get("pnl_pct") or 0 for p in baseline_closed) / len(
+            baseline_closed
         )
+        baseline_str = f"Random baseline (n={len(baseline_closed)}): hit={b_hit:.0f}%, avg_pnl={b_pnl:+.2f}%"
     else:
         baseline_str = "No baseline data yet."
 
@@ -1246,10 +1251,10 @@ def stream_ledger_narrative(use_cache: bool = True):
         for _, row in sufficient.sort_values("win_t30", ascending=False).iterrows():
             factor_lines.append(
                 f"  {row['factor']}: n={int(row['n'])}, "
-                f"win_t30={row['win_t30']*100:.0f}%, "
+                f"win_t30={row['win_t30'] * 100:.0f}%, "
                 f"avg_pnl_t30={row['avg_pnl_t30']:+.2f}%"
                 if row["avg_pnl_t30"] is not None
-                else f"  {row['factor']}: n={int(row['n'])}, win_t30={row['win_t30']*100:.0f}%"
+                else f"  {row['factor']}: n={int(row['n'])}, win_t30={row['win_t30'] * 100:.0f}%"
             )
         factor_str = "\n".join(factor_lines)
     else:

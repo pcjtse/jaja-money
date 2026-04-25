@@ -181,7 +181,9 @@ def close_position(
             s["spy_pnl_pct"] = (
                 round(spy_pnl_pct, 4) if spy_pnl_pct is not None else None
             )
-            s["spy_price_t30"] = float(spy_price_t30) if spy_price_t30 is not None else None
+            s["spy_price_t30"] = (
+                float(spy_price_t30) if spy_price_t30 is not None else None
+            )
             s["price_t5"] = float(price_t5) if price_t5 is not None else None
             s["price_t10"] = float(price_t10) if price_t10 is not None else None
             s["price_t30"] = float(price_t30) if price_t30 is not None else None

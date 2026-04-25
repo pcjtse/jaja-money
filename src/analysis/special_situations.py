@@ -15,12 +15,12 @@ log = get_logger(__name__)
 
 # Probability weight by deal type
 _DEAL_CERTAINTY = {
-    "SC TO-T": 0.85,    # Tender offer — high certainty
+    "SC TO-T": 0.85,  # Tender offer — high certainty
     "SC TO-I": 0.80,
-    "DEFM14A": 0.75,    # Definitive merger proxy
-    "PREM14A": 0.45,    # Preliminary — lower certainty
+    "DEFM14A": 0.75,  # Definitive merger proxy
+    "PREM14A": 0.45,  # Preliminary — lower certainty
     "8-K": 0.60,
-    "10-12B": 0.70,     # Spin-off registration
+    "10-12B": 0.70,  # Spin-off registration
     "10-12G": 0.65,
 }
 

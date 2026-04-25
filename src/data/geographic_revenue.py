@@ -53,8 +53,19 @@ _REGION_GROWTH = {
 
 # Common region keywords found in 10-K MD&A
 _REGION_PATTERNS = {
-    "united states": [r"\bunit(?:ed|) states\b", r"\bu\.?s\.?\b", r"\bdomestic\b", r"\bnorth america\b"],
-    "europe": [r"\beurop(?:e|ean)\b", r"\bEMEA\b", r"\bgermany\b", r"\buk\b", r"\bfrance\b"],
+    "united states": [
+        r"\bunit(?:ed|) states\b",
+        r"\bu\.?s\.?\b",
+        r"\bdomestic\b",
+        r"\bnorth america\b",
+    ],
+    "europe": [
+        r"\beurop(?:e|ean)\b",
+        r"\bEMEA\b",
+        r"\bgermany\b",
+        r"\buk\b",
+        r"\bfrance\b",
+    ],
     "china": [r"\bchina\b", r"\bchinese\b", r"\bgreater china\b", r"\bapac\b"],
     "japan": [r"\bjapan(?:ese)?\b"],
     "india": [r"\bindia(?:n)?\b"],
@@ -129,7 +140,9 @@ def score_geographic_risk(geo_weights: dict[str, float]) -> dict:
     risk_penalty = weighted_risk * 40
     score = max(0, min(100, int(growth_score - risk_penalty)))
 
-    top_regions = sorted(geo_weights.keys(), key=lambda r: geo_weights[r], reverse=True)[:3]
+    top_regions = sorted(
+        geo_weights.keys(), key=lambda r: geo_weights[r], reverse=True
+    )[:3]
 
     detail = (
         f"Top regions: {', '.join(top_regions)} | "
@@ -174,7 +187,13 @@ def fetch_geo_revenue_signal(symbol: str, business_text: str | None = None) -> d
                 geo_weights = {"china": 0.7, "united states": 0.3}
             elif "japan" in country:
                 geo_weights = {"japan": 0.6, "united states": 0.2, "europe": 0.2}
-            elif country in ("germany", "france", "uk", "united kingdom", "netherlands"):
+            elif country in (
+                "germany",
+                "france",
+                "uk",
+                "united kingdom",
+                "netherlands",
+            ):
                 geo_weights = {"europe": 0.6, "united states": 0.4}
             elif "india" in country:
                 geo_weights = {"india": 0.5, "united states": 0.3, "europe": 0.2}

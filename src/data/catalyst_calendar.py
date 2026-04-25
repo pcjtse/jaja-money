@@ -26,10 +26,22 @@ _DB_FILE = _DATA_DIR / "history.db"
 
 # FOMC dates for 2025-2026 (hardcoded; update annually)
 _FOMC_DATES_2025_2026 = [
-    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
-    "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-10",
-    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
-    "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
+    "2025-01-29",
+    "2025-03-19",
+    "2025-05-07",
+    "2025-06-18",
+    "2025-07-30",
+    "2025-09-17",
+    "2025-10-29",
+    "2025-12-10",
+    "2026-01-28",
+    "2026-03-18",
+    "2026-04-29",
+    "2026-06-17",
+    "2026-07-29",
+    "2026-09-16",
+    "2026-10-28",
+    "2026-12-09",
 ]
 
 
@@ -124,13 +136,15 @@ def _get_ex_dividend(symbol: str) -> list[dict]:
         else:
             date_str = str(ex_div_date)[:10]
 
-        return [{
-            "symbol": symbol,
-            "event_type": "EX_DIVIDEND",
-            "event_date": date_str,
-            "description": f"{symbol} ex-dividend date",
-            "alpha_weight": 0.5,
-        }]
+        return [
+            {
+                "symbol": symbol,
+                "event_type": "EX_DIVIDEND",
+                "event_date": date_str,
+                "description": f"{symbol} ex-dividend date",
+                "alpha_weight": 0.5,
+            }
+        ]
     except Exception as exc:
         log.debug("Ex-div fetch failed for %s: %s", symbol, exc)
         return []
@@ -166,13 +180,15 @@ def _get_earnings_date(symbol: str) -> list[dict]:
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
         if date_str >= today:
-            return [{
-                "symbol": symbol,
-                "event_type": "EARNINGS",
-                "event_date": date_str,
-                "description": f"{symbol} earnings release",
-                "alpha_weight": 3.0,
-            }]
+            return [
+                {
+                    "symbol": symbol,
+                    "event_type": "EARNINGS",
+                    "event_date": date_str,
+                    "description": f"{symbol} earnings release",
+                    "alpha_weight": 3.0,
+                }
+            ]
     except Exception as exc:
         log.debug("Earnings date fetch failed for %s: %s", symbol, exc)
     return []
@@ -232,7 +248,9 @@ def get_catalyst_calendar(symbol: str, days_ahead: int = 60) -> dict:
 
     nearest = merged[0] if merged else None
     within_7d = sum(1 for e in merged if e.get("days_until", 999) <= 7)
-    fomc_30d = any(e["event_type"] == "FOMC" and e.get("days_until", 999) <= 30 for e in merged)
+    fomc_30d = any(
+        e["event_type"] == "FOMC" and e.get("days_until", 999) <= 30 for e in merged
+    )
 
     detail = f"{len(merged)} upcoming catalysts (next {days_ahead}d)"
     if within_7d:

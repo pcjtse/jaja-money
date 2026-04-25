@@ -31,7 +31,9 @@ if "pandas" not in sys.modules:
                 result = []
                 for i in range(len(self._data)):
                     start = max(0, i - self._window + 1)
-                    ws = [x for x in self._data[start:i + 1] if x is not None and x == x]
+                    ws = [
+                        x for x in self._data[start : i + 1] if x is not None and x == x
+                    ]
                     if len(ws) < self._window:
                         result.append(float("nan"))
                     else:
@@ -48,6 +50,7 @@ if "pandas" not in sys.modules:
                         return 0.0
                     m = sum(xs) / n
                     return _math_pd.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1))
+
                 return self._apply(_s)
 
         class _EWM:
@@ -96,10 +99,15 @@ if "pandas" not in sys.modules:
                 return _math_pd.sqrt(sum((x - m) ** 2 for x in vals) / (n - 1))
 
             def ewm(self, span=None, alpha=None, min_periods=0, adjust=True, **kw):
-                return _EWM(self, span=span, alpha=alpha, min_periods=min_periods, adjust=adjust)
+                return _EWM(
+                    self, span=span, alpha=alpha, min_periods=min_periods, adjust=adjust
+                )
 
             def diff(self):
-                return _Series([float("nan")] + [self[i] - self[i - 1] for i in range(1, len(self))])
+                return _Series(
+                    [float("nan")]
+                    + [self[i] - self[i - 1] for i in range(1, len(self))]
+                )
 
             def clip(self, lower=None, upper=None):
                 result = []
@@ -123,7 +131,12 @@ if "pandas" not in sys.modules:
                 return min(vals) if vals else float("nan")
 
             def apply(self, fn):
-                return _Series([fn(x) if (x is not None and x == x) else float("nan") for x in self])
+                return _Series(
+                    [
+                        fn(x) if (x is not None and x == x) else float("nan")
+                        for x in self
+                    ]
+                )
 
             def tail(self, n):
                 return _Series(self[-n:])
@@ -136,7 +149,9 @@ if "pandas" not in sys.modules:
 
             def shift(self, n):
                 if n >= 0:
-                    return _Series([float("nan")] * n + list(self[:-n] if n else list(self)))
+                    return _Series(
+                        [float("nan")] * n + list(self[:-n] if n else list(self))
+                    )
                 return _Series(list(self[-n:]) + [float("nan")] * (-n))
 
             def __truediv__(self, other):
@@ -167,13 +182,25 @@ if "pandas" not in sys.modules:
                 return _Series([x * other for x in self])
 
             def __gt__(self, val):
-                return _Series([bool(x > val) if (x is not None and x == x) else False for x in self])
+                return _Series(
+                    [
+                        bool(x > val) if (x is not None and x == x) else False
+                        for x in self
+                    ]
+                )
 
             def __lt__(self, val):
-                return _Series([bool(x < val) if (x is not None and x == x) else False for x in self])
+                return _Series(
+                    [
+                        bool(x < val) if (x is not None and x == x) else False
+                        for x in self
+                    ]
+                )
 
             def __neg__(self):
-                return _Series([-x if (x is not None and x == x) else float("nan") for x in self])
+                return _Series(
+                    [-x if (x is not None and x == x) else float("nan") for x in self]
+                )
 
             def __radd__(self, other):
                 return _Series([other + x for x in self])
@@ -218,6 +245,7 @@ if "pandas" not in sys.modules:
 
         def _date_range(start=None, end=None, periods=None, freq="D", **kw):
             from datetime import datetime, timedelta
+
             if isinstance(start, str):
                 start = datetime.fromisoformat(start)
             if periods:
@@ -289,7 +317,9 @@ if "numpy" not in sys.modules:
 
             def __truediv__(self, other):
                 if isinstance(other, list):
-                    return _NpArray([a / b if b else float("nan") for a, b in zip(self, other)])
+                    return _NpArray(
+                        [a / b if b else float("nan") for a, b in zip(self, other)]
+                    )
                 return _NpArray([x / other if other else float("nan") for x in self])
 
             def __gt__(self, val):
@@ -327,7 +357,7 @@ if "numpy" not in sys.modules:
                 return (len(self),)
 
         def _np_array(data, *a, **kw):
-            if hasattr(data, '__iter__'):
+            if hasattr(data, "__iter__"):
                 return _NpArray(data)
             return _NpArray([data])
 
@@ -363,12 +393,23 @@ if "numpy" not in sys.modules:
             return data[lo] + frac * (data[hi] - data[lo])
 
         _np.percentile = _percentile
-        _np.quantile = lambda a, q, **kw: _percentile(a, q * 100 if isinstance(q, float) else [qi * 100 for qi in q])
+        _np.quantile = lambda a, q, **kw: _percentile(
+            a, q * 100 if isinstance(q, float) else [qi * 100 for qi in q]
+        )
         _np.bool_ = bool
         _np.integer = int
         _np.floating = float
-        _np.arange = lambda start, stop=None, step=1, **kw: list(range(int(start) if stop is not None else 0, int(stop) if stop is not None else int(start), int(step)))
-        _np.linspace = lambda start, stop, num=50, **kw: [start + (stop - start) * i / (num - 1) for i in range(num)]
+        _np.arange = lambda start, stop=None, step=1, **kw: list(
+            range(
+                int(start) if stop is not None else 0,
+                int(stop) if stop is not None else int(start),
+                int(step),
+            )
+        )
+        _np.linspace = lambda start, stop, num=50, **kw: [
+            start + (stop - start) * i / (num - 1) for i in range(num)
+        ]
+
         def _polyfit(x, y, deg):
             """Minimal linear regression (deg=1) via least squares."""
             if deg != 1 or len(x) < 2:
@@ -386,7 +427,9 @@ if "numpy" not in sys.modules:
             return [a, b]
 
         _np.polyfit = _polyfit
-        _np.poly1d = lambda coeffs: (lambda x: sum(c * x ** (len(coeffs) - 1 - i) for i, c in enumerate(coeffs)))
+        _np.poly1d = lambda coeffs: (
+            lambda x: sum(c * x ** (len(coeffs) - 1 - i) for i, c in enumerate(coeffs))
+        )
 
         import random as _random_mod
 
@@ -419,15 +462,27 @@ if "numpy" not in sys.modules:
         _np_random = types.ModuleType("numpy.random")
         _np_random.default_rng = _RNG
         _np_random.seed = lambda s=None: None
-        _np_random.randn = lambda *a: [_random_mod.gauss(0, 1) for _ in range(a[0] if a else 1)]
-        _np_random.rand = lambda *a: [_random_mod.random() for _ in range(a[0] if a else 1)]
+        _np_random.randn = lambda *a: [
+            _random_mod.gauss(0, 1) for _ in range(a[0] if a else 1)
+        ]
+        _np_random.rand = lambda *a: [
+            _random_mod.random() for _ in range(a[0] if a else 1)
+        ]
         _np_random.normal = lambda loc=0.0, scale=1.0, size=None: (
-            [_random_mod.gauss(loc, scale) for _ in range(size if isinstance(size, int) else size[0])]
-            if size is not None else _random_mod.gauss(loc, scale)
+            [
+                _random_mod.gauss(loc, scale)
+                for _ in range(size if isinstance(size, int) else size[0])
+            ]
+            if size is not None
+            else _random_mod.gauss(loc, scale)
         )
         _np_random.uniform = lambda low=0.0, high=1.0, size=None: (
-            [_random_mod.uniform(low, high) for _ in range(size if isinstance(size, int) else size[0])]
-            if size is not None else _random_mod.uniform(low, high)
+            [
+                _random_mod.uniform(low, high)
+                for _ in range(size if isinstance(size, int) else size[0])
+            ]
+            if size is not None
+            else _random_mod.uniform(low, high)
         )
         _np.random = _np_random
         sys.modules["numpy.random"] = _np_random
