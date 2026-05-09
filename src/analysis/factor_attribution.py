@@ -44,8 +44,6 @@ CORE_FACTOR_NAMES: dict[str, str] = {
 
 # 15 alpha signals — sparse, vary per ticker.
 # Names verified against factors.py source (commit c9c2461).
-# KNOWN BUG: ml_weights.py uses stale names that don't match these.
-# See TODOS.md TODO-001 for the fix.
 ALPHA_FACTOR_NAMES: dict[str, str] = {
     "Dividend Yield": "dividend_yield",
     "Estimate Revisions": "estimate_revisions",
@@ -63,6 +61,8 @@ ALPHA_FACTOR_NAMES: dict[str, str] = {
     "Geo Revenue Macro": "geo_revenue",  # NOT "Geographic Revenue"
     "Market Regime": "regime",
 }
+# NOTE (TODO-001 resolved): ml_weights.py imports CORE_FACTOR_NAMES directly so the
+# name→key mapping stays in sync. No stale hardcoded dict exists in ml_weights.py.
 
 ALL_FACTOR_NAMES: dict[str, str] = {**CORE_FACTOR_NAMES, **ALPHA_FACTOR_NAMES}
 
