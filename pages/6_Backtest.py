@@ -8,6 +8,7 @@ import pandas as pd
 from src.data.api import get_api, MOCK_MODE
 from src.analysis.backtest import run_backtest, run_walk_forward, run_parameter_sweep
 from src.analysis.analyzer import stream_backtest_narrative
+from src.analysis.strategies import STRATEGY_REGISTRY, DEFAULT_STRATEGY
 
 from src.ui.theme import inject_css, page_header
 
@@ -16,8 +17,8 @@ inject_css()
 page_header(
     "Strategy Backtesting",
     subtitle=(
-        "Test the factor signal model against historical price data. "
-        "The signal is a price-based composite of SMA trend, RSI, and MACD."
+        "Test any signal strategy against historical price data — "
+        "choose from built-in strategies or drop in autoresearch-optimized variants."
     ),
     icon="📊",
 )
@@ -71,20 +72,48 @@ enable_walkforward = st.checkbox(
 # P6.2: Parameter sweep toggle
 enable_sweep = st.checkbox("Enable parameter sensitivity sweep", value=False)
 
+# Strategy selector
+with st.expander("Signal Strategy", expanded=False):
+    strategy_names = list(STRATEGY_REGISTRY.keys())
+    selected_strategy_name = st.selectbox(
+        "Choose strategy",
+        strategy_names,
+        index=strategy_names.index(DEFAULT_STRATEGY),
+        help="Price Technical v2 (improved) fixes the symmetric RSI bug in v1 and adds a "
+             "Bollinger Band position factor.  MA Crossover uses golden/death cross only. "
+             "Momentum Breakout buys near 52-week highs with RSI confirmation.",
+    )
+    selected_signal_fn = STRATEGY_REGISTRY[selected_strategy_name]
+
+    strategy_descriptions = {
+        "Price Technical v1 (baseline)": "**SMA 40% + RSI 30% (symmetric) + MACD 30%.** Original baseline. "
+            "RSI scoring peaks at RSI=50 (neutral), treating overbought and oversold identically.",
+        "Price Technical v2 (improved)": "**SMA 35% + RSI 25% (directional) + MACD 25% + Bollinger Band 15%.** "
+            "RSI is now directional — RSI=70 scores high, RSI=30 scores low. "
+            "Bollinger Band position confirms trend strength. Recommended.",
+        "MA Crossover": "**Golden/death cross only.** Produces fewer, longer-duration trades. "
+            "Requires 200+ bars to generate a signal. Best on trending large-cap stocks and ETFs.",
+        "Momentum Breakout": "**52-week high proximity 40% + RSI directional 35% + SMA filter 25%.** "
+            "Buys strength near 52-week highs with RSI confirmation. Performs well in bull markets.",
+    }
+    st.info(strategy_descriptions.get(selected_strategy_name, ""))
+
 with st.expander("How the signal works"):
-    st.markdown("""
-    The **Signal Score (0-100)** is a price-based composite:
-    - **40%** — SMA trend (price vs. SMA-50/SMA-200 regime)
-    - **30%** — RSI(14) momentum
-    - **30%** — MACD histogram direction
+    st.markdown(f"""
+    **Selected: {selected_strategy_name}**
 
-    **Entry:** Buy when signal ≥ entry threshold.
-    **Exit:** Sell when signal ≤ exit threshold.
-
-    **Note (P6.1 Fix):** Signal computation uses an expanding window — only data
-    available up to each bar is used, eliminating look-ahead bias.
+    Each strategy returns a score 0-100 per bar using price history only (no look-ahead).
+    - **≥ entry threshold** → Buy
+    - **≤ exit threshold** → Sell
+    - Between thresholds → Hold
 
     Transaction costs (commission + slippage) are deducted from each trade (P6.3).
+
+    To run the autoresearch optimizer overnight and find better strategies automatically:
+    ```bash
+    python autoresearch/evaluate.py    # test current strategy_runner.py
+    # Then run /loop in Claude Code pointing at autoresearch/program.md
+    ```
     """)
 
 # -------------------------------------------------------------------------
@@ -139,6 +168,7 @@ if st.button("Run Backtest", type="primary"):
                     exit_threshold=exit_threshold,
                     commission_pct=commission_pct,
                     slippage_pct=slippage_pct,
+                    signal_fn=selected_signal_fn,
                 )
             except ValueError as e:
                 st.error(str(e))
@@ -204,6 +234,7 @@ if st.button("Run Backtest", type="primary"):
                     commission_pct=commission_pct,
                     slippage_pct=slippage_pct,
                     lookback_years=lookback_years,
+                    signal_fn=selected_signal_fn,
                 )
             except Exception as e:
                 st.error(f"Parameter sweep failed: {e}")
@@ -269,6 +300,7 @@ if st.button("Run Backtest", type="primary"):
                 commission_pct=commission_pct,
                 slippage_pct=slippage_pct,
                 dividends=dividends,
+                signal_fn=selected_signal_fn,
             )
         except ValueError as e:
             st.error(str(e))
