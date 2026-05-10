@@ -174,21 +174,19 @@ def test_derive_signal_confidence_capped_at_100():
 def test_analyze_returns_expected_keys(mock_api):
     from jaja_money_skill.scripts.jaja_skill import analyze
 
-    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
-        return_value={
+    with (
+        patch("src.analysis.factors.compute_factors", return_value={
             "composite_score": 72,
             "composite_label": "Strong Buy",
             "factors": [],
-        }
-    )
-    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
-        return_value={
+        }),
+        patch("src.analysis.guardrails.compute_risk", return_value={
             "risk_score": 35,
             "risk_level": "Low",
             "flags": [],
-        }
-    )
-    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
+        }),
+        patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api),
+    ):
         result = analyze("AAPL")
 
     assert result["symbol"] == "AAPL"
@@ -202,21 +200,19 @@ def test_analyze_returns_expected_keys(mock_api):
 def test_analyze_upcases_ticker(mock_api):
     from jaja_money_skill.scripts.jaja_skill import analyze
 
-    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
-        return_value={
+    with (
+        patch("src.analysis.factors.compute_factors", return_value={
             "composite_score": 50,
             "composite_label": "Hold",
             "factors": [],
-        }
-    )
-    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
-        return_value={
+        }),
+        patch("src.analysis.guardrails.compute_risk", return_value={
             "risk_score": 50,
             "risk_level": "Moderate",
             "flags": [],
-        }
-    )
-    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
+        }),
+        patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api),
+    ):
         result = analyze("aapl")
 
     assert result["symbol"] == "AAPL"
@@ -230,21 +226,19 @@ def test_analyze_upcases_ticker(mock_api):
 def test_score_returns_signal(mock_api):
     from jaja_money_skill.scripts.jaja_skill import score
 
-    sys.modules["src.analysis.factors"].compute_factors = MagicMock(
-        return_value={
+    with (
+        patch("src.analysis.factors.compute_factors", return_value={
             "composite_score": 68,
             "composite_label": "Buy",
             "factors": [],
-        }
-    )
-    sys.modules["src.analysis.guardrails"].compute_risk = MagicMock(
-        return_value={
+        }),
+        patch("src.analysis.guardrails.compute_risk", return_value={
             "risk_score": 45,
             "risk_level": "Moderate",
             "flags": [],
-        }
-    )
-    with patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api):
+        }),
+        patch("jaja_money_skill.scripts.jaja_skill._get_api", return_value=mock_api),
+    ):
         result = score("MSFT")
 
     assert result["symbol"] == "MSFT"
