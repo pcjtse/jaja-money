@@ -1,23 +1,32 @@
-# jaja-money — Stock Analysis Dashboard
+# jaja-money
 
 [![CI](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml/badge.svg)](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml)
+
+**Institutional-grade stock research, reimagined for the AI era.**
+
+jaja-money combines a 23-factor quantitative scoring engine, Claude AI synthesis, and a closed-loop signal validation system — giving any investor the analytical depth of a quant research desk, accessible from a browser.
 
 > ⚠️ **Investment Disclaimer** — jaja-money is a research and educational tool only.
 > **Nothing in this application constitutes financial, investment, or trading advice.**
 > Always consult a qualified financial advisor before making any investment decisions.
 > Past performance shown in backtests does not guarantee future results.
 
-A Streamlit-based stock analysis dashboard powered by the **Finnhub API** and **Claude AI**.
-Enter any ticker to get real-time quotes, interactive charts, technical indicators,
-AI-driven fundamental analysis, FinBERT news sentiment, an 8-factor quantitative score,
-and a comprehensive risk guardrail engine — all in a clean dark-theme UI.
+---
+
+## The Opportunity
+
+Stock research is broken in three ways. Quant tools are locked inside institutional platforms. AI assistants have no live market data. And no one measures whether their signals actually work.
+
+jaja-money fixes all three. A 23-factor quant engine generates a composite Buy/Hold/Sell signal. Claude AI writes a live research report — bull thesis, bear risks, 12-month price target — grounded in real data. And every signal is tracked against actual forward returns, so the system learns whether it's generating alpha over time.
+
+Three systems that traditionally require separate teams and separate budgets, unified in a single product.
 
 ---
 
 ## Screenshots
 
-| Homepage | Stock Analysis |
-|----------|----------------|
+| Main Dashboard | Stock Analysis |
+|----------------|----------------|
 | ![Homepage](screenshots/01_homepage.png) | ![Analysis](screenshots/02_aapl_analysis.png) |
 
 | Compare Stocks | Stock Screener |
@@ -61,11 +70,11 @@ flowchart LR
     end
 
     subgraph F [Factor Scoring]
-        F1["8 Core Factors:
-        Valuation, Trend, MACD,
-        Momentum, Sentiment
+        F1["23 Core Factors:
+        Valuation, Trend, Momentum,
+        Sentiment, Alt Data, Regime
         ---
-        0 to 100 Score"]:::step
+        0 to 100 Composite Score"]:::step
     end
 
     subgraph R [Risk Assessment]
@@ -73,14 +82,14 @@ flowchart LR
         Volatility & Drawdown
         RSI & 200-Day Trend
         ---
-        13 Red-Flag Alerts"]:::step
+        30+ Red-Flag Alerts"]:::step
     end
 
     subgraph AI [AI Analysis]
         AI1["Claude Synthesis:
         Bull/Bear Thesis
         Price Targets
-        Sentiment Synthesis"]:::step
+        SEC Filing Analysis"]:::step
     end
 
     subgraph SIG [Investment Signal]
@@ -92,7 +101,7 @@ flowchart LR
         S5["Strong Sell"]:::sell
     end
 
-    END(["💡 Watchlist & Backtests"]):::finish
+    END(["💡 Watchlist & Signal Validation"]):::finish
 
     %% Connections
     START --> D
@@ -113,498 +122,184 @@ flowchart LR
 
 ---
 
-## Key Features
+## Core Capabilities
 
-### Market Data & Technicals
+### Quantitative Signal Engine
+
+Twenty-three factors — spanning valuation, price trend, momentum, news sentiment, analyst consensus, earnings quality, alternative data, dark pool activity, congressional trades, institutional flow, options flow, supply chain risk, geographic revenue exposure, market regime, and more — are scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy), displayed as a gauge, radar chart, and progress-bar breakdown.
+
+Valuation is scored relative to the sector median, not absolute thresholds. Factor weights are configurable in `config.yaml` and can be replaced by the ML adaptive weighting module, which derives optimal weights from historical signal performance.
+
+### Risk Guardrail Engine
+
+Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme), with 30+ colour-coded red-flag alerts covering volatility, drawdown, overbought/oversold RSI, downtrend conditions, high P/E, earnings miss rate, negative analyst sentiment, earnings proximity, insider selling clusters, elevated short interest, liquidity risk, volatility regime, and macroeconomic stress.
+
+### AI Research Layer (Claude Opus 4.6)
+
+- **Fundamental analysis** — 8-section investment research report streamed live with adaptive prompts per stock type (Growth / Value / Dividend / Cyclical / Defensive)
+- **Price target** — AI-generated 12-month price target with bull/bear scenarios
+- **News sentiment synthesis** — Claude synthesises bullish/bearish narratives from live headlines
+- **Interactive research chat** — Ask any question about the stock; Claude answers with full context
+- **Earnings transcript analysis** — Management tone, guidance confidence, and forward-looking statement analysis
+- **SEC EDGAR** — Fetch and analyse 10-K, 10-Q, and 8-K filings with section-level diffing across quarters
+- **Autonomous research agent** — Multi-step workflow with tool-call authority (up to 10 turns, with step trace)
+- **PDF analysis** — Upload any financial PDF for Claude to parse and cross-reference with live data
+
+### Signal Validation Loop
+
+Every generated signal is tracked in SQLite. Forward returns at T+21, T+63, and T+126 trading-day horizons are filled automatically by a nightly batch job. The Signal Quality page computes Spearman Information Coefficient across all horizons, and Factor Attribution measures per-factor IC with 95% confidence intervals and Benjamini-Hochberg p-value correction — so you know not just what the system is recommending, but whether those recommendations are working.
+
+### Market Data and Technicals
+
 - **Real-time quotes** — price, change, day high/low, previous close
-- **Company overview** — sector, market cap, P/E, EPS, dividend yield, 52-week range
 - **Interactive price chart** — candlestick with SMA(50/200), Bollinger Bands, volume, OBV, VWAP
-- **Technical indicators** — RSI(14), MACD, Fibonacci levels (computed locally)
-- **Earnings history** — EPS vs estimate vs surprise for last 4 quarters, with beat probability badge
+- **Technical indicators** — RSI(14), MACD, Fibonacci levels
+- **Earnings history** — EPS vs estimate vs surprise for last 4 quarters with beat probability
 - **Analyst recommendations** — consensus bar chart and estimate revision momentum
-- **Insider trading** — recent insider buy/sell activity with cluster detection
-- **Short interest** — short % of float, days-to-cover, and squeeze potential indicator
-- **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread with elevated-risk banner
-- **Options market data** — IV surface, sweep/flow classification, gamma exposure, and hedge suggestions
-- **Alternative data signals** — Google Trends 90-day search-interest slope and job-posting velocity (via Adzuna) as leading indicators that precede revenue moves; both feed into the composite factor score when data is available
-- **Dark pool activity** — FINRA ATS weekly volume share with spike detection (>1.5× 4-week average)
+- **Insider trading** — recent buy/sell activity with cluster detection
+- **Short interest** — short % of float, days-to-cover, squeeze potential
+- **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread
+- **Options market data** — IV surface, sweep/flow classification, gamma exposure
+- **Alternative data** — Google Trends 90-day slope and job-posting velocity as leading revenue indicators
+- **Dark pool activity** — FINRA ATS weekly volume share with spike detection
 - **Congressional trades** — STOCK Act disclosure tracker with net buy/sell signal
 - **Institutional flow** — 13F-proxy QoQ delta showing entering and exiting institutions
-- **Catalyst calendar** — Aggregated FOMC dates, earnings, and ex-dividend events with alpha-weight flags
-- **Cross-asset signals** — Sector ETF momentum (HYG/IEF spread, XLF, XLE, etc.) with weighted composite
-- **Geographic revenue risk** — Region-weighted exposure score from SEC text with growth signal overlay
-- **Supply chain risk** — Sole-source concentration and high-risk region exposure parsed from 10-K filings
-- **Special situations** — M&A, spinoff, and restructuring deal tracker via EDGAR full-text search
-- **Market regime** — 5-state classifier (Risk-On Growth → Risk-Off Panic) with composite score multiplier
-- **Export** — CSV, HTML report, or PDF download
+- **Catalyst calendar** — FOMC dates, earnings, and ex-dividend events with alpha-weight flags
+- **Cross-asset signals** — Sector ETF momentum composite
+- **Geographic revenue risk** — Region-weighted exposure from SEC text
+- **Supply chain risk** — Sole-source concentration from 10-K filings
+- **Special situations** — M&A, spinoff, and restructuring tracker via EDGAR
+- **Market regime** — 5-state classifier with composite score multiplier
 
-### Factor Score Engine
-Twenty-three factors scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy),
-displayed as a gauge, radar chart, and progress-bar breakdown. Valuation is scored relative to the
-sector median rather than absolute thresholds. Weights are configurable in `config.yaml` and can be
-overridden by the optional ML adaptive weighting module.
+---
 
-| Factor | Default Weight |
-|--------|----------------|
-| Valuation (P/E, sector-adjusted) | 15% |
-| Trend (SMA-50/200) | 20% |
-| Momentum (RSI-14) | 10% |
-| MACD Signal | 10% |
-| News Sentiment | 15% |
-| Earnings Quality | 15% |
-| Analyst Consensus | 10% |
-| 52-Week Strength | 5% |
-| Dividend Yield | 5% |
-| Estimate Revisions | 8% |
-| Alt Data Signal (Google Trends + job-posting velocity) | 5% |
-| Congressional Signal | 5% |
-| Institutional Flow | 6% |
-| Estimate Velocity | 8% |
-| Buyback Effectiveness | 4% |
-| Guidance Quality | 6% |
-| Options Flow | 5% |
-| Dark Pool Signal | 4% |
-| Supply Chain Risk | 4% |
-| Special Situation | 6% |
-| Cross-Asset Signal | 4% |
-| Geographic Revenue Risk | 4% |
-| Crowding Risk | 0% (penalty only) |
-| Market Regime | 0% (multiplier only) |
+## Multi-Page Platform
 
-> Weights are applied proportionally; factors without available data are excluded from the composite.
-> Crowding Risk applies a score penalty (0–15 pts) and Market Regime applies a composite multiplier (−12 to +8 pts).
-
-### Risk Guardrails
-Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme),
-with 30+ colour-coded red-flag alerts covering volatility, drawdown, overbought/oversold
-RSI, downtrend conditions, high P/E, earnings miss rate, negative analyst sentiment,
-earnings proximity, insider selling clusters, elevated short interest, liquidity risk (ADV-based),
-volatility regime (transient vs. sustained spikes), and macroeconomic stress (VIX / yield curve).
-
-### AI Analysis (Claude Opus 4.6)
-- **Fundamental analysis** — 8-section investment research report streamed live with adaptive prompts per stock type (Growth / Value / Dividend / Cyclical / Defensive)
-- **News sentiment themes** — Claude synthesises bullish/bearish narratives from headlines
-- **Price target** — AI-generated 12-month price target with bull/bear scenarios
-- **Interactive chat** — Ask any question about the stock; Claude answers with full context (chat history auto-trimmed to fit context window)
-- **Earnings transcript analysis** — Stream Claude analysis of earnings call tone, guidance confidence, and forward-looking statements
-- **Earnings prediction** — Beat probability badge based on historical EPS surprise patterns, tracked in history for calibration
-- **SEC EDGAR** — Fetch and analyse 10-K, 10-Q, and 8-K filings directly from EDGAR, with section-level diffing across quarters
-- **Autonomous agent** — Multi-step research workflow with tool-call authority (up to 10 turns, with step trace)
-- **PDF analysis** — Upload any financial PDF (10-K, earnings slides, research reports) for Claude to parse and cross-reference with live data
-
-### Multi-Page App
-| Page | Description |
+| Page | What It Does |
 |------|-------------|
-| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and automatic peer group benchmarking |
-| **Screener** | Filter S&P 500, Russell 1000, or custom universe; supports AND/OR filter logic, quick presets, ESG filter, and Claude natural-language queries |
-| **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10 000 paths), Kelly criterion sizing, and factor attribution |
-| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase classification and momentum quadrant chart |
-| **Backtest** | Walk-forward signal simulation with equity curve, Sharpe ratio, max drawdown, parameter sensitivity heatmap, and DRIP support |
-| **Forward Test** | SQLite-backed paper portfolio to add AI-recommended positions from the main analysis page; tracks live P&L, equity curve, Sharpe ratio, max drawdown, win rate, and average factor/risk score at entry for post-hoc signal validation |
-| **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI thesis for the top long/short |
-| **Signal Quality** | Measures whether composite scores actually predict forward returns; computes Spearman IC at T+21/T+63/T+126 trading-day horizons once enough history accumulates |
-| **Factor Attribution** | Per-factor IC attribution with 95% confidence intervals and Benjamini-Hochberg p-value correction across all 23 factors |
-| **Ledger** | Tamper-evident signal ledger that commits entry signals with entry price and tracks outcomes as positions close; generates signal decay curves and a Claude research narrative once ≥20 closed trades exist |
+| **Main Analysis** | Full factor score, risk assessment, AI research, and signal for any ticker |
+| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and peer benchmarking |
+| **Screener** | Filter S&P 500, Russell 1000, or custom universe with AND/OR logic, quick presets, ESG filter, and Claude natural-language queries |
+| **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10,000 paths), Kelly criterion sizing, and factor attribution |
+| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase and momentum quadrant chart |
+| **Backtest** | Walk-forward signal simulation — equity curve, Sharpe ratio, max drawdown, parameter sensitivity heatmap, DRIP support |
+| **Forward Test** | SQLite-backed paper portfolio that tracks live P&L, equity curve, Sharpe, win rate, and average factor/risk score at entry |
+| **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI thesis |
+| **Signal Quality** | Spearman IC at T+21/T+63/T+126 horizons — measures whether composite scores predict forward returns |
+| **Factor Attribution** | Per-factor IC with 95% CI and Benjamini-Hochberg correction across all 23 factors |
+| **Ledger** | Tamper-evident signal ledger tracking entry/exit prices; generates signal decay curves and a Claude research narrative after 20+ closed trades |
 
-### Additional Capabilities
-- **Watchlist** — Save tickers with factor scores; persisted across sessions
-- **Price & signal alerts** — Threshold alerts with Slack / Discord / Telegram webhook delivery
+---
+
+## Additional Capabilities
+
+- **Nightly batch analysis** — APScheduler-backed overnight scoring of every watchlist ticker; seeds Signal Quality and Factor Attribution automatically
+- **Watchlist** — Save tickers with factor scores, persisted across sessions
+- **Price and signal alerts** — Threshold alerts with Slack / Discord / Telegram webhook delivery
 - **Daily digest** — Claude-written morning briefing for your entire watchlist (HTML + optional email)
 - **Named snapshots** — Save and diff analysis states over time
 - **Google Sheets export** — Write results to a Google Sheet via service account
 - **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
-- **Social sentiment** — Aggregated social media sentiment signals as supplementary context
-- **Post-earnings drift (PEAD)** — Track and analyse post-announcement price drift patterns
-- **Pairs trading** — Statistical correlation-based pairs analysis for hedged long/short ideas
-- **ML factor weighting** — Optional adaptive factor weights derived from historical signal performance
-- **Signal validity metrics** — Reliability scores and confidence intervals for generated signals
-- **Live risk-free rate** — 3-month T-bill rate fetched from FRED (used in Sharpe calculations)
+- **ML factor weighting** — Adaptive factor weights derived from historical signal performance
 - **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
-- **Agent Skill** — Use as an [Agent Skill](https://agentskills.io) with OpenClaw, Claude Code, or any compatible AI agent (see below)
+- **Agent Skill** — Use as an [Agent Skill](https://agentskills.io) with OpenClaw, Claude Code, or any compatible AI agent
 
 ---
 
-### Full Environment Variables
+## Integration
 
-| Variable | Required | Description |
-|---|---|---|
-| `FINNHUB_API_KEY` | Yes | Finnhub market data |
-| `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
-| `JAJA_API_KEY` | No | Protects REST API endpoints (disabled if unset) |
-| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode (e.g. `http://host:8080`) |
-| `JAJA_API_PORT` | No | REST API server port (default: `8080`) |
-| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
-| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
-| `ALPACA_BASE_URL` | Monitoring only | Alpaca base URL (default: `https://paper-api.alpaca.markets`) |
+jaja-money is packaged as an **Agent Skill** following the [Agent Skills standard](https://agentskills.io), making it embeddable in any AI agent or automated workflow.
 
----
-
-## Prerequisites
-
-- **Python 3.10+**
-- A free [Finnhub](https://finnhub.io) API key
-- An [Anthropic](https://console.anthropic.com) API key **or** the [Claude Code CLI](https://claude.ai/code)
-
-> **Tip:** If you have Claude Code CLI installed (`claude` on your PATH), you can set
-> `ai_backend: "cli"` in `config.yaml` and skip the `ANTHROPIC_API_KEY` entirely.
-
----
-
-## Setup
-
-1. **Clone and enter the repo:**
-   ```bash
-   cd jaja-money
-   ```
-
-2. **Create a virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate        # macOS / Linux
-   # venv\Scripts\activate          # Windows
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   > The FinBERT model (~500 MB) downloads automatically on first run and is cached locally.
-
-4. **Configure API keys:**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env`:
-   ```
-   FINNHUB_API_KEY=your_finnhub_key_here
-   ANTHROPIC_API_KEY=your_anthropic_key_here
-   ```
-
----
-
-## Usage
-
-```bash
-streamlit run app.py
-```
-
-Open `http://localhost:8501`, enter a ticker (e.g. `AAPL`) in the sidebar, and click **Analyze**.
-Use the sidebar navigation to switch between pages.
-
-### Docker
-
-```bash
-# Quick start
-cp .env.example .env   # add your keys
-docker compose up --build
-
-# With Redis cache
-docker compose --profile redis up --build
-```
-
-Persistent data (history, watchlist, alerts, cache) is stored inside the container at
-`~/.jaja-money/`. Mount a volume to keep it across restarts:
-```bash
-docker run -p 8501:8501 --env-file .env \
-  -v "$HOME/.jaja-money:/root/.jaja-money" jaja-money
-```
-
----
-
-## Agent Skill — jaja-money
-
-jaja-money is packaged as an **Agent Skill** following the [Agent Skills standard](https://agentskills.io).
-The skill lives in the `jaja_money_skill/` directory and can be used with any AI agent
-that supports the standard, including **OpenClaw** and **Claude Code**.
-
-> **Note:** Real order execution has been removed. `broker.py` provides read-only Alpaca
-> account/position monitoring and a **simulation-only** `execute_signal()` that returns
-> what a trade *would* do without placing any real orders.
-
-### Skill Structure
-
-```
-jaja_money_skill/
-├── SKILL.md              # Skill metadata + instructions (Agent Skills standard)
-├── __init__.py
-├── scripts/
-│   ├── __init__.py
-│   ├── jaja_skill.py     # Core skill functions (analyze, score, screen, etc.)
-│   ├── jaja_client.py    # HTTP client for remote mode
-│   └── jaja_events.py    # Event-triggered analysis scheduler
-├── references/
-│   ├── api_schema.md     # Full API response schemas
-│   └── endpoints.md      # REST API endpoint documentation
-└── assets/               # Static resources (templates, data files)
-```
-
-### Installation
-
-#### With OpenClaw
-
-Copy or symlink the `jaja_money_skill/` directory into your OpenClaw skills directory:
-
-```bash
-# Clone the repo
-git clone https://github.com/pcjtse/jaja-money.git
-cd jaja-money
-
-# Copy the skill to your OpenClaw skills directory
-cp -r jaja_money_skill/ ~/.openclaw/skills/jaja-money/
-
-# Or symlink for development
-ln -s "$(pwd)/jaja-money-skill" ~/.openclaw/skills/jaja-money
-```
-
-Then configure the required environment variables:
-
-```bash
-export FINNHUB_API_KEY=your_finnhub_key
-export ANTHROPIC_API_KEY=your_anthropic_key   # optional, for AI research
-```
-
-OpenClaw will auto-discover the skill from `SKILL.md` and make its functions available.
-
-#### With Claude Code
-
-Add the skill to your Claude Code project by referencing the skill directory:
-
-```bash
-# From the jaja-money project root
-claude --skill ./jaja-money-skill
-```
-
-Or add to your project's `.claude/settings.json`:
-
-```json
-{
-  "skills": ["./jaja-money-skill"]
-}
-```
-
-Claude Code will load the `SKILL.md` and make the skill functions available in your sessions.
-
-#### Standalone Python Usage
-
-```bash
-pip install -r requirements.txt
-```
-
-### Skill Capabilities
-
-| Capability | Function | Description |
-|------------|----------|-------------|
-| Full analysis | `analyze(ticker)` | Factor scores, risk, financials, signal |
-| Quick score | `score(ticker)` | Lightweight factor/risk scores |
-| Screening | `screen(tickers, ...)` | Filter tickers by factor/risk thresholds |
-| Alerts | `get_alerts(symbol)` | Active price and signal alerts |
-| Research | `research(ticker, question)` | Autonomous multi-step investment research |
-
-### 1. Using the Skill (Python)
-
-The skill can run **locally** (importing analysis modules directly) or in
-**remote mode** — connecting to any running jaja-money server over HTTP.
-
-**Local mode:**
+### Python SDK
 
 ```python
-from jaja_money_skill.scripts.jaja_skill import analyze, screen, score, get_alerts, research
+from jaja_money_skill.scripts.jaja_skill import analyze, screen, score, research
 
 # Full fundamental + risk analysis
 result = analyze("AAPL")
 # {'symbol': 'AAPL', 'signal': 'BUY', 'confidence': 74, 'factor_score': 72, ...}
 
-# Lightweight factor/risk score only
-s = score("MSFT")
-# {'symbol': 'MSFT', 'signal': 'HOLD', 'confidence': 50, ...}
-
-# Screen a list of tickers
+# Screen a universe by factor and risk thresholds
 hits = screen(["AAPL", "MSFT", "NVDA"], min_factor_score=65, max_risk_score=50)
 
-# Active price/signal alerts
-alerts = get_alerts("AAPL")
-
-# Autonomous multi-step research agent (returns full memo dict)
+# Autonomous multi-step research agent
 memo = research("TSLA", question="What is the bear case?")
 ```
 
-**Remote mode** — point the skill at a running jaja-money server:
+### REST API
+
+A FastAPI server exposes every capability as HTTP endpoints — full analysis, scoring, screening, alerts, and the autonomous research agent. See [REST_API.md](REST_API.md) for the full reference.
+
+### Remote Mode
+
+Point the skill at a running jaja-money server for distributed or multi-agent setups:
 
 ```bash
 export JAJA_API_URL=http://analysis-server:8080
-export JAJA_API_KEY=mysecret   # optional, forwarded as X-API-Key
+export JAJA_API_KEY=mysecret
 ```
 
-```python
-from jaja_money_skill.scripts.jaja_skill import analyze, score
+### Event-Triggered Analysis
 
-result = analyze("AAPL")   # calls http://analysis-server:8080/analyze
-s = score("MSFT")          # calls http://analysis-server:8080/score
-```
+APScheduler fires analysis callbacks on earnings proximity, new SEC filings, and price/signal threshold breaches — enabling fully automated monitoring workflows.
 
-You can also use `JajaMoneyClient` directly for finer control:
+---
 
-```python
-from jaja_money_skill.scripts.jaja_client import JajaMoneyClient
+## Quick Start
 
-client = JajaMoneyClient("http://analysis-server:8080", api_key="mysecret")
-client.health()                         # GET /health
-client.analyze("AAPL")                  # POST /analyze
-client.score("MSFT")                    # POST /score
-client.screen(["AAPL", "MSFT"])         # POST /screen
-client.signals(["AAPL", "MSFT"])        # POST /signals
-client.get_alerts("AAPL")              # GET /alerts?symbol=AAPL
-client.research("TSLA", question="Bear case?")  # POST /openclaw/agent
-```
-
-### 2. REST API Endpoints
-
-For the full endpoint reference including request/response formats, authentication, and
-Docker setup, see **[REST_API.md](REST_API.md)**.
-
-### 3. Alpaca Account Monitoring (Read-Only)
-
-`broker.py` provides **read-only** monitoring of an [Alpaca](https://alpaca.markets)
-account. `execute_signal()` always returns a simulation result.
+**Requirements:** Python 3.10+, [Finnhub API key](https://finnhub.io) (free tier), [Anthropic API key](https://console.anthropic.com)
 
 ```bash
-ALPACA_API_KEY=your_alpaca_key
-ALPACA_API_SECRET=your_alpaca_secret
-ALPACA_BASE_URL=https://paper-api.alpaca.markets   # default
+# Clone and install
+git clone https://github.com/pcjtse/jaja-money.git
+cd jaja-money
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env
+# Edit .env: add FINNHUB_API_KEY and ANTHROPIC_API_KEY
+
+# Run
+streamlit run app.py
 ```
 
-```python
-from jaja_money_skill.scripts.jaja_skill import score
-from broker import execute_signal
+Open `http://localhost:8501`, enter a ticker in the sidebar, and click **Analyze**.
 
-s = score("AAPL")
-result = execute_signal(
-    "AAPL",
-    signal=s["signal"],
-    qty=10,
-    factor_score=s["factor_score"],
-    risk_score=s["risk_score"],
-)
-# Always returns a simulation — use Forward Test for paper portfolio tracking
+> **Tip:** If you have the [Claude Code CLI](https://claude.ai/code) installed, set `ai_backend: "cli"` in `config.yaml` to skip the `ANTHROPIC_API_KEY` requirement.
+
+### Docker
+
+```bash
+cp .env.example .env   # add your keys
+docker compose up --build
 ```
 
-### 4. Incoming Webhook Receiver
+---
 
-**`POST /openclaw/webhook`** accepts commands from an AI agent at runtime.
+## Environment Variables
 
-| `event_type` | Required `payload` fields | Action |
+| Variable | Required | Description |
 |---|---|---|
-| `analyze_request` | `symbol` | Runs full analysis and returns signal |
-| `alert_request` | `symbol`, `condition`, `threshold` | Creates a price alert |
-| `screen_request` | `tickers` | Runs the screener and returns results |
-
-```bash
-curl -X POST http://localhost:8080/openclaw/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "analyze_request",
-    "payload": {"symbol": "NVDA"},
-    "agent_id": "my-agent"
-  }'
-```
-
-### 5. Event-Triggered Analysis
-
-The event scheduler uses APScheduler to automatically fire analysis callbacks
-when market events occur.
-
-| Event type | Trigger condition |
-|---|---|
-| `earnings_approaching` | Earnings date within 3 days |
-| `new_sec_filing` | 10-K, 10-Q, or 8-K filed today |
-| `price_alert_triggered` | Price / factor threshold breached |
-
-```python
-from jaja_money_skill.scripts.jaja_events import (
-    register_event_callback,
-    start_event_scheduler,
-    stop_event_scheduler,
-)
-
-def on_earnings(event):
-    from jaja_money_skill.scripts.jaja_skill import score
-    s = score(event["symbol"])
-    print(f"{event['symbol']} earnings in {event['days_away']}d — signal: {s['signal']}")
-
-register_event_callback("earnings_approaching", on_earnings)
-start_event_scheduler(tickers=["AAPL", "MSFT", "NVDA"], interval_seconds=300)
-```
-
-Configure in `config.yaml`:
-
-```yaml
-openclaw:
-  event_scheduler_interval_seconds: 300
-  earnings_alert_days_ahead: 3
-  signal_buy_factor_min: 65
-  signal_buy_risk_max: 50
-  signal_sell_factor_max: 35
-  signal_sell_risk_min: 75
-```
-
-## ⚠️ API Usage Limits
-
-**Set spending and rate limits before running bulk operations.**
-The Screener and Sector pages can make hundreds of API calls in a single session.
-
-### Anthropic (Claude) — Spend Limits
-
-1. Go to [console.anthropic.com](https://console.anthropic.com) → **Settings → Billing**
-2. Set a **monthly spend limit** (e.g. $10–20 for light use, $50+ for heavy screener workflows)
-3. Optionally set a notification threshold to get an email before you reach your cap
-
-Every "Analyze with Claude" call streams ~1 000–3 000 tokens. Claude responses are
-disk-cached for 30 minutes, so re-running the same analysis is free — but new symbols always
-hit the API.
-
-### Finnhub — Rate Limits
-
-The free plan allows **60 requests per minute**.
-Approximate call counts per operation:
-
-| Operation | API calls |
-|-----------|-----------|
-| Single stock analysis | ~12 |
-| Compare (5 stocks) | ~25 |
-| Sector Rotation (11 ETFs) | ~55 |
-| Screener — S&P 500 (100 tickers) | ~400–500 |
-| Screener — Russell 1000 (500 tickers) | ~2 000–2 500 |
-
-Monitor usage at [finnhub.io/dashboard](https://finnhub.io/dashboard).
-For the Screener, prefer the **Default** or **S&P 500** universe to stay within free-tier limits.
-If you see `429 Too Many Requests`, wait 60 seconds before retrying.
+| `FINNHUB_API_KEY` | Yes | Finnhub market data |
+| `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
+| `JAJA_API_KEY` | No | Protects REST API endpoints |
+| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode |
+| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
+| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
 
 ---
 
-## Webhook Notifications
+## Data Architecture
 
-Configure Slack, Discord, or Telegram alerts in `config.yaml`:
+jaja-money uses two time-series stores with distinct purposes:
 
-```yaml
-webhooks:
-  slack_url: "https://hooks.slack.com/services/..."
-  discord_url: "https://discord.com/api/webhooks/..."
-  telegram_token: "123456:ABC-..."
-  telegram_chat_id: "-100123456789"
-```
+| Store | Horizons | Purpose |
+|-------|----------|---------|
+| `signal_returns` in `history.db` | T+21 / T+63 / T+126 trading days | Factor IC research — Spearman correlation of composite score vs forward return |
+| `data/ledger.json` | T+5 / T+10 / T+30 calendar days | Paper trade P&L tracking for the Forward Test portfolio |
 
----
-
-## Data Architecture — Storage Separation
-
-jaja-money uses two distinct time-series stores that must **not** be merged:
-
-| Store | File | Horizons | Purpose |
-|-------|------|----------|---------|
-| `signal_returns` table in `history.db` | `src/data/history.py` | T+21 / T+63 / T+126 **trading days** | Factor IC research — Spearman correlation of composite score vs forward return |
-| `data/ledger.json` | `data/ledger.json` | T+5 / T+10 / T+30 **calendar days** | Paper trade P&L tracking for the Forward Test portfolio |
-
-These serve different analytical purposes and use incompatible time units (trading days vs calendar days). A T+21 trading-day return is approximately a 1-month calendar return, but joining these tables would silently produce incorrect results. See `_ensure_signal_returns_table()` in `src/data/history.py` for the authoritative docstring.
+These serve different analytical purposes and use incompatible time units. They must not be merged.
 
 ---
 

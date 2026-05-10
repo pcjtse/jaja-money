@@ -40,6 +40,11 @@ _DEFAULTS: dict[str, Any] = {
         "jobs_weight": 0.5,
         "cache_ttl_hours": 6,
     },
+    "batch_analysis": {
+        "enabled": False,
+        "schedule_hour": 7,
+        "schedule_minute": 0,
+    },
     "risk": {
         "bands": {
             "extreme": 80,
@@ -212,6 +217,21 @@ class _Config:
     def alt_data_enabled(self) -> bool:
         """Whether the alternative data signal (P21.5) is enabled."""
         return bool(self.get("alt_data", "enabled", default=True))
+
+    @property
+    def batch_analysis_enabled(self) -> bool:
+        """Whether the scheduled overnight batch analysis (P23.1) is enabled."""
+        return bool(self.get("batch_analysis", "enabled", default=False))
+
+    @property
+    def batch_schedule_hour(self) -> int:
+        """UTC hour for the nightly batch run."""
+        return int(self.get("batch_analysis", "schedule_hour", default=7))
+
+    @property
+    def batch_schedule_minute(self) -> int:
+        """UTC minute for the nightly batch run."""
+        return int(self.get("batch_analysis", "schedule_minute", default=0))
 
 
 def _build_config() -> _Config:

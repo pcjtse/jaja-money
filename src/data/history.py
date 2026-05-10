@@ -669,6 +669,91 @@ def get_latest_ml_weights() -> dict | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# P23.1: Batch run tracking
+# ---------------------------------------------------------------------------
+
+
+def _ensure_batch_run_table() -> None:
+    """Create batch_runs table for tracking scheduled analysis runs."""
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS batch_runs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_date     TEXT NOT NULL,
+                started_at   INTEGER NOT NULL,
+                finished_at  INTEGER,
+                status       TEXT NOT NULL,
+                processed    INTEGER DEFAULT 0,
+                errors       INTEGER DEFAULT 0,
+                duration_s   REAL DEFAULT 0.0,
+                symbols_json TEXT
+            )
+        """)
+
+
+_ensure_batch_run_table()
+
+
+def save_batch_run(
+    status: str,
+    processed: int = 0,
+    errors: int = 0,
+    symbols_processed: list | None = None,
+    duration_s: float = 0.0,
+) -> None:
+    """Upsert the batch run record for today."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    now = int(time.time())
+    finished_at = now if status != "running" else None
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "DELETE FROM batch_runs WHERE run_date=?",
+                (today,),
+            )
+            conn.execute(
+                """INSERT INTO batch_runs
+                   (run_date, started_at, finished_at, status,
+                    processed, errors, duration_s, symbols_json)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    today,
+                    now,
+                    finished_at,
+                    status,
+                    processed,
+                    errors,
+                    duration_s,
+                    json.dumps(symbols_processed or []),
+                ),
+            )
+        log.info("Saved batch run: status=%s processed=%d errors=%d", status, processed, errors)
+    except Exception as exc:
+        log.warning("Failed to save batch run: %s", exc)
+
+
+def get_last_batch_run() -> dict | None:
+    """Return the most recent batch_runs row, or None if no runs exist."""
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM batch_runs ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        # Decode symbols_json for convenience
+        try:
+            result["symbols_processed"] = json.loads(result.get("symbols_json") or "[]")
+        except Exception:
+            result["symbols_processed"] = []
+        return result
+    except Exception as exc:
+        log.warning("Failed to load last batch run: %s", exc)
+        return None
+
+
 def get_all_factor_snapshots() -> list[dict]:
     """Return all analysis_history rows that contain factor score data.
 
