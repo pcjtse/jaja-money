@@ -1534,6 +1534,15 @@ try:
 except Exception:
     pass
 
+# Fetch executive tone linguistic analysis (earnings call transcript via Claude AI)
+_executive_tone_data = None
+try:
+    from src.analysis.executive_tone import compute_executive_tone_score as _get_exec_tone
+    with st.spinner("Analyzing executive tone..."):
+        _executive_tone_data = _get_exec_tone(symbol, get_api())
+except Exception:
+    pass
+
 # P5.2, P5.1, P5.7, P21.5: Include sector, revisions, alt data in factor computation
 _sector = (profile or {}).get("finnhubIndustry") if profile else None
 _factors = compute_factors(
@@ -1546,6 +1555,7 @@ _factors = compute_factors(
     sector=_sector,
     revisions=_revisions if _revisions else None,
     alt_data=_alt_data,
+    executive_tone_data=_executive_tone_data,
 )
 _composite = composite_score(_factors)
 _label, _color = composite_label_color(_composite)

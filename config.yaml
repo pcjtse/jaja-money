@@ -27,6 +27,7 @@ factor_weights:
   geo_revenue: 0.04
   crowding_risk: 0.0   # informational penalty, not additive weight
   regime: 0.0          # applied as multiplier, not additive weight
+  executive_tone: 0.07 # linguistic analysis of executive speech (Claude AI)
 
 # P21.5: Alternative data signal settings
 alt_data:

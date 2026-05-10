@@ -600,7 +600,7 @@ def test_compute_factors_returns_10():
             "counts": {"positive": 7, "negative": 2, "neutral": 1},
         },
     )
-    assert len(result) == 23  # 11 original + 12 new alpha factors
+    assert len(result) == 24  # 11 original + 12 alpha + 1 executive tone
 
 
 def test_compute_factors_keys():
@@ -631,7 +631,7 @@ def test_compute_factors_zero_price_handled():
         recommendations=[],
         sentiment_agg=None,
     )
-    assert len(result) == 23  # 11 original + 12 new alpha factors
+    assert len(result) == 24  # 11 original + 12 alpha + 1 executive tone
 
 
 def test_compute_factors_all_none():
