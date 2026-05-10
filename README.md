@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml/badge.svg)](https://github.com/pcjtse/jaja-money/actions/workflows/ci.yml)
 
-**Institutional-grade stock research, reimagined for the AI era.**
+**The Bloomberg Terminal charges $25,000 per seat per year. It doesn't use AI. It doesn't measure whether its signals work. And it hasn't changed fundamentally in 30 years.**
 
-jaja-money combines a 23-factor quantitative scoring engine, Claude AI synthesis, and a closed-loop signal validation system — giving any investor the analytical depth of a quant research desk, accessible from a browser.
+jaja-money is what institutional stock research looks like when you build it from scratch in 2026 — a 23-factor quantitative scoring engine, Claude AI synthesis, a closed-loop signal validation system that measures real alpha, and an autonomous strategy optimizer that improves overnight while you sleep.
 
 > ⚠️ **Investment Disclaimer** — jaja-money is a research and educational tool only.
 > **Nothing in this application constitutes financial, investment, or trading advice.**
@@ -13,13 +13,27 @@ jaja-money combines a 23-factor quantitative scoring engine, Claude AI synthesis
 
 ---
 
-## The Opportunity
+## The Market
 
-Stock research is broken in four ways. Quant tools are locked inside institutional platforms. AI assistants have no live market data. No one measures whether their signals actually work. And investment strategies are static — manually tweaked once a quarter if you're lucky.
+**100+ million** retail investors in the US alone. **$30 trillion** in assets managed by RIAs and family offices. **$6 billion** in annual Bloomberg Terminal revenue — from a product that charges $25,000 per seat for infrastructure that predates the smartphone.
 
-jaja-money fixes all four. A 23-factor quant engine generates a composite Buy/Hold/Sell signal. Claude AI writes a live research report — bull thesis, bear risks, 12-month price target — grounded in real data. Every signal is tracked against actual forward returns, so the system measures whether it's generating alpha. And an overnight autoresearch loop (inspired by Andrej Karpathy's autonomous experimentation framework) iterates the backtesting strategy automatically — running ~12 experiments per hour, keeping improvements, reverting failures.
+The AI inflection point changes the unit economics of research entirely. Tasks that previously required a team of quant analysts — factor scoring, risk modeling, SEC filing analysis, signal backtesting, strategy optimization — now run in seconds. The question is no longer whether institutional-grade research can be democratized. It's who builds the platform that does it.
 
-Four systems that traditionally require separate teams and separate budgets, unified in a single product that gets better while you sleep.
+The window is open right now. Incumbent data vendors can't retrofit AI onto 30-year-old architecture without rebuilding from scratch. We built from scratch.
+
+---
+
+## What We Built
+
+Four things that have never existed in a single product before.
+
+**1. A 23-factor quantitative signal engine.** Valuation (sector-relative, not absolute), price trend, momentum, news sentiment, earnings quality, analyst consensus, alternative data (Google Trends slope, job-posting velocity as leading revenue indicators), dark pool activity, congressional STOCK Act disclosures, institutional 13F flow, options sweep analysis, supply chain concentration from 10-K filings, geographic revenue risk from SEC text, market regime classification, and more — each scored 0–100 and composited into a single Buy/Hold/Sell signal with a configurable ML weighting layer.
+
+**2. An AI research layer powered by Claude Opus 4.6.** Not a chatbot on top of a data feed. An analyst that reads 10-K and 10-Q filings directly from EDGAR, synthesizes earnings call transcripts, generates live 12-month price targets with bull/bear scenarios, and writes 8-section investment research reports adapted to stock type (Growth / Value / Dividend / Cyclical / Defensive). Every response is grounded in real-time market data and streamed live.
+
+**3. A signal validation loop.** Every generated signal is tracked against actual forward returns at T+21, T+63, and T+126 trading days. Spearman Information Coefficient measures whether composite scores actually predict returns. Benjamini-Hochberg multiple-comparison correction identifies which of the 23 factors are contributing genuine alpha — and which are noise. Most financial platforms generate signals and never look back. This one closes the loop.
+
+**4. A self-improving strategy engine.** The backtesting system is wired into an autonomous optimization loop modelled on [Andrej Karpathy's autoresearch](https://github.com/karpathy/autoresearch) framework. A Claude Code agent iterates strategy variants overnight — roughly 12 experiments per hour — keeping Sharpe ratio improvements and automatically reverting regressions. Every result is committed to git. The investment strategy compounds improvements through machine experimentation, not manual quarterly tuning.
 
 ---
 
@@ -47,6 +61,28 @@ Four systems that traditionally require separate teams and separate budgets, uni
 
 ---
 
+## Why This Wins
+
+### The Bloomberg Problem Is Structural
+
+Bloomberg's moat is data access and switching costs — not analytical depth. Their terminals were designed before machine learning existed and patched forward. Adding AI to that architecture is like adding autonomous driving to a 1995 car. You can bolt sensors on, but the fundamental systems weren't designed for it.
+
+We designed for it. The 23-factor engine was built to be ML-weighted from day one. The signal validation loop was designed to feed back into factor weights. The autoresearch optimizer was designed to close the loop between backtest performance and live strategy. Every layer was built to compound.
+
+### Three Defensible Moats
+
+**Signal validation data is proprietary and accumulates over time.** Every signal the system generates becomes a data point in the IC dataset. After a year of use, the system has a proprietary record of which signals predicted returns, in which sectors, under which market regimes. No competitor can replicate this retroactively. The longer the platform runs, the better calibrated the factor weights become.
+
+**The autoresearch loop creates a compounding strategy advantage.** Each overnight optimization session improves the backtesting strategy. Each improvement is committed to version control and logged with its Sharpe metric. Competitors who rely on human researchers to manually tune strategies cannot compound improvements at the same rate. An AI agent that runs 100 experiments overnight is not a feature — it's a new category of R&D capability.
+
+**The 23-factor signal depth took years to build and can't be replicated overnight.** Congressional trade STOCK Act parsing, dark pool FINRA ATS volume spike detection, supply chain sole-source concentration from 10-K text, SEC EDGAR full-text diffing across quarters, FinBERT news sentiment with multi-article aggregation — each signal required engineering investment that compounds into competitive advantage as the validation dataset proves which signals actually work.
+
+### Why Now
+
+Two things became true at the same time. Claude Opus 4.6 crossed the threshold where it can read an SEC 10-K, synthesize earnings call transcripts, and produce a credible institutional-grade investment memo in seconds. And the cost of running that analysis dropped to near zero. Neither was true 18 months ago. The window to build the AI-native research platform is open now — and closing as incumbents wake up to the threat.
+
+---
+
 ## Analysis Workflow
 
 ```mermaid
@@ -66,7 +102,9 @@ flowchart LR
         D1["Sources:
         • Quote & Price History
         • Fundamentals & Earnings
-        • News & Analyst Ratings"]:::step
+        • News & Analyst Ratings
+        • SEC EDGAR Filings
+        • Alt Data Signals"]:::step
     end
 
     subgraph F [Factor Scoring]
@@ -101,7 +139,7 @@ flowchart LR
         S5["Strong Sell"]:::sell
     end
 
-    END(["💡 Watchlist & Signal Validation"]):::finish
+    END(["💡 Signal Validation Loop"]):::finish
 
     %% Connections
     START --> D
@@ -122,152 +160,87 @@ flowchart LR
 
 ---
 
-## Core Capabilities
+## The Platform
 
-### Quantitative Signal Engine
+Eleven integrated modules, each solving a specific problem in the investment research workflow.
 
-Twenty-three factors — spanning valuation, price trend, momentum, news sentiment, analyst consensus, earnings quality, alternative data, dark pool activity, congressional trades, institutional flow, options flow, supply chain risk, geographic revenue exposure, market regime, and more — are scored 0–100 and weighted into a single composite signal (Strong Sell → Strong Buy), displayed as a gauge, radar chart, and progress-bar breakdown.
+| Module | What It Solves |
+|--------|---------------|
+| **Main Analysis** | Full 23-factor score, 30+ risk alerts, live AI research report, and price target for any ticker in one view |
+| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and automatic peer group benchmarking |
+| **Screener** | Filter S&P 500, Russell 1000, or any custom universe with AND/OR logic, ESG filter, and Claude natural-language queries ("show me undervalued tech stocks with strong earnings momentum") |
+| **Portfolio** | Correlation matrix, beta, 10,000-path Monte Carlo simulation, Kelly criterion position sizing, and factor attribution |
+| **Sectors** | Relative strength across all 11 S&P 500 sector ETFs with rotation phase classification and momentum quadrant chart |
+| **Backtest** | Walk-forward signal simulation with 4 pluggable strategies, equity curve, Sharpe ratio, max drawdown, parameter sweep heatmap, DRIP support, and the autoresearch optimizer |
+| **Forward Test** | Paper portfolio tracking live P&L, equity curve, Sharpe, win rate, and factor/risk score at entry — the bridge between backtest and real-money conviction |
+| **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI investment thesis for top long/short candidates |
+| **Signal Quality** | Spearman IC at T+21/T+63/T+126 horizons — empirical evidence of whether the composite score predicts forward returns |
+| **Factor Attribution** | Per-factor IC with 95% CI and Benjamini-Hochberg correction — identifies which of the 23 factors are contributing real alpha |
+| **Ledger** | Tamper-evident signal ledger that commits entry signals with entry prices and tracks outcomes; generates signal decay curves and a Claude research narrative after 20+ closed trades |
 
-Valuation is scored relative to the sector median, not absolute thresholds. Factor weights are configurable in `config.yaml` and can be replaced by the ML adaptive weighting module, which derives optimal weights from historical signal performance.
+---
 
-### Risk Guardrail Engine
+## Technical Depth
 
-Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme), with 30+ colour-coded red-flag alerts covering volatility, drawdown, overbought/oversold RSI, downtrend conditions, high P/E, earnings miss rate, negative analyst sentiment, earnings proximity, insider selling clusters, elevated short interest, liquidity risk, volatility regime, and macroeconomic stress.
+### 23-Factor Signal Engine
 
-### AI Research Layer (Claude Opus 4.6)
+Every factor is independently scored 0–100 and weighted into a composite signal. Valuation is scored relative to sector median, not absolute thresholds, eliminating the problem of sectors with structurally different P/E profiles. Weights are configurable in `config.yaml` and can be replaced by the ML adaptive weighting module, which derives optimal weights from the accumulated IC validation dataset.
 
-- **Fundamental analysis** — 8-section investment research report streamed live with adaptive prompts per stock type (Growth / Value / Dividend / Cyclical / Defensive)
-- **Price target** — AI-generated 12-month price target with bull/bear scenarios
-- **News sentiment synthesis** — Claude synthesises bullish/bearish narratives from live headlines
-- **Interactive research chat** — Ask any question about the stock; Claude answers with full context
-- **Earnings transcript analysis** — Management tone, guidance confidence, and forward-looking statement analysis
-- **SEC EDGAR** — Fetch and analyse 10-K, 10-Q, and 8-K filings with section-level diffing across quarters
-- **Autonomous research agent** — Multi-step workflow with tool-call authority (up to 10 turns, with step trace)
-- **PDF analysis** — Upload any financial PDF for Claude to parse and cross-reference with live data
+Factors span five categories:
 
-### Signal Validation Loop
+- **Price & Technical** — SMA trend (50/200), RSI momentum, MACD histogram, Bollinger Band position, 52-week strength
+- **Fundamental** — Valuation (sector-adjusted P/E), earnings quality, estimate revisions, analyst consensus, dividend yield, guidance quality, buyback effectiveness
+- **Alternative Data** — Google Trends 90-day slope, job-posting velocity (Adzuna), dark pool FINRA ATS volume, STOCK Act congressional disclosures, institutional 13F flow, options sweep/gamma
+- **Structural** — Supply chain sole-source concentration (10-K), geographic revenue risk (SEC text), special situations (M&A, spinoffs via EDGAR), cross-asset sector ETF momentum
+- **Regime** — 5-state market regime classifier (Risk-On Growth → Risk-Off Panic) applied as a composite multiplier; crowding risk as a score penalty
 
-Every generated signal is tracked in SQLite. Forward returns at T+21, T+63, and T+126 trading-day horizons are filled automatically by a nightly batch job. The Signal Quality page computes Spearman Information Coefficient across all horizons, and Factor Attribution measures per-factor IC with 95% confidence intervals and Benjamini-Hochberg p-value correction — so you know not just what the system is recommending, but whether those recommendations are working.
+### Self-Improving Backtesting (AutoResearch)
 
-### Self-Improving Strategy Engine (AutoResearch)
+The autoresearch optimizer uses a tight experimentation loop:
 
-The backtesting engine ships with four named strategies and an autonomous optimization loop modelled on [Andrej Karpathy's autoresearch](https://github.com/karpathy/autoresearch) pattern.
+1. Agent reads `autoresearch/program.md` (research brief) and `autoresearch/strategy_runner.py` (current strategy)
+2. Proposes one targeted modification based on results history in `autoresearch/results.tsv`
+3. Modifies `strategy_runner.py` and runs `autoresearch/evaluate.py` (fixed harness — agent cannot modify it)
+4. If Sharpe improves on the AAPL/MSFT/GOOGL 3-year benchmark: commits and logs the improvement
+5. If not: reverts and logs the failure
+6. Loop — roughly 12 experiments per hour, 100+ overnight
 
-| Strategy | Description |
-|----------|-------------|
-| **Price Technical v2** (default) | SMA trend 35% + directional RSI 25% + MACD 25% + Bollinger Band position 15% |
-| **Price Technical v1** | Original baseline — SMA 40% + RSI 30% + MACD 30% |
-| **MA Crossover** | Golden/death cross only. Fewer, longer trades. Best on trending large-caps. |
-| **Momentum Breakout** | 52-week high proximity + RSI confirmation. Buys strength. |
+This is not random search. The agent reads failure patterns before proposing changes, making it structured experimentation. Shopify applied the same pattern to build performance and saw 65% CI improvement. We applied it to investment strategy.
 
-The **autoresearch loop** lets a Claude Code agent iterate strategy variants overnight:
+### Signal Validation Architecture
 
-```bash
-# Establish baseline
-python autoresearch/evaluate.py
+```
+Daily Batch (APScheduler, 7am UTC)
+  → Score every watchlist ticker (23 factors)
+  → Save to analysis_history
+  → Upsert to signal_returns with entry price
 
-# Run the overnight optimization loop in Claude Code
-# Agent reads autoresearch/program.md, modifies autoresearch/strategy_runner.py,
-# runs the harness, keeps Sharpe improvements, reverts regressions.
-# ~12 experiments/hour → 100 strategy variants tested overnight.
+Nightly Forward Return Fill
+  → For signals T+21/T+63/T+126 days old: fetch current price
+  → Compute and store actual forward return
+
+Signal Quality Page
+  → Spearman IC per horizon
+  → Factor Attribution with Benjamini-Hochberg correction
+  → Rolling IC trend (detects signal decay over time)
 ```
 
-Every experiment is logged to `autoresearch/results.tsv`. Improvements are committed to git automatically. The result is a strategy that compounds improvements through AI experimentation rather than manual iteration.
+### API-First Architecture
 
-### Market Data and Technicals
-
-- **Real-time quotes** — price, change, day high/low, previous close
-- **Interactive price chart** — candlestick with SMA(50/200), Bollinger Bands, volume, OBV, VWAP
-- **Technical indicators** — RSI(14), MACD, Fibonacci levels
-- **Earnings history** — EPS vs estimate vs surprise for last 4 quarters with beat probability
-- **Analyst recommendations** — consensus bar chart and estimate revision momentum
-- **Insider trading** — recent buy/sell activity with cluster detection
-- **Short interest** — short % of float, days-to-cover, squeeze potential
-- **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread
-- **Options market data** — IV surface, sweep/flow classification, gamma exposure
-- **Alternative data** — Google Trends 90-day slope and job-posting velocity as leading revenue indicators
-- **Dark pool activity** — FINRA ATS weekly volume share with spike detection
-- **Congressional trades** — STOCK Act disclosure tracker with net buy/sell signal
-- **Institutional flow** — 13F-proxy QoQ delta showing entering and exiting institutions
-- **Catalyst calendar** — FOMC dates, earnings, and ex-dividend events with alpha-weight flags
-- **Cross-asset signals** — Sector ETF momentum composite
-- **Geographic revenue risk** — Region-weighted exposure from SEC text
-- **Supply chain risk** — Sole-source concentration from 10-K filings
-- **Special situations** — M&A, spinoff, and restructuring tracker via EDGAR
-- **Market regime** — 5-state classifier with composite score multiplier
-
----
-
-## Multi-Page Platform
-
-| Page | What It Does |
-|------|-------------|
-| **Main Analysis** | Full factor score, risk assessment, AI research, and signal for any ticker |
-| **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and peer benchmarking |
-| **Screener** | Filter S&P 500, Russell 1000, or custom universe with AND/OR logic, quick presets, ESG filter, and Claude natural-language queries |
-| **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10,000 paths), Kelly criterion sizing, and factor attribution |
-| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase and momentum quadrant chart |
-| **Backtest** | Walk-forward signal simulation with 4 pluggable strategies (v1/v2/MA Crossover/Momentum Breakout), equity curve, Sharpe ratio, max drawdown, parameter sweep heatmap, DRIP support, and autoresearch optimizer |
-| **Forward Test** | SQLite-backed paper portfolio that tracks live P&L, equity curve, Sharpe, win rate, and average factor/risk score at entry |
-| **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI thesis |
-| **Signal Quality** | Spearman IC at T+21/T+63/T+126 horizons — measures whether composite scores predict forward returns |
-| **Factor Attribution** | Per-factor IC with 95% CI and Benjamini-Hochberg correction across all 23 factors |
-| **Ledger** | Tamper-evident signal ledger tracking entry/exit prices; generates signal decay curves and a Claude research narrative after 20+ closed trades |
-
----
-
-## Additional Capabilities
-
-- **Nightly batch analysis** — APScheduler-backed overnight scoring of every watchlist ticker; seeds Signal Quality and Factor Attribution automatically
-- **AutoResearch strategy optimizer** — autonomous overnight loop that iterates backtesting strategy code, keeping Sharpe improvements and reverting regressions (~12 experiments/hour)
-- **Watchlist** — Save tickers with factor scores, persisted across sessions
-- **Price and signal alerts** — Threshold alerts with Slack / Discord / Telegram webhook delivery
-- **Daily digest** — Claude-written morning briefing for your entire watchlist (HTML + optional email)
-- **Named snapshots** — Save and diff analysis states over time
-- **Google Sheets export** — Write results to a Google Sheet via service account
-- **Brokerage CSV import** — Auto-detect Schwab, Fidelity, and IBKR position exports
-- **ML factor weighting** — Adaptive factor weights derived from historical signal performance
-- **REST API** — FastAPI server for programmatic access (see [REST_API.md](REST_API.md))
-- **Agent Skill** — Use as an [Agent Skill](https://agentskills.io) with OpenClaw, Claude Code, or any compatible AI agent
-
----
-
-## Integration
-
-jaja-money is packaged as an **Agent Skill** following the [Agent Skills standard](https://agentskills.io), making it embeddable in any AI agent or automated workflow.
-
-### Python SDK
+jaja-money is packaged as an **Agent Skill** and exposes a full **FastAPI REST server**, making it embeddable in any AI agent, trading system, or institutional workflow.
 
 ```python
-from jaja_money_skill.scripts.jaja_skill import analyze, screen, score, research
+from jaja_money_skill.scripts.jaja_skill import analyze, screen, research
 
-# Full fundamental + risk analysis
 result = analyze("AAPL")
-# {'symbol': 'AAPL', 'signal': 'BUY', 'confidence': 74, 'factor_score': 72, ...}
+# {'symbol': 'AAPL', 'signal': 'BUY', 'factor_score': 72, 'risk_score': 28, ...}
 
-# Screen a universe by factor and risk thresholds
-hits = screen(["AAPL", "MSFT", "NVDA"], min_factor_score=65, max_risk_score=50)
+hits = screen(["AAPL", "MSFT", "NVDA", "GOOGL"], min_factor_score=65, max_risk_score=50)
 
-# Autonomous multi-step research agent
-memo = research("TSLA", question="What is the bear case?")
+memo = research("TSLA", question="What is the bear case for the next 12 months?")
 ```
 
-### REST API
-
-A FastAPI server exposes every capability as HTTP endpoints — full analysis, scoring, screening, alerts, and the autonomous research agent. See [REST_API.md](REST_API.md) for the full reference.
-
-### Remote Mode
-
-Point the skill at a running jaja-money server for distributed or multi-agent setups:
-
-```bash
-export JAJA_API_URL=http://analysis-server:8080
-export JAJA_API_KEY=mysecret
-```
-
-### Event-Triggered Analysis
-
-APScheduler fires analysis callbacks on earnings proximity, new SEC filings, and price/signal threshold breaches — enabling fully automated monitoring workflows.
+Remote mode: point any agent at a running jaja-money server over HTTP. The REST API exposes every capability — analysis, scoring, screening, alerts, research — with optional API key authentication.
 
 ---
 
@@ -276,29 +249,30 @@ APScheduler fires analysis callbacks on earnings proximity, new SEC filings, and
 **Requirements:** Python 3.10+, [Finnhub API key](https://finnhub.io) (free tier), [Anthropic API key](https://console.anthropic.com)
 
 ```bash
-# Clone and install
 git clone https://github.com/pcjtse/jaja-money.git
 cd jaja-money
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-# Edit .env: add FINNHUB_API_KEY and ANTHROPIC_API_KEY
-
-# Run
+cp .env.example .env          # add FINNHUB_API_KEY and ANTHROPIC_API_KEY
 streamlit run app.py
 ```
 
-Open `http://localhost:8501`, enter a ticker in the sidebar, and click **Analyze**.
-
-> **Tip:** If you have the [Claude Code CLI](https://claude.ai/code) installed, set `ai_backend: "cli"` in `config.yaml` to skip the `ANTHROPIC_API_KEY` requirement.
-
-### Docker
+Open `http://localhost:8501`, enter any ticker, click **Analyze**.
 
 ```bash
-cp .env.example .env   # add your keys
+# Docker
+cp .env.example .env
 docker compose up --build
+```
+
+> If you have the [Claude Code CLI](https://claude.ai/code) installed, set `ai_backend: "cli"` in `config.yaml` — no `ANTHROPIC_API_KEY` needed.
+
+### Run the AutoResearch Optimizer
+
+```bash
+python autoresearch/evaluate.py   # baseline Sharpe measurement
+# Then in Claude Code: /loop
+# Agent iterates strategy_runner.py overnight, logs results to autoresearch/results.tsv
 ```
 
 ---
@@ -310,22 +284,9 @@ docker compose up --build
 | `FINNHUB_API_KEY` | Yes | Finnhub market data |
 | `ANTHROPIC_API_KEY` | Yes* | Claude AI (*or use `ai_backend: cli`) |
 | `JAJA_API_KEY` | No | Protects REST API endpoints |
-| `JAJA_API_URL` | Remote mode | URL of jaja-money server for remote skill mode |
-| `ALPACA_API_KEY` | Monitoring only | Alpaca API key for read-only account monitoring |
-| `ALPACA_API_SECRET` | Monitoring only | Alpaca API secret |
-
----
-
-## Data Architecture
-
-jaja-money uses two time-series stores with distinct purposes:
-
-| Store | Horizons | Purpose |
-|-------|----------|---------|
-| `signal_returns` in `history.db` | T+21 / T+63 / T+126 trading days | Factor IC research — Spearman correlation of composite score vs forward return |
-| `data/ledger.json` | T+5 / T+10 / T+30 calendar days | Paper trade P&L tracking for the Forward Test portfolio |
-
-These serve different analytical purposes and use incompatible time units. They must not be merged.
+| `JAJA_API_URL` | Remote mode | URL of jaja-money server |
+| `ALPACA_API_KEY` | Monitoring | Read-only Alpaca account monitoring |
+| `ALPACA_API_SECRET` | Monitoring | Alpaca API secret |
 
 ---
 
