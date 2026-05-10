@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 import pandas as pd
 
@@ -157,6 +158,7 @@ def run_backtest(
     slippage_pct: float = 0.0005,
     is_insample: bool = True,
     dividends: dict | None = None,
+    signal_fn: Optional[Callable] = None,
 ) -> BacktestResult:
     """Run a signal-based backtest.
 
@@ -174,6 +176,10 @@ def run_backtest(
                        'amounts' (list[float]) for dividend reinvestment.
                        When provided, dividends received while in a position
                        are reinvested immediately into the equity curve.
+    signal_fn        : Optional callable ``(close: pd.Series, index: int) -> int``
+                       that replaces the default ``_compute_signal``.  Pass any
+                       function from ``src.analysis.strategies`` or a custom
+                       function for autoresearch experimentation.
 
     Returns
     -------
@@ -201,13 +207,14 @@ def run_backtest(
     n = len(prices)
 
     # Build signal series
+    _signal_fn = signal_fn if signal_fn is not None else _compute_signal
     signals = []
     for i in range(n):
         # Use the full history up to this point for signal computation
         # Find the index in the full df
         row_date = df_back["Date"].iloc[i]
         full_idx = df[df["Date"] <= row_date].index[-1]
-        sig = _compute_signal(df["Close"], full_idx)
+        sig = _signal_fn(df["Close"], full_idx)
         signals.append(sig)
 
     # Transaction cost per trade (round-trip = entry + exit slippage + commission)
@@ -390,6 +397,7 @@ def run_walk_forward(
     insample_pct: float = 0.70,
     commission_pct: float = 0.001,
     slippage_pct: float = 0.0005,
+    signal_fn: Optional[Callable] = None,
 ) -> tuple[BacktestResult, BacktestResult]:
     """Run walk-forward validation by splitting history into in-sample and out-of-sample.
 
@@ -427,6 +435,7 @@ def run_walk_forward(
         commission_pct=commission_pct,
         slippage_pct=slippage_pct,
         is_insample=True,
+        signal_fn=signal_fn,
     )
 
     # For out-of-sample, pass full df for signal computation but only trade in the OOS period
@@ -443,6 +452,7 @@ def run_walk_forward(
         commission_pct=commission_pct,
         slippage_pct=slippage_pct,
         is_insample=False,
+        signal_fn=signal_fn,
     )
 
     return in_result, out_result
@@ -461,6 +471,7 @@ def run_parameter_sweep(
     commission_pct: float = 0.001,
     slippage_pct: float = 0.0005,
     lookback_years: float = 2.0,
+    signal_fn: Optional[Callable] = None,
 ) -> dict:
     """Test all combinations of entry/exit thresholds.
 
@@ -502,6 +513,7 @@ def run_parameter_sweep(
                     lookback_years=lookback_years,
                     commission_pct=commission_pct,
                     slippage_pct=slippage_pct,
+                    signal_fn=signal_fn,
                 )
                 sharpe = result.sharpe_ratio
                 ret = result.total_return_pct

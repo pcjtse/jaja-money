@@ -1,0 +1,2 @@
+commit	sharpe	return_pct	drawdown_pct	win_rate_pct	trades	notes	status
+baseline	0.00	0.0	0.0	0.0	0	price_technical_v2 starting point — run evaluate.py to populate	PENDING

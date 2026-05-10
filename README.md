@@ -15,11 +15,11 @@ jaja-money combines a 23-factor quantitative scoring engine, Claude AI synthesis
 
 ## The Opportunity
 
-Stock research is broken in three ways. Quant tools are locked inside institutional platforms. AI assistants have no live market data. And no one measures whether their signals actually work.
+Stock research is broken in four ways. Quant tools are locked inside institutional platforms. AI assistants have no live market data. No one measures whether their signals actually work. And investment strategies are static — manually tweaked once a quarter if you're lucky.
 
-jaja-money fixes all three. A 23-factor quant engine generates a composite Buy/Hold/Sell signal. Claude AI writes a live research report — bull thesis, bear risks, 12-month price target — grounded in real data. And every signal is tracked against actual forward returns, so the system learns whether it's generating alpha over time.
+jaja-money fixes all four. A 23-factor quant engine generates a composite Buy/Hold/Sell signal. Claude AI writes a live research report — bull thesis, bear risks, 12-month price target — grounded in real data. Every signal is tracked against actual forward returns, so the system measures whether it's generating alpha. And an overnight autoresearch loop (inspired by Andrej Karpathy's autonomous experimentation framework) iterates the backtesting strategy automatically — running ~12 experiments per hour, keeping improvements, reverting failures.
 
-Three systems that traditionally require separate teams and separate budgets, unified in a single product.
+Four systems that traditionally require separate teams and separate budgets, unified in a single product that gets better while you sleep.
 
 ---
 
@@ -149,6 +149,31 @@ Four risk dimensions weighted into an overall **Risk Score** (Low → Extreme), 
 
 Every generated signal is tracked in SQLite. Forward returns at T+21, T+63, and T+126 trading-day horizons are filled automatically by a nightly batch job. The Signal Quality page computes Spearman Information Coefficient across all horizons, and Factor Attribution measures per-factor IC with 95% confidence intervals and Benjamini-Hochberg p-value correction — so you know not just what the system is recommending, but whether those recommendations are working.
 
+### Self-Improving Strategy Engine (AutoResearch)
+
+The backtesting engine ships with four named strategies and an autonomous optimization loop modelled on [Andrej Karpathy's autoresearch](https://github.com/karpathy/autoresearch) pattern.
+
+| Strategy | Description |
+|----------|-------------|
+| **Price Technical v2** (default) | SMA trend 35% + directional RSI 25% + MACD 25% + Bollinger Band position 15% |
+| **Price Technical v1** | Original baseline — SMA 40% + RSI 30% + MACD 30% |
+| **MA Crossover** | Golden/death cross only. Fewer, longer trades. Best on trending large-caps. |
+| **Momentum Breakout** | 52-week high proximity + RSI confirmation. Buys strength. |
+
+The **autoresearch loop** lets a Claude Code agent iterate strategy variants overnight:
+
+```bash
+# Establish baseline
+python autoresearch/evaluate.py
+
+# Run the overnight optimization loop in Claude Code
+# Agent reads autoresearch/program.md, modifies autoresearch/strategy_runner.py,
+# runs the harness, keeps Sharpe improvements, reverts regressions.
+# ~12 experiments/hour → 100 strategy variants tested overnight.
+```
+
+Every experiment is logged to `autoresearch/results.tsv`. Improvements are committed to git automatically. The result is a strategy that compounds improvements through AI experimentation rather than manual iteration.
+
 ### Market Data and Technicals
 
 - **Real-time quotes** — price, change, day high/low, previous close
@@ -182,7 +207,7 @@ Every generated signal is tracked in SQLite. Forward returns at T+21, T+63, and 
 | **Screener** | Filter S&P 500, Russell 1000, or custom universe with AND/OR logic, quick presets, ESG filter, and Claude natural-language queries |
 | **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10,000 paths), Kelly criterion sizing, and factor attribution |
 | **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase and momentum quadrant chart |
-| **Backtest** | Walk-forward signal simulation — equity curve, Sharpe ratio, max drawdown, parameter sensitivity heatmap, DRIP support |
+| **Backtest** | Walk-forward signal simulation with 4 pluggable strategies (v1/v2/MA Crossover/Momentum Breakout), equity curve, Sharpe ratio, max drawdown, parameter sweep heatmap, DRIP support, and autoresearch optimizer |
 | **Forward Test** | SQLite-backed paper portfolio that tracks live P&L, equity curve, Sharpe, win rate, and average factor/risk score at entry |
 | **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI thesis |
 | **Signal Quality** | Spearman IC at T+21/T+63/T+126 horizons — measures whether composite scores predict forward returns |
@@ -194,6 +219,7 @@ Every generated signal is tracked in SQLite. Forward returns at T+21, T+63, and 
 ## Additional Capabilities
 
 - **Nightly batch analysis** — APScheduler-backed overnight scoring of every watchlist ticker; seeds Signal Quality and Factor Attribution automatically
+- **AutoResearch strategy optimizer** — autonomous overnight loop that iterates backtesting strategy code, keeping Sharpe improvements and reverting regressions (~12 experiments/hour)
 - **Watchlist** — Save tickers with factor scores, persisted across sessions
 - **Price and signal alerts** — Threshold alerts with Slack / Discord / Telegram webhook delivery
 - **Daily digest** — Claude-written morning briefing for your entire watchlist (HTML + optional email)
