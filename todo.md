@@ -1461,12 +1461,12 @@ Allow users to add AI-recommended stock symbols to a named portfolio for live fo
 ### 23.1 Scheduled Overnight Batch Analysis
 The Signal Quality and Factor Attribution pages are permanently empty without this — they require at least 21 trading days of `signal_returns` data which only accumulates if analysis runs regularly. A nightly scheduler scores every watchlist ticker automatically, populates `signal_returns`, and keeps the ML weight retraining loop fed with fresh data.
 
-- [ ] Add an APScheduler job (or cron entry) in `digest.py` or a new `scheduler.py` that runs pre-market each trading day
-- [ ] For each watchlist ticker: run the full factor computation, save to `analysis_history`, and record current price for forward-return tracking
-- [ ] After 21 trading days have elapsed since any stored signal, automatically compute `return_21d` / `return_63d` / `return_126d` and write to `signal_returns`
-- [ ] Trigger an ML weight retrain if a new quarter's worth of data has accumulated since the last training run
-- [ ] Add a "Last batch run" timestamp and next-run countdown to the Signal Quality sidebar
-- [ ] Add a `BATCH_ANALYSIS_ENABLED` config flag (default `false`) with instructions in README
+- [x] Add an APScheduler job (or cron entry) in `digest.py` or a new `scheduler.py` that runs pre-market each trading day
+- [x] For each watchlist ticker: run the full factor computation, save to `analysis_history`, and record current price for forward-return tracking
+- [x] After 21 trading days have elapsed since any stored signal, automatically compute `return_21d` / `return_63d` / `return_126d` and write to `signal_returns`
+- [x] Trigger an ML weight retrain if a new quarter's worth of data has accumulated since the last training run
+- [x] Add a "Last batch run" timestamp and next-run countdown to the Signal Quality sidebar
+- [x] Add a `BATCH_ANALYSIS_ENABLED` config flag (default `false`) with instructions in README
 
 **Files:** `src/services/scheduler.py` (new), `src/data/history.py` (`upsert_signal_returns`), `src/analysis/ml_weights.py` (auto-retrain hook), `app.py` (batch status in Signal Quality sidebar)
 
