@@ -60,6 +60,7 @@ ALPHA_FACTOR_NAMES: dict[str, str] = {
     "Cross-Asset Signal": "cross_asset",
     "Geo Revenue Macro": "geo_revenue",  # NOT "Geographic Revenue"
     "Market Regime": "regime",
+    "Executive Tone": "executive_tone",
 }
 # NOTE (TODO-001 resolved): ml_weights.py imports CORE_FACTOR_NAMES directly so the
 # name→key mapping stays in sync. No stale hardcoded dict exists in ml_weights.py.

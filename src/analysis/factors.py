@@ -815,11 +815,12 @@ def compute_factors(
     geo_revenue_data: dict | None = None,
     crowding_data: dict | None = None,
     regime_data: dict | None = None,
+    executive_tone_data: dict | None = None,
 ) -> list[dict]:
     """Compute factors and return them as a list of dicts.
 
     Each dict has keys: name, score (0–100), label, detail, weight.
-    Includes all original factors plus 13 new alpha-feature factors.
+    Includes all original factors plus alpha-feature factors.
     New alpha parameters are all optional (default None) for backward
     compatibility with existing callers.
     """
@@ -851,6 +852,7 @@ def compute_factors(
         _factor_cross_asset(cross_asset_data),
         _factor_geo_revenue(geo_revenue_data),
         _factor_regime(regime_data),
+        _factor_executive_tone(executive_tone_data),
     ]
     log.debug("Computed %d factors for price=%.2f", len(factors), price or 0)
     return factors
@@ -2121,3 +2123,32 @@ def _factor_regime(regime_data: dict | None) -> dict:
         detail=f"{detail} | Adjustment: {sign}{multiplier} pts",
         regime_multiplier=multiplier,
     )
+
+
+def _factor_executive_tone(executive_tone_data: dict | None) -> dict:
+    """Executive linguistic tone analysis signal.
+
+    Analyzes how executives communicate — confidence, hedging density,
+    transparency, and forward guidance specificity — derived from earnings
+    call transcripts via Claude AI linguistic scoring.
+    """
+    weight = _get_weight("executive_tone", 0.07)
+    if not executive_tone_data:
+        return dict(
+            name="Executive Tone",
+            score=50,
+            weight=weight,
+            label=FACTOR_ABSENT_LABEL,
+            detail="No earnings call transcript available for linguistic analysis",
+        )
+    score = int(executive_tone_data.get("score", 50))
+    label = executive_tone_data.get("label", "")
+    detail = executive_tone_data.get("detail", "")
+    result = dict(name="Executive Tone", score=score, weight=weight, label=label, detail=detail)
+    sub = executive_tone_data.get("sub_signals")
+    if sub:
+        result["sub_signals"] = sub
+    dominant = executive_tone_data.get("dominant_tone")
+    if dominant:
+        result["dominant_tone"] = dominant
+    return result
