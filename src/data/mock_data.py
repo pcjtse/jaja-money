@@ -470,9 +470,15 @@ def get_mock_transcript(transcript_id: str) -> dict:
 
 
 def get_mock_earnings_calendar(symbol: str) -> dict:
+    import datetime
+
+    today = datetime.date.today()
+    # Next earnings ~45-60 days out (simulates a quarterly cycle)
+    days_ahead = 45 + (hash(symbol) % 15)
+    next_date = today + datetime.timedelta(days=days_ahead)
     return {
-        "next_date": "2026-04-25",
-        "days_to_earnings": 34,
+        "next_date": next_date.strftime("%Y-%m-%d"),
+        "days_to_earnings": days_ahead,
         "historical_reactions": [],
         "implied_move_pct": round(random.uniform(3.0, 8.0), 2),
     }
