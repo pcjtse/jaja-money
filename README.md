@@ -126,6 +126,7 @@ flowchart LR
 - **Short interest** — short % of float, days-to-cover, and squeeze potential indicator
 - **Macroeconomic overlay** — VIX fear gauge and 2y/10y yield curve spread with elevated-risk banner
 - **Options market data** — IV surface, sweep/flow classification, gamma exposure, and hedge suggestions
+- **Alternative data signals** — Google Trends 90-day search-interest slope and job-posting velocity (via Adzuna) as leading indicators that precede revenue moves; both feed into the composite factor score when data is available
 - **Dark pool activity** — FINRA ATS weekly volume share with spike detection (>1.5× 4-week average)
 - **Congressional trades** — STOCK Act disclosure tracker with net buy/sell signal
 - **Institutional flow** — 13F-proxy QoQ delta showing entering and exiting institutions
@@ -155,6 +156,7 @@ overridden by the optional ML adaptive weighting module.
 | 52-Week Strength | 5% |
 | Dividend Yield | 5% |
 | Estimate Revisions | 8% |
+| Alt Data Signal (Google Trends + job-posting velocity) | 5% |
 | Congressional Signal | 5% |
 | Institutional Flow | 6% |
 | Estimate Velocity | 8% |
@@ -194,13 +196,15 @@ volatility regime (transient vs. sustained spikes), and macroeconomic stress (VI
 | Page | Description |
 |------|-------------|
 | **Compare** | Side-by-side factor scores, risk, P/E, RSI for up to 5 stocks with correlation heatmap and automatic peer group benchmarking |
-| **Screener** | Filter S&P 500, Russell 1000, or custom universe; supports AND/OR filter logic and Claude natural-language queries |
+| **Screener** | Filter S&P 500, Russell 1000, or custom universe; supports AND/OR filter logic, quick presets, ESG filter, and Claude natural-language queries |
 | **Portfolio** | Correlation matrix, beta, Monte Carlo simulation (10 000 paths), Kelly criterion sizing, and factor attribution |
-| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase classification and Claude narrative |
+| **Sectors** | Relative strength across 11 S&P 500 sector ETFs with rotation phase classification and momentum quadrant chart |
 | **Backtest** | Walk-forward signal simulation with equity curve, Sharpe ratio, max drawdown, parameter sensitivity heatmap, and DRIP support |
-| **Forward Test** | Paper portfolio tracker to validate AI signals without real capital |
-| **Digests** | Daily Claude-written morning briefings covering overnight news and flag changes for each watchlist ticker |
-| **Settings** | Runtime configuration for factor weights, risk thresholds, alert destinations, and cache management |
+| **Forward Test** | SQLite-backed paper portfolio to add AI-recommended positions from the main analysis page; tracks live P&L, equity curve, Sharpe ratio, max drawdown, win rate, and average factor/risk score at entry for post-hoc signal validation |
+| **Rankings** | Daily cross-sectional long/short leaderboard with sector breakdown, percentile ranks, and AI thesis for the top long/short |
+| **Signal Quality** | Measures whether composite scores actually predict forward returns; computes Spearman IC at T+21/T+63/T+126 trading-day horizons once enough history accumulates |
+| **Factor Attribution** | Per-factor IC attribution with 95% confidence intervals and Benjamini-Hochberg p-value correction across all 23 factors |
+| **Ledger** | Tamper-evident signal ledger that commits entry signals with entry price and tracks outcomes as positions close; generates signal decay curves and a Claude research narrative once ≥20 closed trades exist |
 
 ### Additional Capabilities
 - **Watchlist** — Save tickers with factor scores; persisted across sessions

@@ -856,13 +856,13 @@ Score stocks relative to each other rather than in isolation and generate a dail
 ### 21.5 Alternative Data Signal: Google Trends + Job Posting Velocity
 Integrate at least one non-traditional, publicly accessible data source that leads financial statements by weeks or months. Google search-interest trends and job posting growth are well-documented leading indicators — they surface demand acceleration or deceleration before it appears in revenue figures. This gives the service a genuine data edge over tools that rely solely on Finnhub/yfinance.
 
-- [ ] Integrate `pytrends` to fetch Google Trends interest-over-time for the company name and its primary product terms (last 12 months, weekly)
-- [ ] Compute trend slope over the last 90 days; flag accelerating search interest as a positive signal, decelerating as a risk flag
-- [ ] Integrate a job posting API (e.g., Adzuna free tier or Indeed scrape-free approach via SerpAPI) to track hiring velocity — rapid headcount growth signals expansion, mass layoffs signal contraction
-- [ ] Add both signals as optional inputs to the composite factor score (weight ~5% each when available)
-- [ ] Surface trend charts in a new "Alternative Data" section in the app
+- [x] Integrate `pytrends` to fetch Google Trends interest-over-time for the company name and its primary product terms (last 12 months, weekly)
+- [x] Compute trend slope over the last 90 days; flag accelerating search interest as a positive signal, decelerating as a risk flag
+- [x] Integrate a job posting API (e.g., Adzuna free tier or Indeed scrape-free approach via SerpAPI) to track hiring velocity — rapid headcount growth signals expansion, mass layoffs signal contraction
+- [x] Add both signals as optional inputs to the composite factor score (weight ~5% each when available)
+- [x] Surface trend charts in a new "Alternative Data" section in the app
 
-**Files:** new `alt_data.py`, `factors.py`, `api.py`, `app.py`
+**Files:** `src/data/alt_data.py`, `src/analysis/factors.py` (`_factor_alt_data`), `src/data/api.py` (`get_alt_data_signals`), `app.py` (Alternative Data Signals section)
 
 ---
 
@@ -963,7 +963,8 @@ Integrate at least one non-traditional, publicly accessible data source that lea
 | 21 | Enable Live Trade Execution via Alpaca | [ ] Pending |
 | 21 | Signal Validity Dashboard | ✅ Done |
 | 21 | Cross-Sectional Ranking: Daily Long/Short List | ✅ Done |
-| 21 | Alternative Data Signal: Google Trends + Job Postings | [ ] Pending |
+| 21 | Alternative Data Signal: Google Trends + Job Postings | ✅ Done |
+| 22 | Stock Tracking Portfolio (Forward Test) | ✅ Done |
 
 ---
 
@@ -1431,18 +1432,18 @@ Combine high short interest, insider selling signals, declining earnings quality
 ### 22.1 Stock Tracking Portfolio (Forward Test)
 Allow users to add AI-recommended stock symbols to a named portfolio for live forward tracking. Validate factor-based signals in real market conditions over time without risking capital.
 
-- [ ] Create `forward_test.py` module with SQLite-backed paper portfolio management (`create_portfolio`, `add_position`, `close_position`, `get_portfolio_summary`)
-- [ ] Extend `history.py` (or add new tables to `history.db`) with `paper_portfolio`, `paper_trades`, and `paper_portfolio_history` tables
-- [ ] Add a "Track" button to the main analysis page (`app.py`) that adds the currently analysed symbol to the user's selected tracking portfolio at the live quote price
-- [ ] Build `pages/7_ForwardTest.py` Streamlit page:
+- [x] Create `forward_test.py` module with SQLite-backed paper portfolio management (`create_portfolio`, `add_position`, `close_position`, `get_portfolio_summary`)
+- [x] Extend `history.py` (or add new tables to `history.db`) with `paper_portfolio`, `paper_trades`, and `paper_portfolio_history` tables
+- [x] Add a "Track" button to the main analysis page (`app.py`) that adds the currently analysed symbol to the user's selected tracking portfolio at the live quote price
+- [x] Build `pages/7_ForwardTest.py` Streamlit page:
   - Create / rename / delete tracking portfolios
   - View open positions (symbol, entry price, current price, unrealised P&L %, days held)
   - View closed trade history (entry → exit, realised P&L %)
   - Daily equity curve chart (portfolio value over time)
   - Summary stats: total return %, annualised return, Sharpe ratio, max drawdown, win rate
-- [ ] Snapshot portfolio valuations daily by re-fetching live quotes for all open positions and writing to `paper_portfolio_history`
-- [ ] Allow user to manually close a position (sell at current market price)
-- [ ] Display average factor score and risk score at time of entry alongside each position for post-hoc signal validation
-- [ ] Add REST endpoint `POST /forward-test/portfolio` and `POST /forward-test/trade` to `server.py` for programmatic access
+- [x] Snapshot portfolio valuations daily by re-fetching live quotes for all open positions and writing to `paper_portfolio_history`
+- [x] Allow user to manually close a position (sell at current market price)
+- [x] Display average factor score and risk score at time of entry alongside each position for post-hoc signal validation
+- [x] Add REST endpoint `POST /forward-test/portfolio` and `POST /forward-test/trade` to `server.py` for programmatic access
 
-**Files:** new `forward_test.py`, `pages/7_ForwardTest.py`, `history.py` (schema extension), `app.py` (Track button), `server.py` (new endpoints)
+**Files:** `src/analysis/forward_test.py`, `pages/7_ForwardTest.py`, `src/data/history.py` (paper_portfolio/paper_trades/paper_portfolio_history tables), `app.py` (Track in Paper Portfolio section), `src/services/server.py` (forward-test endpoints)
