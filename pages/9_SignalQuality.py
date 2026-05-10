@@ -14,7 +14,7 @@ from src.analysis.signal_validity import (
     compute_quartile_analysis,
     compute_spearman_correlations,
 )
-from src.data.history import get_signal_returns
+from src.data.history import get_last_batch_run, get_signal_returns
 from src.ui.theme import inject_css, page_header
 
 st.set_page_config(
@@ -55,6 +55,81 @@ with st.sidebar:
         "Click **Refresh** to compute forward returns for all historical signals "
         "stored in your local history database."
     )
+
+    # -----------------------------------------------------------------------
+    # P23.1: Batch Analysis Status
+    # -----------------------------------------------------------------------
+    st.divider()
+    st.subheader("Batch Analysis")
+
+    from src.core.config import cfg as _cfg
+
+    _batch_enabled = _cfg.batch_analysis_enabled
+    _last_run = get_last_batch_run()
+
+    if _batch_enabled:
+        st.caption("Nightly batch scoring is **enabled**.")
+        # Show next scheduled run time
+        try:
+            from src.services.scheduler import get_next_run_time, is_scheduler_running
+
+            if is_scheduler_running():
+                next_run = get_next_run_time()
+                if next_run:
+                    from datetime import timezone
+
+                    now_utc = __import__("datetime").datetime.now(timezone.utc)
+                    delta = next_run - now_utc
+                    total_secs = int(delta.total_seconds())
+                    if total_secs > 0:
+                        hours, rem = divmod(total_secs, 3600)
+                        mins = rem // 60
+                        st.metric("Next run", f"in {hours}h {mins:02d}m")
+                    else:
+                        st.metric("Next run", "imminent")
+            else:
+                st.caption("Scheduler not active in this session.")
+        except Exception:
+            pass
+    else:
+        st.caption(
+            "Nightly batch scoring is **disabled**. "
+            "Set `batch_analysis.enabled: true` in `config.yaml` to enable."
+        )
+
+    if _last_run:
+        _status = _last_run.get("status", "unknown")
+        _proc = _last_run.get("processed", 0)
+        _errs = _last_run.get("errors", 0)
+        _dur = _last_run.get("duration_s", 0.0)
+        _run_date = _last_run.get("run_date", "")
+        _status_icon = {"success": "✅", "partial": "⚠️", "error": "❌", "running": "⏳"}.get(
+            _status, "❓"
+        )
+        st.caption(
+            f"{_status_icon} **Last run:** {_run_date}  \n"
+            f"Scored {_proc} ticker{'s' if _proc != 1 else ''}, "
+            f"{_errs} error{'s' if _errs != 1 else ''}, "
+            f"{_dur:.0f}s"
+        )
+    else:
+        st.caption("No batch runs recorded yet.")
+
+    if st.button("Run Batch Now", help="Score all watchlist tickers immediately"):
+        with st.spinner("Running batch analysis…"):
+            try:
+                from src.data.api import get_api
+                from src.services.scheduler import run_batch_analysis
+
+                _api = get_api()
+                _res = run_batch_analysis(_api)
+                st.success(
+                    f"Done — scored {_res['processed']} ticker(s), "
+                    f"{_res['errors']} error(s) in {_res['duration_s']:.0f}s"
+                )
+                st.rerun()
+            except Exception as _exc:
+                st.error(f"Batch run failed: {_exc}")
 
 # ---------------------------------------------------------------------------
 # Data availability check

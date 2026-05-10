@@ -221,6 +221,16 @@ crowding:
   high_similarity_threshold: 0.82
   extreme_similarity_threshold: 0.92
 
+# P23.1: Scheduled Overnight Batch Analysis
+# Set enabled: true to score all watchlist tickers nightly and populate
+# signal_returns so Signal Quality and Factor Attribution have data.
+# The scheduler runs at schedule_hour:schedule_minute UTC each calendar day.
+# Requires APScheduler: pip install apscheduler
+batch_analysis:
+  enabled: false
+  schedule_hour: 7      # 7am UTC = 3am ET (pre-market)
+  schedule_minute: 0
+
 # Signal Ledger — tamper-evident JSON trade record
 ledger:
   buy_threshold: 75      # composite score >= this fires a BUY signal
