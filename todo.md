@@ -965,6 +965,12 @@ Integrate at least one non-traditional, publicly accessible data source that lea
 | 21 | Cross-Sectional Ranking: Daily Long/Short List | ✅ Done |
 | 21 | Alternative Data Signal: Google Trends + Job Postings | ✅ Done |
 | 22 | Stock Tracking Portfolio (Forward Test) | ✅ Done |
+| 23 | Scheduled Overnight Batch Analysis | [ ] Pending |
+| 23 | Watchlist Score-Delta Alerts | [ ] Pending |
+| 23 | Backtested Screener Preset Performance | [ ] Pending |
+| 23 | Earnings Season Dashboard | [ ] Pending |
+| 23 | Factor Signal Leaderboard | [ ] Pending |
+| 23 | Mobile-Responsive Layout | [ ] Pending |
 
 ---
 
@@ -1447,3 +1453,84 @@ Allow users to add AI-recommended stock symbols to a named portfolio for live fo
 - [x] Add REST endpoint `POST /forward-test/portfolio` and `POST /forward-test/trade` to `server.py` for programmatic access
 
 **Files:** `src/analysis/forward_test.py`, `pages/7_ForwardTest.py`, `src/data/history.py` (paper_portfolio/paper_trades/paper_portfolio_history tables), `app.py` (Track in Paper Portfolio section), `src/services/server.py` (forward-test endpoints)
+
+---
+
+## Priority 23 — Signal Loop Closure & UX
+
+### 23.1 Scheduled Overnight Batch Analysis
+The Signal Quality and Factor Attribution pages are permanently empty without this — they require at least 21 trading days of `signal_returns` data which only accumulates if analysis runs regularly. A nightly scheduler scores every watchlist ticker automatically, populates `signal_returns`, and keeps the ML weight retraining loop fed with fresh data.
+
+- [ ] Add an APScheduler job (or cron entry) in `digest.py` or a new `scheduler.py` that runs pre-market each trading day
+- [ ] For each watchlist ticker: run the full factor computation, save to `analysis_history`, and record current price for forward-return tracking
+- [ ] After 21 trading days have elapsed since any stored signal, automatically compute `return_21d` / `return_63d` / `return_126d` and write to `signal_returns`
+- [ ] Trigger an ML weight retrain if a new quarter's worth of data has accumulated since the last training run
+- [ ] Add a "Last batch run" timestamp and next-run countdown to the Signal Quality sidebar
+- [ ] Add a `BATCH_ANALYSIS_ENABLED` config flag (default `false`) with instructions in README
+
+**Files:** `src/services/scheduler.py` (new), `src/data/history.py` (`upsert_signal_returns`), `src/analysis/ml_weights.py` (auto-retrain hook), `app.py` (batch status in Signal Quality sidebar)
+
+---
+
+### 23.2 Watchlist Score-Delta Alerts
+The existing alert system fires on price thresholds. This extends it to composite score changes — the more actionable signal. When a watchlist stock's score rises above a buy threshold or drops below a sell threshold since the last recorded analysis, fire the existing webhook/email delivery.
+
+- [ ] After each analysis, compare the new composite score to the previous stored score for that ticker in `analysis_history`
+- [ ] If the delta exceeds a configurable threshold (e.g., ±10 points) or crosses a configured buy/sell level, create an alert event
+- [ ] Reuse the existing `alerts.py` webhook delivery (Slack, Discord, Telegram, email) with a score-delta message format
+- [ ] Add a "Score alert threshold" field to the alert configuration panel in the sidebar
+- [ ] Show score-delta history (last 5 changes) in the watchlist panel alongside current price
+
+**Files:** `src/services/alerts.py`, `app.py` (score-delta check after analysis), `src/data/history.py` (`get_previous_score`)
+
+---
+
+### 23.3 Backtested Screener Preset Performance
+Screens are currently stateless — there is no memory of what they found or how those results performed. This adds a "how would this screen have done?" layer that turns filter presets from hunches into evidence-backed strategies.
+
+- [ ] After running any screen, offer a "Backtest this screen" button that replays the same filters against `analysis_history` at each date stocks were scored
+- [ ] Simulate buying every stock that passed the screen on its score date and holding for 21 / 63 calendar days; compute average return and hit rate
+- [ ] Display: avg return, hit rate, sample size, and comparison to buy-and-hold SPY for the same periods
+- [ ] Save results alongside saved screen templates so each preset shows its historical hit rate when loaded
+- [ ] Warn prominently when sample size < 30 (insufficient for statistical significance)
+
+**Files:** `src/analysis/screener.py` (`backtest_screen` function), `pages/3_Screener.py` (backtest button + results panel), `src/data/history.py`
+
+---
+
+### 23.4 Earnings Season Dashboard
+Aggregate upcoming earnings events across the entire watchlist into a single calendar view. All the data exists (earnings calendar, predicted move, IV, historical beat rate) — it just isn't assembled cross-watchlist anywhere.
+
+- [ ] Add a new page `pages/12_EarningsSeason.py` listing every watchlist ticker with earnings in the next 30 days
+- [ ] For each upcoming event show: ticker, days until earnings, historical beat rate (last 4 qtrs), analyst consensus EPS estimate, implied move (IV-derived), and the current factor score
+- [ ] Color-code rows: green = high beat probability + bullish factor score, red = miss risk + weak factor score
+- [ ] Add a "Pre-earnings checklist" Claude prompt that, for the nearest upcoming earnings, drafts key questions to watch for in the call
+- [ ] Sort by days-to-earnings; allow filtering by sector or minimum factor score
+
+**Files:** `pages/12_EarningsSeason.py` (new), `src/data/api.py` (`get_earnings_calendar_bulk`), `app.py` (link from sidebar)
+
+---
+
+### 23.5 Factor Signal Leaderboard
+The Factor Attribution page computes IC for each of the 23 factors but doesn't tell the user which factors to trust most or how to act on that. This page closes that loop: rank factors by IC, surface the top performers, and let users override ML weights based on observed attribution.
+
+- [ ] Add a new section to `pages/10_FactorAttribution.py` (or a dedicated sub-tab) that ranks all 23 factors by absolute IC at the selected horizon
+- [ ] Highlight factors with IC > 0.05 and p < 0.05 as "statistically meaningful" signals; flag those with near-zero IC as noise candidates
+- [ ] Add a "Use IC-weighted overrides" button that writes the top-quartile factor ICs (normalized to sum to 1) to `config.yaml` as custom factor weights for the next analysis run
+- [ ] Show a rolling 6-month IC trend chart for the top 5 factors so users can detect signal decay
+- [ ] Compare current ML-trained weights vs. empirical IC-derived weights in a side-by-side table
+
+**Files:** `pages/10_FactorAttribution.py` (leaderboard section), `src/analysis/factor_attribution.py` (`rank_factors_by_ic`), `src/core/config.py` (write IC-derived weight overrides)
+
+---
+
+### 23.6 Mobile-Responsive Layout
+Streamlit defaults to a desktop-first layout. The sidebar, wide column grids, and large Plotly charts break on phone screens. This makes the dashboard usable on mobile for checking watchlist status and factor scores on the go.
+
+- [ ] Add a custom CSS block in `app.py` that collapses multi-column metric rows to single-column on narrow viewports (< 768 px)
+- [ ] Collapse the sidebar by default on mobile and replace it with a hamburger-style expander
+- [ ] Set Plotly chart `height` and `margin` to scale with viewport width using `config={"responsive": True}`
+- [ ] Reduce font sizes and padding in the factor score gauge and radar chart on small screens
+- [ ] Test at 375 px (iPhone SE), 390 px (iPhone 14), and 412 px (Pixel 7) viewport widths
+
+**Files:** `app.py` (CSS + layout), all `pages/*.py` (Plotly responsive config)
