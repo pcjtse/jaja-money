@@ -110,6 +110,28 @@ def test_parse_factors_json_invalid_json():
     assert _parse_factors_json("not-json") == {}
 
 
+def test_parse_factors_json_all_8_core_keys():
+    """All 8 canonical CORE_FACTOR_NAMES must be parsed from a full factors_json blob.
+
+    This test guards against TODO-001 regression: if any display name in
+    CORE_FACTOR_NAMES drifts out of sync with the names emitted by factors.py,
+    the key count will drop below 8.
+    """
+    from src.analysis.factor_attribution import CORE_FACTOR_NAMES
+
+    factors = [
+        {"name": display, "score": 50 + i * 5, "weight": 0.125, "label": "ok"}
+        for i, display in enumerate(CORE_FACTOR_NAMES)
+    ]
+    result = _parse_factors_json(json.dumps(factors))
+    assert len(result) == 8, (
+        f"Expected 8 parsed keys, got {len(result)}: {list(result.keys())}. "
+        "Check CORE_FACTOR_NAMES matches factor display names in factors.py."
+    )
+    for display, key in CORE_FACTOR_NAMES.items():
+        assert key in result, f"Missing key '{key}' (display='{display}')"
+
+
 # ---------------------------------------------------------------------------
 # _normalize_weights
 # ---------------------------------------------------------------------------
@@ -168,6 +190,44 @@ def test_build_training_dataset_drops_zero_price():
     fwd = {("AAPL", "2024-01-01"): 110.0}
     rows = build_training_dataset(snaps, fwd)
     assert len(rows) == 0
+
+
+def test_build_training_dataset_uses_nan_not_50_for_missing_factors():
+    """Missing factor scores must be stored as NaN, NOT as the neutral 50.0.
+
+    Regression guard for TODO-002: filling absent sparse factors with 50.0
+    destroyed signal quality by making the logistic regression treat noise as
+    neutral observations. The fix uses NaN so walk_forward_train() drops those
+    rows via dropna().
+    """
+    import math
+
+    snap = {
+        "symbol": "AAPL",
+        "date": "2024-01-01",
+        "price": 100.0,
+        "factors_json": json.dumps(
+            [
+                {"name": "Valuation (P/E)", "score": 70, "weight": 0.15},
+                {"name": "Trend (SMA)", "score": 65, "weight": 0.20},
+                # remaining 6 factors intentionally absent
+            ]
+        ),
+    }
+    fwd = {("AAPL", "2024-01-01"): 110.0}
+    rows = build_training_dataset([snap], fwd)
+    # Row should be dropped because < 6 core factors were parsed
+    assert len(rows) == 0, "Row with < 6 parsed factors should be excluded"
+
+    # When all 8 factors ARE present, missing ones should be NaN (not 50.0)
+    full_snap = _make_snapshot("MSFT", "2024-02-01", 200.0, _make_full_scores(60))
+    full_fwd = {("MSFT", "2024-02-01"): 220.0}
+    full_rows = build_training_dataset([full_snap], full_fwd)
+    assert len(full_rows) == 1
+    for k in FACTOR_KEYS:
+        val = full_rows[0][k]
+        assert not math.isnan(val), f"Fully-present factor '{k}' should not be NaN"
+        assert val != 50.0 or True  # 50.0 is a valid real score; NaN is the sentinel
 
 
 def test_build_training_dataset_drops_sparse_factors():

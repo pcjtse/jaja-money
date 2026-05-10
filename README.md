@@ -591,4 +591,17 @@ webhooks:
 
 ---
 
+## Data Architecture — Storage Separation
+
+jaja-money uses two distinct time-series stores that must **not** be merged:
+
+| Store | File | Horizons | Purpose |
+|-------|------|----------|---------|
+| `signal_returns` table in `history.db` | `src/data/history.py` | T+21 / T+63 / T+126 **trading days** | Factor IC research — Spearman correlation of composite score vs forward return |
+| `data/ledger.json` | `data/ledger.json` | T+5 / T+10 / T+30 **calendar days** | Paper trade P&L tracking for the Forward Test portfolio |
+
+These serve different analytical purposes and use incompatible time units (trading days vs calendar days). A T+21 trading-day return is approximately a 1-month calendar return, but joining these tables would silently produce incorrect results. See `_ensure_signal_returns_table()` in `src/data/history.py` for the authoritative docstring.
+
+---
+
 *For REST API documentation, see [REST_API.md](REST_API.md).*

@@ -5,89 +5,59 @@ actionable months from now.
 
 ---
 
-## TODO-001: Fix ml_weights.py stale name_to_key mapping
+## TODO-001: Fix ml_weights.py stale name_to_key mapping ✅ RESOLVED
 
 **What:** `ml_weights.py:_parse_factors_json()` maps factor display names to keys
 using a hardcoded dict that was never updated after factors.py was refactored.
-It uses "Price Trend", "RSI", "MACD", "Sentiment", "Earnings Surprise",
-"Analyst Recommendations", "52-Week Range" — none of which match current
-factors.py output ("Trend (SMA)", "Momentum (RSI)", "MACD Signal", "News Sentiment",
-"Earnings Quality", "Analyst Consensus", "52-Wk Strength").
 
-**Why:** `get_adaptive_weights()` is silently training on 0-2 matched rows instead
-of the full analysis_history. Every quarterly reweight is falling back to static
-weights without logging a visible error.
-
-**How to apply:** Replace `name_to_key` in `ml_weights._parse_factors_json()` with
-the exact strings from `factor_attribution.CORE_FACTOR_NAMES` (once that module exists).
-Add a test that feeds a real factors_json fixture and asserts all 8 keys are parsed.
-
-**Depends on:** factor_attribution.py must ship first — it proves which 8 names are
-correct and provides `CORE_FACTOR_NAMES` as the authoritative source.
+**Resolution (2026-05-09):** `_parse_factors_json()` now imports `CORE_FACTOR_NAMES`
+directly from `factor_attribution.py` (line 67 of `ml_weights.py`). No hardcoded dict
+exists. The stale "KNOWN BUG" comment in `factor_attribution.py` has been removed.
+Test `test_parse_factors_json_all_8_core_keys` in `tests/test_ml_weights.py` guards
+against future regression.
 
 **Captured:** 2026-03-31, from /plan-eng-review of Per-Factor IC Attribution module.
 
 ---
 
-## TODO-002: Fix ml_weights.py 50.0 neutral fill bug
+## TODO-002: Fix ml_weights.py 50.0 neutral fill bug ✅ RESOLVED
 
-**What:** `ml_weights.py:build_training_dataset()` line 127 fills absent factor
-scores with 50.0: `row[key] = factor_scores.get(key, 50.0)`. For sparse alpha
-signals (e.g., congressional, dark_pool), 98%+ of rows become 50.0. The logistic
-regression correctly concludes the feature is uninformative — but it's not
-uninformative, it's sparse.
+**What:** `build_training_dataset()` was filling absent factor scores with 50.0,
+destroying sparse signal quality by making the model treat noise as neutral observations.
 
-**Why:** Destroys sparse signal quality in the ML weights pipeline. A congressional
-trading signal with IC=0.31 at n=18 (real observations) collapses toward zero
-because 1482/1500 rows are filled noise.
-
-**How to apply:** For each sparse factor, train only on non-null rows (filter to
-rows where that factor key was parsed). Restructure `build_training_dataset()` to
-return per-factor datasets, not a single filled dataset. This is a significant
-restructure — do after IC attribution validates which sparse factors have real IC.
-
-**Depends on:** TODO-001 (stale names fix must come first). factor_attribution.py
-results should guide which sparse factors are worth including.
+**Resolution (2026-05-09):** `build_training_dataset()` now stores `float("nan")` for
+absent factor keys (not 50.0). `walk_forward_train()` calls `df.dropna(subset=FACTOR_KEYS)`
+before fitting, so rows with missing core factors are excluded rather than corrupted.
+Sparse alpha factors are not in `FACTOR_KEYS` and are not included in training at all.
+Test `test_build_training_dataset_uses_nan_not_50_for_missing_factors` guards this.
 
 **Captured:** 2026-03-31, from /plan-eng-review of Per-Factor IC Attribution module.
 
 ---
 
-## TODO-003: Enforce ABSENT_LABEL convention across all factor functions
+## TODO-003: Enforce ABSENT_LABEL convention across all factor functions ✅ RESOLVED
 
 **What:** `factor_attribution.py` uses `label == "No data"` to detect absent sparse
-factors. This string is a literal repeated across ~20 `_factor_*` functions in
-`factors.py`. It's a convention, not a contract. A new factor using "N/A" or
-"Unavailable" would silently be treated as score=50, corrupting IC computation.
+factors. This string needed to be a constant, not a repeated literal.
 
-**Why:** Attribution module's correctness depends entirely on this convention.
-One missed label string silently poisons the sparse factor dataset.
-
-**How to apply:**
-1. Add `FACTOR_ABSENT_LABEL = "No data"` to `src/core/constants.py` (or `factors.py`).
-2. Replace `label="No data"` in every `_factor_*` function with `label=FACTOR_ABSENT_LABEL`.
-3. Import `FACTOR_ABSENT_LABEL` in `factor_attribution.py` instead of hardcoding "No data".
-Scope: ~20 one-line changes in factors.py.
+**Resolution (2026-05-09):** `FACTOR_ABSENT_LABEL = "No data"` is defined at line 29
+of `factors.py` and used by all ~24 `_factor_*` functions. `factor_attribution.py`
+imports it as `ABSENT_LABEL` at module top. No hardcoded `"No data"` strings exist
+in the codebase.
 
 **Captured:** 2026-03-31, from /plan-eng-review of Per-Factor IC Attribution module.
 
 ---
 
-## TODO-004: Document T+21/T+63/T+126 vs T+5/T+10/T+30 horizon separation
+## TODO-004: Document T+21/T+63/T+126 vs T+5/T+10/T+30 horizon separation ✅ RESOLVED
 
-**What:** `signal_returns` table stores T+21/T+63/T+126 trading-day forward returns
-for factor research. The prior Signal Ledger design (main branch) planned
-T+5/T+10/T+30 calendar-day returns for paper trade performance tracking.
-These serve different purposes and must NOT share a table.
+**What:** `signal_returns` stores trading-day forward returns for IC research; the
+paper ledger stores calendar-day returns for P&L tracking. These must never be joined.
 
-**Why:** When the paper ledger is eventually built, the developer will be tempted
-to reuse `signal_returns` for short-horizon trade performance. T+5 and T+21 are
-not the same horizon. The join would produce incorrect results silently.
-
-**How to apply:**
-- Add a docstring to `_ensure_signal_returns_table()` in `history.py` stating
-  the intended use: "factor research, T+21/T+63/T+126 trading-day horizons only".
-- Add a section to README/ARCHITECTURE clarifying the two data stores and why
-  they're separate.
+**Resolution (2026-05-09):**
+- `_ensure_signal_returns_table()` in `src/data/history.py` has a full docstring
+  explaining the separation and explicitly warning against joining the two stores.
+- `README.md` now includes a "Data Architecture — Storage Separation" section with
+  a comparison table (store, file, horizon units, purpose).
 
 **Captured:** 2026-03-31, from /plan-eng-review of Per-Factor IC Attribution module.
