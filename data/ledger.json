@@ -1,0 +1,24 @@
+[
+  {
+    "signal_id": "02aaa3c2-21d7-4f1f-8306-a3d17dc7dfbb",
+    "ticker": "TEST",
+    "fired_at": "2026-04-02T06:14:18.257174+00:00",
+    "composite_score": 80.0,
+    "factor_scores": {
+      "Trend (SMA)": 90.0
+    },
+    "price_at_signal": 100.0,
+    "spy_entry_price": 550.0,
+    "direction": "long",
+    "is_baseline": false,
+    "regime": "flat",
+    "status": "open",
+    "exit_price": null,
+    "exit_at": null,
+    "pnl_pct": null,
+    "spy_pnl_pct": null,
+    "price_t5": null,
+    "price_t10": null,
+    "price_t30": null
+  }
+]
